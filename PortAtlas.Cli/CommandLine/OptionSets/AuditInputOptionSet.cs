@@ -17,6 +17,12 @@ internal sealed class AuditInputOptionSet
     public void AddTo(Command command) => command.Options.Add(_input);
 
     /// <summary>
+    /// Tells whether the user named audit logs, as opposed to the configuration default.
+    /// </summary>
+    /// <param name="parseResult">Parsed command line.</param>
+    public bool HasExplicitInput(ParseResult parseResult) => parseResult.GetValue(_input) is { Length: > 0 };
+
+    /// <summary>
     /// Expands the inputs into existing files.
     /// </summary>
     /// <param name="parseResult">Parsed command line.</param>

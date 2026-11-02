@@ -40,8 +40,10 @@ public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enriche
         Console.WriteLine("  PortAtlas - Offline DNS Resolution & Cache Consolidation (resolve)");
         Console.WriteLine("========================================================================");
         Console.WriteLine($"Execution mode: {(options.Isolated ? "Cache only, no DNS or RDAP query (--cache-only)" : "Active enrichment with DNS & RDAP")}");
-        Console.WriteLine($"Audit log updates: {(options.InPlace ? "Direct in-place overwrite (--in-place)" : "Generate new '*_enriched' files")}");
-        Console.WriteLine($"Force hostname replacement: {(options.ForceResolve ? "Yes (--force-resolve)" : "No (retain existing names)")}");
+        Console.WriteLine(auditFiles.Count == 0
+            ? "Audit log updates: none (cache only, no audit log given)"
+            : $"Audit log updates: {(options.InPlace ? "Direct in-place overwrite (--in-place)" : "Generate new '*_enriched' files")}");
+        Console.WriteLine($"Resolution scope: {(options.ForceResolve ? "Every address, names already known are kept when a lookup fails (--force-resolve)" : "Addresses without a name only")}");
         Console.WriteLine();
 
         var report = await _enricher.EnrichPathsAsync(auditFiles, cacheFiles, options, cancellationToken).ConfigureAwait(false);
@@ -66,6 +68,10 @@ public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enriche
         Console.WriteLine($"  * Source caches processed: {report.CacheReport.TotalCachesProcessed} ({report.CacheReport.TotalEntriesLoaded} raw entries)");
         Console.WriteLine($"  * Deduplicated cache entries: {report.CacheReport.MergedEntries.Count}");
         Console.WriteLine($"  * Online resolutions completed: {report.OnlineResolutionsCount}");
+        if (report.Resolution is { } resolution && report.OnlineResolutionsCount > 0)
+        {
+            Console.WriteLine($"      newly named: {resolution.NewlyNamed}, renamed: {resolution.Renamed}, confirmed: {resolution.Unchanged}, kept after a failed lookup: {resolution.KeptAfterFailure}, still unresolved: {resolution.StillUnresolved}");
+        }
         Console.WriteLine($"  * Audit files processed: {report.ProcessedAuditFiles.Count}");
         Console.WriteLine($"  * Audit records scanned: {report.TotalRecordsScanned}");
         Console.WriteLine($"  * Audit records updated: {report.TotalRecordsUpdated}");

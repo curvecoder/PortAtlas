@@ -121,6 +121,74 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         report.Conflicts.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoAuditFile_ResolvesOnlyTheEntriesWithoutName()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver { ["10.0.0.6"] = Resolved("SRV-LATE") };
+        var options = Options();
+        var cache = Cache(("10.0.0.5", "SRV-KNOWN"), ("10.0.0.6", ""));
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([], [cache], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("10.0.0.6");
+        SavedCache(options).Values.Select(entry => entry.HostName).Should().BeEquivalentTo(["SRV-KNOWN", "SRV-LATE"]);
+        report.ProcessedAuditFiles.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoAuditFileAndForce_ResolvesEveryEntryAndKeepsNamesOnFailure()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver { ["10.0.0.5"] = Resolved("SRV-RENAMED") };
+        var options = Options(forceResolve: true);
+        var cache = Cache(("10.0.0.5", "SRV-KNOWN"), ("10.0.0.6", "SRV-OTHER"));
+
+        // Act
+        await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([], [cache], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEquivalentTo(["10.0.0.5", "10.0.0.6"]);
+        var saved = SavedCache(options);
+        saved["10.0.0.5"].HostName.Should().Be("SRV-RENAMED");
+        saved["10.0.0.6"].HostName.Should().Be("SRV-OTHER");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoAuditFileAndIsolated_ResolvesNothing()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver();
+        var options = Options() with { Isolated = true };
+
+        // Act
+        await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([], [Cache(("10.0.0.6", ""))], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenCacheIsResolved_ReportsEachKindOfOutcome()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver
+        {
+            ["10.0.0.1"] = Resolved("NEW-NAME"),
+            ["10.0.0.2"] = Resolved("CHANGED-NAME"),
+            ["10.0.0.3"] = Resolved("SAME-NAME")
+        };
+        var cache = Cache(("10.0.0.1", ""), ("10.0.0.2", "OLD-NAME"), ("10.0.0.3", "SAME-NAME"), ("10.0.0.4", "KEPT-NAME"), ("10.0.0.5", ""));
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([], [cache], Options(forceResolve: true));
+
+        // Assert
+        report.Resolution.Should().Be(new CacheResolutionSummary(NewlyNamed: 1, Renamed: 1, Unchanged: 1, KeptAfterFailure: 1, StillUnresolved: 1));
+    }
+
     private async Task<string> WriteAuditAsync(string remoteIp)
     {
         var path = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");

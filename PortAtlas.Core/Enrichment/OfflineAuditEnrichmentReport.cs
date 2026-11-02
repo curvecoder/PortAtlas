@@ -12,6 +12,7 @@ namespace PortAtlas.Core.Enrichment;
 /// <param name="DistinctIpsEnriched">Number of unique IP addresses enriched.</param>
 /// <param name="OnlineResolutionsCount">Number of real-time online DNS/RDAP queries performed.</param>
 /// <param name="CacheReport">Cache consolidation and conflict analysis report.</param>
+/// <param name="Resolution">Outcome of the online resolutions on the master cache.</param>
 public sealed record OfflineAuditEnrichmentReport(
     IReadOnlyList<string> ProcessedAuditFiles,
     IReadOnlyList<string> GeneratedAuditFiles,
@@ -19,4 +20,5 @@ public sealed record OfflineAuditEnrichmentReport(
     int TotalRecordsUpdated,
     int DistinctIpsEnriched,
     int OnlineResolutionsCount,
-    DnsCacheConsolidationReport CacheReport);
+    DnsCacheConsolidationReport CacheReport,
+    CacheResolutionSummary? Resolution = null);

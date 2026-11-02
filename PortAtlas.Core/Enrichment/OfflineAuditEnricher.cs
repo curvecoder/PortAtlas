@@ -67,8 +67,18 @@ public sealed class OfflineAuditEnricher(
             }
         }
 
+        // Without audit file the cache itself is the list of addresses to resolve.
+        if (auditFiles.Count == 0)
+        {
+            foreach (var ip in activeCache.Keys.Where(ip => !IsUnspecifiedAddress(ip) && (options.ForceResolve || !HasHostName(activeCache, ip))))
+            {
+                distinctUnresolvedIps.Add(ip);
+            }
+        }
+
         // 3. Online resolution of missing IPs if not isolated
         var onlineCount = 0;
+        var outcomes = new ResolutionOutcomeCounter();
         if (!options.Isolated && distinctUnresolvedIps.Count > 0)
         {
             _logger?.Invoke($"Resolving {distinctUnresolvedIps.Count} unknown IP address(es) online...");
@@ -85,7 +95,9 @@ public sealed class OfflineAuditEnricher(
                 if (IPAddress.TryParse(ipStr, out var address))
                 {
                     var resolvedEntry = await _offlineResolver.ResolveSingleAsync(address, cancellationToken).ConfigureAwait(false);
-                    activeCache[ipStr] = KeepResolvedName(activeCache.GetValueOrDefault(ipStr), resolvedEntry);
+                    var previousEntry = activeCache.GetValueOrDefault(ipStr);
+                    activeCache[ipStr] = KeepResolvedName(previousEntry, resolvedEntry);
+                    outcomes.Record(previousEntry, resolvedEntry);
                     onlineCount++;
                 }
             }
@@ -139,7 +151,8 @@ public sealed class OfflineAuditEnricher(
             totalUpdated,
             enrichedIps.Count,
             onlineCount,
-            cacheReport);
+            cacheReport,
+            outcomes.ToSummary());
     }
 
     /// <summary>
@@ -283,8 +296,7 @@ public sealed class OfflineAuditEnricher(
             return false;
         }
 
-        if (IPAddress.TryParse(ip, out var parsedAddr) &&
-            (parsedAddr.Equals(IPAddress.Any) || parsedAddr.Equals(IPAddress.IPv6Any) || parsedAddr.Equals(IPAddress.None)))
+        if (IsUnspecifiedAddress(ip))
         {
             return false;
         }
@@ -301,6 +313,10 @@ public sealed class OfflineAuditEnricher(
 
         return false;
     }
+
+    private static bool IsUnspecifiedAddress(string ip) =>
+        IPAddress.TryParse(ip, out var address) &&
+        (address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any) || address.Equals(IPAddress.None));
 
     private static bool HasHostName(IReadOnlyDictionary<string, DnsCacheEntry> cache, string ip) =>
         cache.TryGetValue(ip, out var entry) && !string.IsNullOrWhiteSpace(entry.HostName);
@@ -597,5 +613,47 @@ public sealed class OfflineAuditEnricher(
 
         result.Add(current.ToString());
         return result;
+    }
+
+    private sealed class ResolutionOutcomeCounter
+    {
+        private int _newlyNamed;
+        private int _renamed;
+        private int _unchanged;
+        private int _keptAfterFailure;
+        private int _stillUnresolved;
+
+        public void Record(DnsCacheEntry? previous, DnsCacheEntry resolved)
+        {
+            var hadName = previous is not null && !string.IsNullOrWhiteSpace(previous.HostName);
+            if (string.IsNullOrWhiteSpace(resolved.HostName))
+            {
+                if (hadName)
+                {
+                    _keptAfterFailure++;
+                }
+                else
+                {
+                    _stillUnresolved++;
+                }
+
+                return;
+            }
+
+            if (!hadName)
+            {
+                _newlyNamed++;
+            }
+            else if (string.Equals(previous?.HostName, resolved.HostName, StringComparison.OrdinalIgnoreCase))
+            {
+                _unchanged++;
+            }
+            else
+            {
+                _renamed++;
+            }
+        }
+
+        public CacheResolutionSummary ToSummary() => new(_newlyNamed, _renamed, _unchanged, _keptAfterFailure, _stillUnresolved);
     }
 }

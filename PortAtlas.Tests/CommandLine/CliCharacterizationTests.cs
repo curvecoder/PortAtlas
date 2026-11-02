@@ -182,6 +182,24 @@ public sealed class CliCharacterizationTests : IDisposable
     }
 
     [Fact]
+    public async Task Resolve_WhenCacheGivenWithoutInput_MergesCachesAndLeavesAuditLogsAlone()
+    {
+        // Arrange
+        var cache = Path.Combine(_directory, "other_cache.json");
+        await File.WriteAllTextAsync(cache, "{\"203.0.113.10\": {\"HostName\": \"git.example.test\", \"Source\": \"DNS\"}}");
+        var masterCache = Path.Combine(_directory, "known_master.json");
+        await File.WriteAllTextAsync(masterCache, "{\"10.20.1.5\": {\"HostName\": \"db.example.test\", \"Source\": \"DNS\"}}");
+
+        // Act
+        await RunAsync("resolve", "--cache", cache, "--output-cache", masterCache, "--cache-only");
+
+        // Assert
+        Directory.GetFiles(_directory, "*_enriched.*").Should().BeEmpty();
+        var saved = await File.ReadAllTextAsync(masterCache);
+        saved.Should().Contain("git.example.test").And.Contain("db.example.test");
+    }
+
+    [Fact]
     public async Task ConfigInit_WhenPathGiven_WritesDeserializableConfiguration()
     {
         // Arrange

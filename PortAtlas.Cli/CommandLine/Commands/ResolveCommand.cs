@@ -16,12 +16,12 @@ public sealed class ResolveCommand : Command
     private readonly AuditInputOptionSet _inputs = new();
     private readonly Option<string[]> _cache = new("--cache")
     {
-        Description = "DNS cache to merge: a file, a directory or a wildcard pattern. Repeatable. Default: the DNS cache of the configuration.",
+        Description = "DNS cache to merge: a file, a directory or a wildcard pattern. Repeatable. Default: the DNS cache of the configuration. Without --input, the audit logs are left alone and only the caches are resolved.",
         HelpName = "path"
     };
     private readonly Option<string?> _outputCache = OptionFactory.CreatePath("--output-cache", "Merged master cache to write. Default: the DNS cache of the configuration (netflow_dns_cache.json).");
     private readonly Option<bool> _inPlace = new("--in-place") { Description = "Overwrite the audit logs instead of writing *_enriched files." };
-    private readonly Option<bool> _forceResolve = new("--force-resolve") { Description = "Replace host names already present in the audit logs." };
+    private readonly Option<bool> _forceResolve = new("--force-resolve") { Description = "Resolve every address again, those that already have a name included, and replace the host names already present in the audit logs. A lookup that finds nothing never erases a known name. Without this option only the addresses without a name are resolved." };
     private readonly Option<int?> _rdapDelayMs = OptionFactory.CreateInteger("--rdap-delay-ms", "milliseconds", "Delay between two RDAP queries. Default: 200.", minimum: 0);
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
     private readonly Option<bool> _cacheOnly = new("--cache-only") { Description = "Use only the merged caches: no DNS or RDAP query is sent." };
@@ -47,14 +47,22 @@ public sealed class ResolveCommand : Command
         SetAction(async (parseResult, cancellationToken) =>
         {
             var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
-            var auditFiles = _inputs.ResolveFiles(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions);
-            if (auditFiles.Count == 0)
+            var cacheGiven = parseResult.GetValue(_cache) is { Length: > 0 };
+            var caches = cacheGiven ? parseResult.GetValue(_cache)! : [config.DnsCacheFilePath];
+
+            // Naming a cache without naming audit logs asks for a cache-only run, so that the audit file of the
+            // configuration is not rewritten as a side effect.
+            IReadOnlyList<string> auditFiles = [];
+            if (_inputs.HasExplicitInput(parseResult) || !cacheGiven)
             {
-                await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);
-                return 1;
+                auditFiles = _inputs.ResolveFiles(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions);
+                if (auditFiles.Count == 0 && _inputs.HasExplicitInput(parseResult))
+                {
+                    await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);
+                    return 1;
+                }
             }
 
-            var caches = parseResult.GetValue(_cache) is { Length: > 0 } given ? given : [config.DnsCacheFilePath];
             var options = new OfflineAuditEnrichmentOptions
             {
                 InPlace = parseResult.GetValue(_inPlace),
