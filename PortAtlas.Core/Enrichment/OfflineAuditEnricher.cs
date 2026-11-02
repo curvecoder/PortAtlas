@@ -96,8 +96,9 @@ public sealed class OfflineAuditEnricher(
                 {
                     var resolvedEntry = await _offlineResolver.ResolveSingleAsync(address, cancellationToken).ConfigureAwait(false);
                     var previousEntry = activeCache.GetValueOrDefault(ipStr);
-                    activeCache[ipStr] = KeepResolvedName(previousEntry, resolvedEntry);
-                    outcomes.Record(previousEntry, resolvedEntry);
+                    var keptEntry = KeepResolvedName(previousEntry, resolvedEntry);
+                    activeCache[ipStr] = keptEntry;
+                    outcomes.Record(previousEntry, resolvedEntry, keptEntry);
                     onlineCount++;
                 }
             }
@@ -321,12 +322,21 @@ public sealed class OfflineAuditEnricher(
     private static bool HasHostName(IReadOnlyDictionary<string, DnsCacheEntry> cache, string ip) =>
         cache.TryGetValue(ip, out var entry) && !string.IsNullOrWhiteSpace(entry.HostName);
 
-    // A machine that cannot reach the DNS servers answers with an empty entry: it must not erase a name that another
-    // machine resolved earlier.
-    private static DnsCacheEntry KeepResolvedName(DnsCacheEntry? existing, DnsCacheEntry resolved) =>
-        existing is not null && !string.IsNullOrWhiteSpace(existing.HostName) && string.IsNullOrWhiteSpace(resolved.HostName)
-            ? existing
-            : resolved;
+    // A machine that cannot reach the DNS servers answers with an empty entry, or with the registry owner only: neither
+    // may replace a name that another machine resolved earlier (a reverse DNS name outranks the registry owner, as in
+    // DnsCacheConsolidator).
+    private static DnsCacheEntry KeepResolvedName(DnsCacheEntry? existing, DnsCacheEntry resolved)
+    {
+        if (existing is null || string.IsNullOrWhiteSpace(existing.HostName))
+        {
+            return resolved;
+        }
+
+        var lookupFoundNothing = string.IsNullOrWhiteSpace(resolved.HostName);
+        var lookupDowngradesDnsName = string.Equals(existing.Source, "DNS", StringComparison.OrdinalIgnoreCase) &&
+                                      !string.Equals(resolved.Source, "DNS", StringComparison.OrdinalIgnoreCase);
+        return lookupFoundNothing || lookupDowngradesDnsName ? existing : resolved;
+    }
 
     private static async Task<(int Scanned, int Updated, string OutputPath, IReadOnlyList<string> EnrichedIps)> EnrichSingleAuditFileAsync(
         string inputPath,
@@ -623,20 +633,18 @@ public sealed class OfflineAuditEnricher(
         private int _keptAfterFailure;
         private int _stillUnresolved;
 
-        public void Record(DnsCacheEntry? previous, DnsCacheEntry resolved)
+        public void Record(DnsCacheEntry? previous, DnsCacheEntry resolved, DnsCacheEntry kept)
         {
             var hadName = previous is not null && !string.IsNullOrWhiteSpace(previous.HostName);
+            if (hadName && ReferenceEquals(kept, previous))
+            {
+                _keptAfterFailure++;
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(resolved.HostName))
             {
-                if (hadName)
-                {
-                    _keptAfterFailure++;
-                }
-                else
-                {
-                    _stillUnresolved++;
-                }
-
+                _stillUnresolved++;
                 return;
             }
 

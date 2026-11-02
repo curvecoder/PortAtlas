@@ -56,7 +56,7 @@ public sealed class ResolveCommand : Command
             if (_inputs.HasExplicitInput(parseResult) || !cacheGiven)
             {
                 auditFiles = _inputs.ResolveFiles(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions);
-                if (auditFiles.Count == 0 && _inputs.HasExplicitInput(parseResult))
+                if (auditFiles.Count == 0)
                 {
                     await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);
                     return 1;

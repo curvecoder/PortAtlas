@@ -200,6 +200,16 @@ public sealed class CliCharacterizationTests : IDisposable
     }
 
     [Fact]
+    public async Task Resolve_WhenNeitherInputNorCacheGivenAndNoAuditExists_ReturnsNonZeroExitCode()
+    {
+        // Act
+        var exitCode = await Program.Main(["resolve", "--config", _missingConfigPath, "--cache-only"]);
+
+        // Assert
+        exitCode.Should().NotBe(0);
+    }
+
+    [Fact]
     public async Task ConfigInit_WhenPathGiven_WritesDeserializableConfiguration()
     {
         // Arrange

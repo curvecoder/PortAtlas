@@ -189,6 +189,22 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         report.Resolution.Should().Be(new CacheResolutionSummary(NewlyNamed: 1, Renamed: 1, Unchanged: 1, KeptAfterFailure: 1, StillUnresolved: 1));
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenForceResolveOnlyFindsRegistryOwner_KeepsTheReverseDnsName()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver { ["10.0.0.5"] = new DnsCacheEntry { HostName = "Example Org", Source = "RDAP" } };
+        var options = Options(forceResolve: true);
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([], [Cache(("10.0.0.5", "srv.example.test"))], options);
+
+        // Assert
+        SavedCache(options)["10.0.0.5"].HostName.Should().Be("srv.example.test");
+        report.Resolution!.KeptAfterFailure.Should().Be(1);
+    }
+
     private async Task<string> WriteAuditAsync(string remoteIp)
     {
         var path = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");
