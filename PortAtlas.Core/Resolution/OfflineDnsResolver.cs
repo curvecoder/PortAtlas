@@ -14,16 +14,15 @@ public sealed class OfflineDnsResolver(
     IIpOrganizationResolver? organizationResolver = null,
     TimeSpan? rdapThrottleDelay = null,
     TimeSpan? resolutionTimeout = null,
-    Action<string>? logThrottlingNotice = null)
+    Action<string>? logThrottlingNotice = null) : IOfflineIpResolver
 {
     private readonly IIpOrganizationResolver? _organizationResolver = organizationResolver;
     private readonly TimeSpan _rdapThrottleDelay = rdapThrottleDelay ?? TimeSpan.FromMilliseconds(200);
     private readonly TimeSpan _resolutionTimeout = resolutionTimeout ?? TimeSpan.FromSeconds(2);
     private readonly Action<string>? _logThrottlingNotice = logThrottlingNotice;
 
-    /// <summary>
-    /// Resolves an IP address using reverse DNS PTR followed by throttled RDAP lookup if necessary.
-    /// </summary>
+    /// <inheritdoc />
+    /// <remarks>Reverse DNS PTR first, then a throttled RDAP lookup when no name was found or the address is public.</remarks>
     /// <param name="address">Target IP address to resolve.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>A populated DNS cache entry reflecting resolution results.</returns>

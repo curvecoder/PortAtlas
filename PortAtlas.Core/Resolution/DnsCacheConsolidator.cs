@@ -36,6 +36,13 @@ public sealed class DnsCacheConsolidator
                     continue;
                 }
 
+                // An entry without a name only records a failed attempt: the named one wins and no conflict is worth reporting.
+                if (string.IsNullOrWhiteSpace(existingEntry.HostName) != string.IsNullOrWhiteSpace(incomingEntry.HostName))
+                {
+                    merged[ip] = string.IsNullOrWhiteSpace(existingEntry.HostName) ? incomingEntry : existingEntry;
+                    continue;
+                }
+
                 if (string.Equals(existingEntry.HostName, incomingEntry.HostName, StringComparison.OrdinalIgnoreCase))
                 {
                     merged[ip] = MergeMatchingEntries(existingEntry, incomingEntry);

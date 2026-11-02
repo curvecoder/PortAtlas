@@ -16,7 +16,7 @@ namespace PortAtlas.Core.Enrichment;
 /// <param name="logger">Optional progress reporting callback.</param>
 public sealed class OfflineAuditEnricher(
     DnsCacheConsolidator? consolidator = null,
-    OfflineDnsResolver? offlineResolver = null,
+    IOfflineIpResolver? offlineResolver = null,
     Action<string>? logger = null)
 {
     private static readonly JsonSerializerOptions CompactJsonOptions = new()
@@ -26,7 +26,7 @@ public sealed class OfflineAuditEnricher(
     };
 
     private readonly DnsCacheConsolidator _consolidator = consolidator ?? new DnsCacheConsolidator();
-    private readonly OfflineDnsResolver _offlineResolver = offlineResolver ?? new OfflineDnsResolver();
+    private readonly IOfflineIpResolver _offlineResolver = offlineResolver ?? new OfflineDnsResolver();
     private readonly Action<string>? _logger = logger;
 
     /// <summary>
@@ -77,7 +77,7 @@ public sealed class OfflineAuditEnricher(
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (activeCache.ContainsKey(ipStr) && !options.ForceResolve)
+                if (!options.ForceResolve && HasHostName(activeCache, ipStr))
                 {
                     continue;
                 }
@@ -85,7 +85,7 @@ public sealed class OfflineAuditEnricher(
                 if (IPAddress.TryParse(ipStr, out var address))
                 {
                     var resolvedEntry = await _offlineResolver.ResolveSingleAsync(address, cancellationToken).ConfigureAwait(false);
-                    activeCache[ipStr] = resolvedEntry;
+                    activeCache[ipStr] = KeepResolvedName(activeCache.GetValueOrDefault(ipStr), resolvedEntry);
                     onlineCount++;
                 }
             }
@@ -163,8 +163,17 @@ public sealed class OfflineAuditEnricher(
         var auditFiles = AuditInputPathResolver.Resolve(auditPathsOrPatterns, AuditInputPathResolver.AuditLogExtensions);
         var cacheFiles = AuditInputPathResolver.Resolve(cachePathsOrPatterns, [".json"]);
 
+        // The master cache is read even when the caller did not list it: writing it back without merging would erase
+        // every name that the other caches do not carry.
+        var inputCaches = cacheFiles.ToList();
+        if (File.Exists(options.OutputCachePath) &&
+            !inputCaches.Contains(Path.GetFullPath(options.OutputCachePath), StringComparer.OrdinalIgnoreCase))
+        {
+            inputCaches.Insert(0, options.OutputCachePath);
+        }
+
         var loadedCaches = new List<IReadOnlyDictionary<string, DnsCacheEntry>>();
-        foreach (var cachePath in cacheFiles)
+        foreach (var cachePath in inputCaches)
         {
             var store = new PersistentDnsCacheStore(cachePath);
             loadedCaches.Add(store.Load());
@@ -287,11 +296,21 @@ public sealed class OfflineAuditEnricher(
 
         if (string.IsNullOrWhiteSpace(host) || string.Equals(host, ip, StringComparison.OrdinalIgnoreCase))
         {
-            return !knownCache.TryGetValue(ip, out var entry) || !string.IsNullOrWhiteSpace(entry.HostName);
+            return !HasHostName(knownCache, ip);
         }
 
         return false;
     }
+
+    private static bool HasHostName(IReadOnlyDictionary<string, DnsCacheEntry> cache, string ip) =>
+        cache.TryGetValue(ip, out var entry) && !string.IsNullOrWhiteSpace(entry.HostName);
+
+    // A machine that cannot reach the DNS servers answers with an empty entry: it must not erase a name that another
+    // machine resolved earlier.
+    private static DnsCacheEntry KeepResolvedName(DnsCacheEntry? existing, DnsCacheEntry resolved) =>
+        existing is not null && !string.IsNullOrWhiteSpace(existing.HostName) && string.IsNullOrWhiteSpace(resolved.HostName)
+            ? existing
+            : resolved;
 
     private static async Task<(int Scanned, int Updated, string OutputPath, IReadOnlyList<string> EnrichedIps)> EnrichSingleAuditFileAsync(
         string inputPath,
