@@ -48,7 +48,7 @@ public sealed class ResolveCommand : Command
         {
             var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
             var cacheGiven = parseResult.GetValue(_cache) is { Length: > 0 };
-            var caches = cacheGiven ? parseResult.GetValue(_cache)! : [config.DnsCacheFilePath];
+            var caches = parseResult.GetValue(_cache) is { Length: > 0 } given ? given : [config.DnsCacheFilePath];
 
             // Naming a cache without naming audit logs asks for a cache-only run, so that the audit file of the
             // configuration is not rewritten as a side effect.
