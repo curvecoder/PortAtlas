@@ -197,12 +197,14 @@ PortAtlas resolve [-i <path>]... [--cache <path>]... [options]
 | `--cache` | `<path>`, repeatable | `DnsCacheFilePath` | DNS cache to merge: a file, a directory (its `.json` files) or a pattern |
 | `--output-cache` | `<path>` | `DnsCacheFilePath` | Merged cache to write |
 | `--in-place` | none | off | Overwrite the audit logs instead of writing `<name>_enriched.<ext>` |
-| `--force-resolve` | none | off | Replace host names already present in the logs |
+| `--force-resolve` | none | off | Resolve every address again, including those that already have a name, and replace the names already in the logs. A lookup that finds nothing never erases a known name |
 | `--rdap-delay-ms` | milliseconds, at least 0 | `200` | Delay between two RDAP queries |
 | `--cache-only` | none | off | Send no DNS or RDAP query; use only the merged caches |
 | `--dns-timeout-ms` | milliseconds, at least 1 | `DnsResolutionTimeoutMs` | Time to wait for a reverse DNS answer |
 
-Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). When two caches give different names for the same address, the most recent entry is kept and the conflict is printed.
+Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). When two caches give different names for the same address, the most recent entry is kept and the conflict is printed. An entry without a name never conflicts with a named one: the named entry is kept.
+
+Audit logs are optional. When `--cache` is given without `-i`, the audit logs are left alone and the caches alone are resolved: the addresses of the merged cache are the ones to resolve. Without `--force-resolve` only the entries without a name are resolved; with it, every entry is. When audit logs are given, the addresses to resolve are those of the logs. The cache named by `--output-cache` is always merged before it is written, even when `--cache` does not list it, so that running `resolve` from several machines completes the cache instead of replacing it.
 
 ## lookup
 

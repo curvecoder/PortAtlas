@@ -26,6 +26,16 @@ PortAtlas resolve -i "collected/*.csv" --cache "collected/*.json" --output-cache
 
 Each `audit_x.csv` gets an `audit_x_enriched.csv`; `--in-place` overwrites the originals instead. RDAP queries are spaced by 200 ms (`--rdap-delay-ms`).
 
+## Complete the cache from several machines
+
+To fill the master cache without touching any audit log, give the cache alone. Only the entries without a name are resolved, and a name already known is never erased:
+
+```bash
+PortAtlas resolve --cache master_cache.json
+```
+
+Add `--force-resolve` to resolve every entry again. A lookup that finds nothing keeps the name resolved earlier, so running the command from machines that reach different DNS servers only completes the cache.
+
 ## Without any network access
 
 To use only the collected caches, with no DNS or RDAP query:

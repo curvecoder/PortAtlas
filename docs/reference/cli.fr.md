@@ -197,12 +197,14 @@ PortAtlas resolve [-i <path>]... [--cache <path>]... [options]
 | `--cache` | `<path>`, répétable | `DnsCacheFilePath` | Cache DNS à fusionner : un fichier, un dossier (ses fichiers `.json`) ou un motif |
 | `--output-cache` | `<path>` | `DnsCacheFilePath` | Cache fusionné à écrire |
 | `--in-place` | aucune | inactif | Remplacer les journaux au lieu d'écrire `<name>_enriched.<ext>` |
-| `--force-resolve` | aucune | inactif | Remplacer les noms d'hôtes déjà présents dans les journaux |
+| `--force-resolve` | aucune | inactif | Résoudre de nouveau toutes les adresses, y compris celles qui ont déjà un nom, et remplacer les noms déjà présents dans les journaux. Une recherche qui ne trouve rien n'efface jamais un nom connu |
 | `--rdap-delay-ms` | millisecondes, au moins 0 | `200` | Délai entre deux requêtes RDAP |
 | `--cache-only` | aucune | inactif | N'envoyer aucune requête DNS ni RDAP ; n'utiliser que les caches fusionnés |
 | `--dns-timeout-ms` | millisecondes, au moins 1 | `DnsResolutionTimeoutMs` | Délai d'attente d'une réponse DNS inverse |
 
-Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Quand deux caches donnent des noms différents pour une même adresse, l'entrée la plus récente est gardée et le conflit est affiché.
+Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Quand deux caches donnent des noms différents pour une même adresse, l'entrée la plus récente est gardée et le conflit est affiché. Une entrée sans nom n'entre jamais en conflit avec une entrée nommée : l'entrée nommée est gardée.
+
+Les journaux d'audit sont facultatifs. Quand `--cache` est donné sans `-i`, les journaux d'audit sont laissés intacts et seuls les caches sont résolus : les adresses du cache fusionné sont celles à résoudre. Sans `--force-resolve`, seules les entrées sans nom sont résolues ; avec, toutes le sont. Quand des journaux d'audit sont donnés, les adresses à résoudre sont celles des journaux. Le cache désigné par `--output-cache` est toujours fusionné avant d'être écrit, même si `--cache` ne le liste pas : lancer `resolve` depuis plusieurs machines complète donc le cache au lieu de le remplacer.
 
 ## lookup
 
