@@ -373,6 +373,32 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(output).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Main_WhenConfigOptionIsGivenAnEmptyValue_ReturnsExitCodeOne()
+    {
+        // Arrange
+        var output = Path.Combine(_directory, "empty-option.ndjson");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "ndjson", "-i", _auditPath, "-o", output, "--config", ""]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain("--config").And.Contain("is empty");
+        File.Exists(output).Should().BeFalse();
+    }
+
     private Task RunAsync(params string[] commandArguments) =>
         RunWithConfigurationAsync(_emptyConfigPath, commandArguments);
 

@@ -79,6 +79,24 @@ public sealed class AppConfigurationFileTests : IDisposable
             .And.NotContain("neither in", "an absolute path is looked up in one place only");
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Load_WhenGivenPathIsBlank_ThrowsConfigurationFileException(string blankPath)
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+        File.WriteAllText(Path.Combine(workingDirectory, AppConfigurationFile.DefaultPath), """{ "ScanIntervalSeconds": 9 }""");
+
+        // Act
+        var act = () => AppConfigurationFile.Load(blankPath, workingDirectory, executableDirectory);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith("--config").And.Contain("is empty");
+    }
+
     [Fact]
     public void Load_WhenGivenRelativePathIsMissingFromBothDirectories_ThrowsConfigurationFileExceptionNamingThem()
     {

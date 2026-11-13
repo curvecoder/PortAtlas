@@ -36,9 +36,9 @@ public static class AppConfigurationFile
     /// <see cref="DefaultPath"/> is missing from both directories.
     /// </returns>
     /// <exception cref="ConfigurationFileException">
-    /// When a requested path is missing from both directories, or when the file exists but is locked, denied to the
-    /// user, not valid JSON, holds a key that is not a setting, a value of the wrong type, a <c>null</c> where a value
-    /// is needed, or still sets the removed <c>IsolatedMode</c> key to <see langword="true"/>.
+    /// When a requested path is empty or missing from both directories, or when the file exists but is locked, denied
+    /// to the user, not valid JSON, holds a key that is not a setting, a value of the wrong type, a <c>null</c> where
+    /// a value is needed, or still sets the removed <c>IsolatedMode</c> key to <see langword="true"/>.
     /// </exception>
     public static LoadedAppConfiguration Load(string? path) =>
         Load(path, Directory.GetCurrentDirectory(), AppContext.BaseDirectory);
@@ -47,9 +47,16 @@ public static class AppConfigurationFile
     // directory of the test process, which the other tests share.
     internal static LoadedAppConfiguration Load(string? path, string workingDirectory, string executableDirectory)
     {
-        var requestedPath = string.IsNullOrWhiteSpace(path) ? null : path;
-        var inWorkingDirectory = Path.Combine(workingDirectory, requestedPath ?? DefaultPath);
-        var besideExecutable = Path.Combine(executableDirectory, requestedPath ?? DefaultPath);
+        // An empty value is what a script passes when the variable holding the path is not set. Reading it as "no
+        // option" would run the command on portatlas.json or on the defaults in place of the file the script meant.
+        if (path is not null && string.IsNullOrWhiteSpace(path))
+        {
+            throw new ConfigurationFileException(
+                $"--config: the path of the configuration file is empty. Give a path, or remove the option to read {DefaultPath}.");
+        }
+
+        var inWorkingDirectory = Path.Combine(workingDirectory, path ?? DefaultPath);
+        var besideExecutable = Path.Combine(executableDirectory, path ?? DefaultPath);
 
         var existingPath = new[] { inWorkingDirectory, besideExecutable }.FirstOrDefault(File.Exists);
         if (existingPath is not null)
@@ -60,9 +67,9 @@ public static class AppConfigurationFile
 
         // A path given on the command line states which file the operator wants. A mistyped one would otherwise start
         // the command on the built-in defaults, RDAP queries included, without a word.
-        if (requestedPath is not null)
+        if (path is not null)
         {
-            throw new ConfigurationFileException(DescribeMissingRequestedFile(requestedPath, workingDirectory, executableDirectory));
+            throw new ConfigurationFileException(DescribeMissingRequestedFile(path, workingDirectory, executableDirectory));
         }
 
         // Without the option, a missing portatlas.json is the plain first run: the defaults apply, and an exclusion
