@@ -170,6 +170,8 @@ Familles lues : entrées (`.csv`, `.ndjson`, `.jsonl`) et filtres de flux, avec 
 
 Une destination est `Internal` si c'est une adresse de bouclage, une adresse d'une plage privée, ou `0.0.0.0` / `::` ; sinon elle est `Public`.
 
+Un journal CSV est lu avec le séparateur trouvé sur sa propre première ligne (`,`, `;`, tabulation ou `|`) : des journaux écrits avec des valeurs différentes de `CsvDelimiter` peuvent donc être consolidés ensemble. C'est le séparateur placé entre les noms de colonnes de l'en-tête ou, dans un journal sans en-tête, celui qui revient le plus souvent hors des champs entre guillemets. La matrice est écrite avec `CsvDelimiter`.
+
 ## export ndjson
 
 Convertit des journaux CSV en un seul fichier NDJSON, un objet JSON par flux.

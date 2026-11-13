@@ -76,7 +76,8 @@ public sealed record FirewallRuleExportOptions
     public IReadOnlyList<string> ExcludedProcesses { get; init; } = [];
 
     /// <summary>
-    /// Field delimiter character for the CSV output (comma ',' by default).
+    /// Field delimiter character for the CSV output (comma ',' by default). An audit CSV is read with the delimiter
+    /// found on its own first line; this one only settles a first line that fits several delimiters equally.
     /// </summary>
     public char Delimiter { get; init; } = ',';
 

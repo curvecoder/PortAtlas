@@ -170,6 +170,8 @@ Families read: inputs (`.csv`, `.ndjson`, `.jsonl`) and flow filters, with two d
 
 A destination is `Internal` when it is a loopback address, an address of a private range, or `0.0.0.0` / `::`; otherwise it is `Public`.
 
+A CSV log is read with the separator found on its own first line (`,`, `;`, tab or `|`), so logs written with different `CsvDelimiter` values can be consolidated together: the separator between the column names of the header or, in a log without header, the one that occurs most often outside the quoted fields. The matrix is written with `CsvDelimiter`.
+
 ## export ndjson
 
 Converts CSV audit logs into a single NDJSON file, one JSON object per flow.

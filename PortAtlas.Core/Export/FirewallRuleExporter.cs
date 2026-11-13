@@ -70,7 +70,8 @@ public sealed class FirewallRuleExporter(
             }
             else
             {
-                var csvEntries = await _csvParser.ParseHistoryAsync(file, cancellationToken: cancellationToken).ConfigureAwait(false);
+                var delimiter = await AuditCsvDelimiterDetector.DetectAsync(file, options.Delimiter, cancellationToken).ConfigureAwait(false);
+                var csvEntries = await _csvParser.ParseHistoryAsync(file, delimiter: delimiter, cancellationToken: cancellationToken).ConfigureAwait(false);
                 allEntries.AddRange(csvEntries);
             }
         }
