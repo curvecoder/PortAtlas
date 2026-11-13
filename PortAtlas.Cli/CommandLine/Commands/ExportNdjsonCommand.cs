@@ -30,7 +30,7 @@ public sealed class ExportNdjsonCommand : Command
         SetAction(async (parseResult, cancellationToken) =>
         {
             var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
-            var files = _inputs.ResolveFiles(parseResult, config.OutputCsvPath, CsvExtension);
+            var files = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, CsvExtension, AuditDuplicatePolicy.OneFilePerAudit, cancellationToken).ConfigureAwait(false);
             if (files.Count == 0)
             {
                 await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);

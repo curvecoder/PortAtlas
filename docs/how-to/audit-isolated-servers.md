@@ -26,6 +26,8 @@ PortAtlas resolve -i "collected/*.csv" --cache "collected/*.json" --output-cache
 
 Each `audit_x.csv` gets an `audit_x_enriched.csv`; `--in-place` overwrites the originals instead. RDAP queries are spaced by 200 ms (`--rdap-delay-ms`).
 
+Running the command again enriches the originals again and leaves the copies alone: an `_enriched` file found next to its original is named on the console and not read. The folder can then be given as it is to `map` or `export rules`, which read the enriched copy of each log.
+
 ## Complete the cache from several machines
 
 To fill the master cache without touching any audit log, give the cache alone. Only the entries without a name are resolved, and a name already known is never erased:

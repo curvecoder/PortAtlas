@@ -60,6 +60,8 @@ Read by `map`, `export rules`, `export ndjson` and `resolve`.
 
 A directory contributes its files with the extensions read by the command (`.csv` for `map` and `export ndjson`; `.csv`, `.ndjson`, `.jsonl` for `export rules` and `resolve`). Subdirectories are not read. When no file matches, the command prints `No audit log found for: …` and exits with code 1.
 
+Among the files of a directory or of a wildcard pattern, the command reads the audit logs only: a CSV whose first line names the `ServerName` or `LocalPort` column, an NDJSON whose first record carries one of these two properties. A matrix written by `export rules`, a log without header line or an empty file is left out. When several files of a directory hold the same audit, the command keeps one: `map`, `export rules` and `export ndjson` read the copy written by `resolve` (`<name>_enriched.<ext>`) rather than the original, and `export rules` reads the CSV rather than the NDJSON of the same name; `resolve` enriches each original, CSV and NDJSON alike, and leaves out an enriched copy whose original is present. Each file left out is named on the console with its reason. A file whose own path is given to `--input` is always read, whatever it contains. The enriched copy does not receive the flows observed after `resolve` ran: run `resolve` again, or name the original, to read them.
+
 ### Flow filters
 
 Read by `audit` (for its map), `map` and `export rules`. List values are separated by commas; a list option can be repeated and the values add up.

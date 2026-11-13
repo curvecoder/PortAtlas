@@ -39,7 +39,7 @@ public sealed class ExportRulesCommand : Command
         SetAction(async (parseResult, cancellationToken) =>
         {
             var config = _filters.Apply(parseResult, AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration);
-            var files = _inputs.ResolveFiles(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions);
+            var files = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.OneFilePerAudit, cancellationToken).ConfigureAwait(false);
             if (files.Count == 0)
             {
                 await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);

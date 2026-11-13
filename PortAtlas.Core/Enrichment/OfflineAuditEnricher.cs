@@ -36,7 +36,7 @@ public sealed class OfflineAuditEnricher(
     /// <param name="initialCaches">Collection of pre-loaded DNS cache dictionaries.</param>
     /// <param name="options">Enrichment and output options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>A comprehensive outcome report containing processed and generated file paths and metrics.</returns>
+    /// <returns>The outcome report: processed and generated file paths, and counters.</returns>
     public async Task<OfflineAuditEnrichmentReport> EnrichFilesAsync(
         IReadOnlyList<string> auditFiles,
         IReadOnlyList<IReadOnlyDictionary<string, DnsCacheEntry>> initialCaches,
@@ -163,8 +163,8 @@ public sealed class OfflineAuditEnricher(
     /// <param name="cachePathsOrPatterns">Cache file paths, directories, or glob patterns.</param>
     /// <param name="options">Enrichment and output options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>A comprehensive outcome report containing processed and generated file paths and metrics.</returns>
-    public Task<OfflineAuditEnrichmentReport> EnrichPathsAsync(
+    /// <returns>The outcome report: processed and generated file paths, and counters.</returns>
+    public async Task<OfflineAuditEnrichmentReport> EnrichPathsAsync(
         IReadOnlyList<string> auditPathsOrPatterns,
         IReadOnlyList<string> cachePathsOrPatterns,
         OfflineAuditEnrichmentOptions options,
@@ -174,7 +174,20 @@ public sealed class OfflineAuditEnricher(
         ArgumentNullException.ThrowIfNull(cachePathsOrPatterns);
         ArgumentNullException.ThrowIfNull(options);
 
-        var auditFiles = AuditInputPathResolver.Resolve(auditPathsOrPatterns, AuditInputPathResolver.AuditLogExtensions);
+        // An enriched copy found next to its original is the output of an earlier run: enriching it again would
+        // write a copy of the copy.
+        var selection = await AuditLogSelector.SelectAsync(
+            auditPathsOrPatterns,
+            AuditInputPathResolver.AuditLogExtensions,
+            AuditDuplicatePolicy.EachOriginalLog,
+            cancellationToken).ConfigureAwait(false);
+
+        foreach (var skipped in selection.Skipped)
+        {
+            _logger?.Invoke(skipped.Describe());
+        }
+
+        var auditFiles = selection.Files;
         var cacheFiles = AuditInputPathResolver.Resolve(cachePathsOrPatterns, [".json"]);
 
         // The master cache is read even when the caller did not list it: writing it back without merging would erase
@@ -193,7 +206,7 @@ public sealed class OfflineAuditEnricher(
             loadedCaches.Add(store.Load());
         }
 
-        return EnrichFilesAsync(auditFiles, loadedCaches, options, cancellationToken);
+        return await EnrichFilesAsync(auditFiles, loadedCaches, options, cancellationToken).ConfigureAwait(false);
     }
 
     private static async Task<IReadOnlyList<string>> ExtractIpsRequiringResolutionAsync(
@@ -555,7 +568,7 @@ public sealed class OfflineAuditEnricher(
         var dir = Path.GetDirectoryName(inputPath) ?? string.Empty;
         var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
         var ext = Path.GetExtension(inputPath);
-        return Path.Combine(dir, $"{fileNameWithoutExt}_enriched{ext}");
+        return Path.Combine(dir, $"{fileNameWithoutExt}{AuditLogSelector.EnrichedCopySuffix}{ext}");
     }
 
     private static (int RemoteIpIdx, int RemoteHostIdx) ResolveCsvColumnIndices(IReadOnlyList<string> headers)

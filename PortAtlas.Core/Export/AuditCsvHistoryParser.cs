@@ -36,6 +36,20 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         ["UserName"] = 19
     };
 
+    /// <summary>
+    /// Columns whose name tells the header of an audit log from a data row, and from the header of another file.
+    /// </summary>
+    internal static readonly IReadOnlyList<string> HeaderMarkerColumns = [nameof(AuditCsvColumn.ServerName), nameof(AuditCsvColumn.LocalPort)];
+
+    /// <summary>
+    /// Tells whether a line is the header of an audit log, that is the line this parser reads the columns by name from.
+    /// </summary>
+    /// <param name="line">First line of a CSV file.</param>
+    /// <param name="delimiter">Field separator of the file.</param>
+    /// <returns>True when the line names one of <see cref="HeaderMarkerColumns"/>.</returns>
+    internal static bool IsHeaderLine(string line, char delimiter)
+        => HeaderMarkerColumns.Any(BuildColumnIndexMap(SplitCsvLine(line, delimiter)).ContainsKey);
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkAuditEntry>> ParseHistoryAsync(
         string csvFilePath,
@@ -69,7 +83,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
 
         var firstLineFields = SplitCsvLine(firstLine, delimiter);
         var columnMap = BuildColumnIndexMap(firstLineFields);
-        var isHeaderPresent = columnMap.ContainsKey("ServerName") || columnMap.ContainsKey("LocalPort");
+        var isHeaderPresent = HeaderMarkerColumns.Any(columnMap.ContainsKey);
 
         int dataStartIndex;
         if (isHeaderPresent)

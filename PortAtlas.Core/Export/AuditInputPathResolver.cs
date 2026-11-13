@@ -20,24 +20,43 @@ public static class AuditInputPathResolver
     /// <param name="directoryExtensions">Extensions kept when an input is a directory.</param>
     /// <returns>Distinct full paths of the existing files, in input order; inputs matching nothing are skipped.</returns>
     /// <exception cref="ArgumentNullException">When an argument is null.</exception>
+    /// <remarks>
+    /// Every file an input designates is returned, whatever it contains; <see cref="AuditLogSelector"/> keeps the
+    /// audit logs among them.
+    /// </remarks>
     public static IReadOnlyList<string> Resolve(IEnumerable<string> pathsOrPatterns, IReadOnlyCollection<string> directoryExtensions)
+        => ResolveWithOrigin(pathsOrPatterns, directoryExtensions).Select(input => input.FullPath).ToList();
+
+    /// <summary>
+    /// Resolves each input to the files it designates and tells, for each file, whether an input is its own path.
+    /// </summary>
+    /// <param name="pathsOrPatterns">File paths, directory paths or wildcard patterns, as for <see cref="Resolve"/>.</param>
+    /// <param name="directoryExtensions">Extensions kept when an input is a directory.</param>
+    /// <returns>Distinct full paths of the existing files, in input order.</returns>
+    internal static IReadOnlyList<ResolvedInputFile> ResolveWithOrigin(IEnumerable<string> pathsOrPatterns, IReadOnlyCollection<string> directoryExtensions)
     {
         ArgumentNullException.ThrowIfNull(pathsOrPatterns);
         ArgumentNullException.ThrowIfNull(directoryExtensions);
 
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var resolved = new List<string>();
+        var order = new List<string>();
+        var namedByPath = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var file in pathsOrPatterns.Where(p => !string.IsNullOrWhiteSpace(p)).SelectMany(p => Expand(p, directoryExtensions)))
+        foreach (var item in pathsOrPatterns.Where(p => !string.IsNullOrWhiteSpace(p)))
         {
-            var fullPath = Path.GetFullPath(file);
-            if (seen.Add(fullPath))
+            var isNamed = File.Exists(item);
+            foreach (var fullPath in Expand(item, directoryExtensions).Select(Path.GetFullPath))
             {
-                resolved.Add(fullPath);
+                if (!namedByPath.TryGetValue(fullPath, out var alreadyNamed))
+                {
+                    order.Add(fullPath);
+                }
+
+                // A file found in a directory and also given by its own path counts as named, whatever the order.
+                namedByPath[fullPath] = alreadyNamed || isNamed;
             }
         }
 
-        return resolved;
+        return order.ConvertAll(fullPath => new ResolvedInputFile(fullPath, namedByPath[fullPath]));
     }
 
     private static IEnumerable<string> Expand(string item, IReadOnlyCollection<string> directoryExtensions)

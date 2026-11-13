@@ -10,7 +10,7 @@ internal sealed class AuditInputOptionSet
 {
     private readonly Option<string[]> _input = new("--input", "-i")
     {
-        Description = "Audit log to read: a file, a directory (every audit file it contains) or a wildcard pattern such as audits/nas-*.csv. Repeatable. Default: the audit output file of the configuration.",
+        Description = "Audit log to read: a file, a directory (the audit logs it contains, each audit once) or a wildcard pattern such as audits/nas-*.csv. Repeatable. Default: the audit output file of the configuration.",
         HelpName = "path"
     };
 
@@ -23,15 +23,37 @@ internal sealed class AuditInputOptionSet
     public bool HasExplicitInput(ParseResult parseResult) => parseResult.GetValue(_input) is { Length: > 0 };
 
     /// <summary>
-    /// Expands the inputs into existing files.
+    /// Expands the inputs into the audit logs to read, and names on the console each file of a directory or of a
+    /// pattern that is left out.
     /// </summary>
     /// <param name="parseResult">Parsed command line.</param>
     /// <param name="defaultInput">Input used when <c>--input</c> is absent.</param>
     /// <param name="directoryExtensions">Extensions read when an input is a directory.</param>
-    public IReadOnlyList<string> ResolveFiles(ParseResult parseResult, string defaultInput, IReadOnlyCollection<string> directoryExtensions)
+    /// <param name="duplicatePolicy">Which files are kept when several hold the same audit.</param>
+    /// <param name="cancellationToken">Cooperative cancellation token.</param>
+    /// <returns>Full paths of the audit logs to read, in input order; empty when the inputs designate none.</returns>
+    public async Task<IReadOnlyList<string>> ResolveFilesAsync(
+        ParseResult parseResult,
+        string defaultInput,
+        IReadOnlyCollection<string> directoryExtensions,
+        AuditDuplicatePolicy duplicatePolicy,
+        CancellationToken cancellationToken)
     {
         var requested = parseResult.GetValue(_input) is { Length: > 0 } given ? given : [defaultInput];
-        return AuditInputPathResolver.Resolve(requested, directoryExtensions);
+        var selection = await AuditLogSelector.SelectAsync(requested, directoryExtensions, duplicatePolicy, cancellationToken).ConfigureAwait(false);
+
+        foreach (var skipped in selection.Skipped)
+        {
+            Console.WriteLine(skipped.Describe());
+        }
+
+        if (selection.Skipped.Count > 0)
+        {
+            Console.WriteLine("A file whose own path is given to --input is always read.");
+            Console.WriteLine();
+        }
+
+        return selection.Files;
     }
 
     /// <summary>

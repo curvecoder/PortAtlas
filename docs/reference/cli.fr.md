@@ -60,6 +60,8 @@ Lues par `map`, `export rules`, `export ndjson` et `resolve`.
 
 Un dossier apporte ses fichiers portant les extensions lues par la commande (`.csv` pour `map` et `export ndjson` ; `.csv`, `.ndjson`, `.jsonl` pour `export rules` et `resolve`). Les sous-dossiers ne sont pas lus. Quand aucun fichier ne correspond, la commande affiche `No audit log found for: …` et sort avec le code 1.
 
+Parmi les fichiers d'un dossier ou d'un motif, la commande ne lit que les journaux d'audit : un CSV dont la première ligne nomme la colonne `ServerName` ou `LocalPort`, un NDJSON dont le premier enregistrement porte l'une de ces deux propriétés. Une matrice écrite par `export rules`, un journal sans ligne d'en-tête ou un fichier vide est écarté. Quand plusieurs fichiers d'un dossier portent le même audit, la commande n'en garde qu'un : `map`, `export rules` et `export ndjson` lisent la copie écrite par `resolve` (`<name>_enriched.<ext>`) plutôt que l'original, et `export rules` lit le CSV plutôt que le NDJSON de même nom ; `resolve` enrichit chaque original, CSV comme NDJSON, et écarte une copie enrichie dont l'original est présent. Chaque fichier écarté est nommé à l'écran avec sa raison. Un fichier dont le chemin est donné tel quel à `--input` est toujours lu, quel que soit son contenu. La copie enrichie ne reçoit pas les flux observés après le passage de `resolve` : relancez `resolve`, ou nommez l'original, pour les lire.
+
 ### Filtres de flux
 
 Lus par `audit` (pour sa carte), `map` et `export rules`. Les valeurs de liste sont séparées par des virgules ; une option de liste peut être répétée et les valeurs s'additionnent.

@@ -26,6 +26,8 @@ PortAtlas resolve -i "collected/*.csv" --cache "collected/*.json" --output-cache
 
 Chaque `audit_x.csv` donne un `audit_x_enriched.csv` ; `--in-place` remplace plutôt les originaux. Les requêtes RDAP sont espacées de 200 ms (`--rdap-delay-ms`).
 
+Relancer la commande enrichit de nouveau les originaux et laisse les copies de côté : un fichier `_enriched` trouvé à côté de son original est nommé à l'écran et n'est pas lu. Le dossier peut ensuite être donné tel quel à `map` ou à `export rules`, qui lisent la copie enrichie de chaque journal.
+
 ## Compléter le cache depuis plusieurs machines
 
 Pour remplir le cache maître sans toucher aucun journal d'audit, donnez le cache seul. Seules les entrées sans nom sont résolues, et un nom déjà connu n'est jamais effacé :

@@ -60,10 +60,7 @@ public sealed class FirewallRuleExporter(
             cancellationToken.ThrowIfCancellationRequested();
             validFiles.Add(file);
 
-            var isNdjson = file.EndsWith(".ndjson", StringComparison.OrdinalIgnoreCase) ||
-                           file.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase);
-
-            if (isNdjson)
+            if (AuditLogRecognizer.IsNdjsonPath(file))
             {
                 var ndjsonEntries = await _ndjsonParser.ParseHistoryAsync(file, cancellationToken: cancellationToken).ConfigureAwait(false);
                 allEntries.AddRange(ndjsonEntries);
@@ -133,7 +130,7 @@ public sealed class FirewallRuleExporter(
     /// <param name="options">Consolidation and filtering options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Execution report detailing processed files, row counts, and exported rule counts.</returns>
-    public Task<FirewallRuleExportReport> ExportRulesFromPathsAsync(
+    public async Task<FirewallRuleExportReport> ExportRulesFromPathsAsync(
         IReadOnlyList<string> auditPathsOrPatterns,
         string outputPath,
         FirewallRuleExportOptions options,
@@ -143,7 +140,17 @@ public sealed class FirewallRuleExporter(
         ArgumentException.ThrowIfNullOrWhiteSpace(outputPath);
         ArgumentNullException.ThrowIfNull(options);
 
-        var matchingFiles = AuditInputPathResolver.Resolve(auditPathsOrPatterns, AuditInputPathResolver.AuditLogExtensions);
-        return ExportRulesAsync(matchingFiles, outputPath, options, cancellationToken);
+        var selection = await AuditLogSelector.SelectAsync(
+            auditPathsOrPatterns,
+            AuditInputPathResolver.AuditLogExtensions,
+            AuditDuplicatePolicy.OneFilePerAudit,
+            cancellationToken).ConfigureAwait(false);
+
+        foreach (var skipped in selection.Skipped)
+        {
+            _logger?.Invoke(skipped.Describe());
+        }
+
+        return await ExportRulesAsync(selection.Files, outputPath, options, cancellationToken).ConfigureAwait(false);
     }
 }

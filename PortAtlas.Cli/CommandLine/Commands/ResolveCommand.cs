@@ -55,7 +55,9 @@ public sealed class ResolveCommand : Command
             IReadOnlyList<string> auditFiles = [];
             if (_inputs.HasExplicitInput(parseResult) || !cacheGiven)
             {
-                auditFiles = _inputs.ResolveFiles(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions);
+                // Each log is rewritten, the CSV and the NDJSON of an audit alike; an enriched copy next to its
+                // original is the output of an earlier run and is not enriched again.
+                auditFiles = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.EachOriginalLog, cancellationToken).ConfigureAwait(false);
                 if (auditFiles.Count == 0)
                 {
                     await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);
