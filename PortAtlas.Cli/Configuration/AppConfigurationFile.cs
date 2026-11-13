@@ -20,6 +20,8 @@ public static class AppConfigurationFile
     /// </summary>
     public const string DefaultPath = "portatlas.json";
 
+    internal const string RemovedIsolatedModeKey = "IsolatedMode";
+
     private const string DefaultsNotApplied = "Correct the file, or remove it to run on the default settings.";
 
     /// <summary>
@@ -31,8 +33,9 @@ public static class AppConfigurationFile
     /// </param>
     /// <returns>The configuration and the path it was read from; default values when the file is missing.</returns>
     /// <exception cref="ConfigurationFileException">
-    /// When the file exists but is locked, denied to the user, not valid JSON, holds a value of the wrong type or
-    /// <c>null</c>, or still sets the removed <c>IsolatedMode</c> key to <see langword="true"/>.
+    /// When the file exists but is locked, denied to the user, not valid JSON, holds a key that is not a setting, a
+    /// value of the wrong type, a <c>null</c> where a value is needed, or still sets the removed <c>IsolatedMode</c>
+    /// key to <see langword="true"/>.
     /// </exception>
     public static LoadedAppConfiguration Load(string? path)
     {
@@ -93,7 +96,12 @@ public static class AppConfigurationFile
 
         try
         {
-            RejectRemovedIsolatedMode(json, configPath);
+            using (var document = JsonDocument.Parse(json))
+            {
+                RejectRemovedIsolatedMode(document.RootElement, configPath);
+                ConfigurationKeyValidator.Validate(document.RootElement, configPath);
+            }
+
             return JsonSerializer.Deserialize<AppConfiguration>(json)
                 ?? throw new ConfigurationFileException(
                     $"{configPath}: the configuration file holds null instead of a JSON object. {DefaultsNotApplied}");
@@ -108,11 +116,10 @@ public static class AppConfigurationFile
 
     // IsolatedMode (removed in 2.0.0) kept RDAP queries off. Ignoring a true value would make an isolated server
     // start sending Internet queries after the upgrade, so the agent refuses to start until the key is migrated.
-    private static void RejectRemovedIsolatedMode(string json, string configPath)
+    private static void RejectRemovedIsolatedMode(JsonElement root, string configPath)
     {
-        using var document = JsonDocument.Parse(json);
-        if (document.RootElement.ValueKind != JsonValueKind.Object ||
-            !document.RootElement.TryGetProperty("IsolatedMode", out var isolatedMode))
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty(RemovedIsolatedModeKey, out var isolatedMode))
         {
             return;
         }

@@ -2,7 +2,7 @@
 
 # Configuration file reference
 
-PortAtlas reads a JSON file: the one given by `--config`, otherwise `portatlas.json` in the working directory, otherwise `portatlas.json` next to the executable. A missing key takes its default value; an unknown key is ignored. A file that exists but cannot be read (locked, access denied), is not valid JSON, holds a value of the wrong type or holds `null` stops the command with an error naming the file and the cause, and exit code 1: the defaults are not used in its place.
+PortAtlas reads a JSON file: the one given by `--config`, otherwise `portatlas.json` in the working directory, otherwise `portatlas.json` next to the executable. A missing key takes its default value. A file that exists stops the command with an error naming the file and the cause, and exit code 1, when it cannot be read (locked, access denied), is not valid JSON or holds only `null`, or when one of its keys is not a setting of this page (names are case-sensitive), has a value of the wrong type, is `null` (only `ReloadHistoryLimit` accepts it) or holds a `null` entry in a list or in `CustomHostAliases`: the defaults are not used in its place.
 
 `PortAtlas config init` writes a file holding every key with its default value. Command-line options take precedence over the file ([CLI reference](cli.md#sources-of-values)).
 
