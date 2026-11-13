@@ -100,12 +100,7 @@ public sealed class FirewallRuleAggregator
             }
 
             var sourceIp = isOutbound ? entry.Socket.LocalEndpoint.Address.ToString() : entry.Socket.RemoteEndpoint.Address.ToString();
-            var sourceHost = isOutbound
-                ? entry.Server.HostName
-                : isListener ? AnySourceHost : (!string.IsNullOrWhiteSpace(entry.RemoteHostName) ? entry.RemoteHostName : sourceIp);
-
             var destIp = isOutbound ? entry.Socket.RemoteEndpoint.Address.ToString() : entry.Socket.LocalEndpoint.Address.ToString();
-            var destHost = isOutbound ? (!string.IsNullOrWhiteSpace(entry.RemoteHostName) ? entry.RemoteHostName : destIp) : entry.Server.HostName;
             var destPort = isOutbound ? entry.Socket.RemoteEndpoint.Port : entry.Socket.LocalEndpoint.Port;
 
             // Ephemeral destination port exclusion
@@ -116,13 +111,6 @@ public sealed class FirewallRuleAggregator
 
             // Port inclusion / exclusion
             if (!portFilter.IsAllowed(destPort))
-            {
-                continue;
-            }
-
-            // Host inclusion / exclusion
-            if (!IsHostAllowed(sourceHost, options.IncludedHosts, options.ExcludedHosts) ||
-                !IsHostAllowed(destHost, options.IncludedHosts, options.ExcludedHosts))
             {
                 continue;
             }
@@ -146,37 +134,20 @@ public sealed class FirewallRuleAggregator
             {
                 acc = new AggregationAccumulator
                 {
-                    Direction = directionStr,
+                    IsOutbound = isOutbound,
+                    IsListener = isListener,
                     SourceIp = sourceIp,
-                    SourceHost = sourceHost,
                     DestinationIp = destIp,
-                    DestinationHost = destHost,
                     DestinationPort = destPort,
                     Protocol = protocolStr,
                     ProcessName = processName,
                     ExecutablePath = entry.Socket.Process.ExecutablePath,
-                    UserName = entry.Socket.Process.UserName,
-                    ObservationCount = 0,
-                    FirstSeenUtc = entry.FirstSeenUtc,
-                    LastSeenUtc = entry.LastSeenUtc
+                    UserName = entry.Socket.Process.UserName
                 };
                 groups[key] = acc;
             }
 
-            acc.ObservationCount += entry.ObservationCount;
-            if (entry.FirstSeenUtc < acc.FirstSeenUtc)
-            {
-                acc.FirstSeenUtc = entry.FirstSeenUtc;
-            }
-            if (entry.LastSeenUtc > acc.LastSeenUtc)
-            {
-                acc.LastSeenUtc = entry.LastSeenUtc;
-            }
-
-            if (string.IsNullOrWhiteSpace(acc.DestinationHost) && !string.IsNullOrWhiteSpace(destHost))
-            {
-                acc.DestinationHost = destHost;
-            }
+            acc.Observe(entry);
         }
 
         var results = new List<FirewallRuleItem>();
@@ -184,6 +155,13 @@ public sealed class FirewallRuleAggregator
 
         foreach (var acc in groups.Values)
         {
+            // The host patterns are tested once the whole group is read: a name known from one row only would
+            // otherwise let the other rows of the same rule through an exclusion, or drop them from an inclusion.
+            if (!IsAllowedByHostPatterns(acc, options))
+            {
+                continue;
+            }
+
             if (acc.ObservationCount < options.MinObservations)
             {
                 continue;
@@ -270,19 +248,20 @@ public sealed class FirewallRuleAggregator
         return $"{port}/{protocol}";
     }
 
-    private static bool IsHostAllowed(string host, IReadOnlyList<string> included, IReadOnlyList<string> excluded)
+    // As in the topology map, a pattern is tested against both ends of the flow, by name and by address, and one match
+    // is enough to exclude the rule as to include it. The addresses are the ones the rule shows, where the map tests
+    // the primary address of the server. The "Any" source of a listener is a label, not a host.
+    private static bool IsAllowedByHostPatterns(AggregationAccumulator group, FirewallRuleExportOptions options)
     {
-        if (excluded.Count > 0 && MatchesAnyPattern(host, excluded))
+        string[] endpoints = [group.ServerHostName, group.RemoteHostName, group.SourceIp, group.DestinationIp];
+
+        if (endpoints.Any(endpoint => MatchesAnyPattern(endpoint, options.ExcludedHosts)))
         {
             return false;
         }
 
-        if (included.Count > 0 && !MatchesAnyPattern(host, included))
-        {
-            return false;
-        }
-
-        return true;
+        return options.IncludedHosts.Count == 0 ||
+               endpoints.Any(endpoint => MatchesAnyPattern(endpoint, options.IncludedHosts));
     }
 
     private static bool IsProcessAllowed(string processName, string targetExecutable, IReadOnlyList<string> included, IReadOnlyList<string> excluded)
@@ -379,19 +358,83 @@ public sealed class FirewallRuleAggregator
 
     private sealed class AggregationAccumulator
     {
-        public required string Direction { get; init; }
+        private readonly MostRecentlySeenName _serverHostName = new();
+        private readonly MostRecentlySeenName _remoteHostName = new();
+
+        public required bool IsOutbound { get; init; }
+        public required bool IsListener { get; init; }
         public required string SourceIp { get; init; }
-        public required string SourceHost { get; set; }
         public required string DestinationIp { get; init; }
-        public required string DestinationHost { get; set; }
         public required int DestinationPort { get; init; }
         public required string Protocol { get; init; }
         public required string ProcessName { get; init; }
         public required string ExecutablePath { get; init; }
         public required string UserName { get; init; }
-        public long ObservationCount { get; set; }
-        public DateTimeOffset FirstSeenUtc { get; set; }
-        public DateTimeOffset LastSeenUtc { get; set; }
+        public string Direction => IsOutbound ? "Outbound" : "Inbound";
+        public string ServerHostName => _serverHostName.Value;
+        public string RemoteHostName => _remoteHostName.Value;
+        public long ObservationCount { get; private set; }
+        public DateTimeOffset FirstSeenUtc { get; private set; } = DateTimeOffset.MaxValue;
+        public DateTimeOffset LastSeenUtc { get; private set; } = DateTimeOffset.MinValue;
+
+        public string SourceHost
+        {
+            get
+            {
+                if (IsOutbound)
+                {
+                    return ServerHostName;
+                }
+
+                return IsListener ? AnySourceHost : RemoteHostNameOr(SourceIp);
+            }
+        }
+
+        public string DestinationHost => IsOutbound ? RemoteHostNameOr(DestinationIp) : ServerHostName;
+
+        public void Observe(NetworkAuditEntry entry)
+        {
+            ObservationCount += entry.ObservationCount;
+            if (entry.FirstSeenUtc < FirstSeenUtc)
+            {
+                FirstSeenUtc = entry.FirstSeenUtc;
+            }
+            if (entry.LastSeenUtc > LastSeenUtc)
+            {
+                LastSeenUtc = entry.LastSeenUtc;
+            }
+
+            _serverHostName.Offer(entry.Server.HostName, entry.LastSeenUtc);
+            _remoteHostName.Offer(entry.RemoteHostName, entry.LastSeenUtc);
+        }
+
+        private string RemoteHostNameOr(string remoteIp) => RemoteHostName.Length > 0 ? RemoteHostName : remoteIp;
+    }
+
+    // The first row of a flow is written before the DNS answer comes back, and a server can be renamed during an
+    // audit: a rule takes each name from whichever row carries it. The most recently seen name wins and the ordinal
+    // order settles a tie, so that the matrix does not depend on the order in which the audit files are read.
+    private sealed class MostRecentlySeenName
+    {
+        private DateTimeOffset _seenUtc = DateTimeOffset.MinValue;
+
+        public string Value { get; private set; } = string.Empty;
+
+        public void Offer(string name, DateTimeOffset seenUtc)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return;
+            }
+
+            var isMoreRecent = seenUtc > _seenUtc;
+            var settlesTie = seenUtc == _seenUtc && string.CompareOrdinal(name, Value) < 0;
+            if (Value.Length == 0 || isMoreRecent || settlesTie)
+            {
+                Value = name;
+                _seenUtc = seenUtc;
+            }
+        }
     }
 
     private sealed class PortMatcher(HashSet<int> included, HashSet<int> excluded)

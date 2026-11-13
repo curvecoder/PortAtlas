@@ -325,6 +325,303 @@ public sealed class FirewallRuleAggregatorTests
         rules[0].DestinationIp.Should().Be("10.20.1.5");
     }
 
+    // The first row of a flow is written before the DNS answer comes back: only a later row carries the name.
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound)]
+    [InlineData(SocketFlowDirection.Inbound)]
+    public void Aggregate_WhenOnlyALaterRowCarriesTheRemoteName_NamesTheRemoteEndOfTheRule(SocketFlowDirection direction)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var unnamed = CreateRemoteNamedEntry(direction, remoteHost: "", lastSeen: seen);
+        var named = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: seen.AddMinutes(5));
+
+        // Act
+        var rules = aggregator.Aggregate([unnamed, named], new FirewallRuleExportOptions());
+
+        // Assert
+        var rule = rules.Should().ContainSingle().Subject;
+        var remoteHost = direction == SocketFlowDirection.Outbound ? rule.DestinationHost : rule.SourceHost;
+        remoteHost.Should().Be("pihole.home.arpa");
+    }
+
+    // A server renamed during the audit, or read from two logs: the rule must not take the name of the first file read.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenRowsCarryDifferentServerNames_KeepsTheMostRecentlySeenName(bool recentRowFirst)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var old = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen, serverHost: "old-nas.home.arpa");
+        var recent = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen.AddMinutes(5), serverHost: "nas.home.arpa");
+        NetworkAuditEntry[] entries = recentRowFirst ? [recent, old] : [old, recent];
+
+        // Act
+        var rules = aggregator.Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Should().ContainSingle().Which.SourceHost.Should().Be("nas.home.arpa");
+    }
+
+    [Fact]
+    public void Aggregate_WhenExcludedHostPatternMatchesTheAddressOfAnUnnamedRemoteHost_RemovesTheRule()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ExcludedHosts = ["192.168.1.53"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Aggregate_WhenExcludedHostPatternMatchesOneRuleOnly_KeepsTheOtherRule()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var toPihole = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+        var toProxmox = CreateSampleEntry(
+            direction: SocketFlowDirection.Outbound,
+            localIp: "192.168.1.20",
+            localPort: 51001,
+            remoteIp: "192.168.1.10",
+            remotePort: 8006,
+            serverHost: "nas.home.arpa",
+            remoteHost: "proxmox.home.arpa");
+
+        // Act
+        var rules = aggregator.Aggregate([toPihole, toProxmox], new FirewallRuleExportOptions { ExcludedHosts = ["pihole*"] });
+
+        // Assert
+        rules.Should().ContainSingle().Which.DestinationHost.Should().Be("proxmox.home.arpa");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    public void Aggregate_WhenALaterRowHasNoRemoteName_KeepsTheNameAlreadyRead(string missingName)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var named = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen);
+        var unnamed = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: missingName, lastSeen: seen.AddMinutes(5));
+
+        // Act
+        var rules = aggregator.Aggregate([named, unnamed], new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Should().ContainSingle().Which.DestinationHost.Should().Be("pihole.home.arpa");
+    }
+
+    // The matrix must not depend on the order in which the audit files are read.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenRowsCarryDifferentRemoteNames_KeepsTheMostRecentlySeenName(bool recentRowFirst)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var old = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "old-name.home.arpa", lastSeen: seen);
+        var recent = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "new-name.home.arpa", lastSeen: seen.AddMinutes(5));
+        NetworkAuditEntry[] entries = recentRowFirst ? [recent, old] : [old, recent];
+
+        // Act
+        var rules = aggregator.Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Should().ContainSingle().Which.DestinationHost.Should().Be("new-name.home.arpa");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenTwoRemoteNamesWereSeenAtTheSameInstant_KeepsTheFirstInOrdinalOrder(bool reversed)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var first = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "adguard.home.arpa", lastSeen: seen);
+        var second = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen);
+        NetworkAuditEntry[] entries = reversed ? [second, first] : [first, second];
+
+        // Act
+        var rules = aggregator.Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Should().ContainSingle().Which.DestinationHost.Should().Be("adguard.home.arpa");
+    }
+
+    [Fact]
+    public void Aggregate_WhenExcludedHostNameIsCarriedByOneRowOnly_RemovesTheWholeRule()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var unnamed = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "", lastSeen: seen);
+        var named = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen.AddMinutes(5));
+
+        // Act
+        var rules = aggregator.Aggregate([unnamed, named], new FirewallRuleExportOptions { ExcludedHosts = ["pihole*"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Aggregate_WhenIncludedHostNameIsCarriedByOneRowOnly_CountsEveryRowOfTheRule()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var unnamed = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "", lastSeen: seen, observationCount: 10);
+        var named = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen.AddMinutes(5), observationCount: 30);
+
+        // Act
+        var rules = aggregator.Aggregate([unnamed, named], new FirewallRuleExportOptions { IncludedHosts = ["pihole*"] });
+
+        // Assert
+        rules.Should().ContainSingle().Which.ObservationCount.Should().Be(40);
+    }
+
+    // Same rule as the topology map: one end of the flow is enough, by its name or by its address.
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound, "nas*")]
+    [InlineData(SocketFlowDirection.Outbound, "pihole*")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Inbound, "nas*")]
+    [InlineData(SocketFlowDirection.Inbound, "pihole*")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.53")]
+    public void Aggregate_WhenIncludedHostPatternMatchesOneEndOfTheFlow_KeepsTheRule(SocketFlowDirection direction, string pattern)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedHosts = [pattern] });
+
+        // Assert
+        rules.Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound, "nas*")]
+    [InlineData(SocketFlowDirection.Outbound, "pihole*")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Inbound, "nas*")]
+    [InlineData(SocketFlowDirection.Inbound, "pihole*")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.53")]
+    public void Aggregate_WhenExcludedHostPatternMatchesOneEndOfTheFlow_RemovesTheRule(SocketFlowDirection direction, string pattern)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ExcludedHosts = [pattern] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Aggregate_WhenIncludedHostPatternMatchesNoEndOfTheFlow_RemovesTheRule()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedHosts = ["proxmox*"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    // The source of a listener rule is the placeholder "Any": it must not be what the patterns are tested against.
+    [Fact]
+    public void Aggregate_WhenListenersOnlyAndIncludedHostPatternMatchesTheServer_KeepsTheListener()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateSampleEntry(
+            direction: SocketFlowDirection.Listening,
+            localIp: "192.168.1.20",
+            localPort: 445,
+            remoteIp: "0.0.0.0",
+            remotePort: 0,
+            serverHost: "nas.home.arpa",
+            processName: "smbd",
+            state: "Listen");
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedHosts = ["nas*"] });
+
+        // Assert
+        rules.Should().ContainSingle().Which.SourceHost.Should().Be("Any");
+    }
+
+    [Fact]
+    public void Aggregate_WhenListenersOnlyAndExcludedHostPatternMatchesTheAnySourceLabel_KeepsTheListener()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateSampleEntry(
+            direction: SocketFlowDirection.Listening,
+            localIp: "192.168.1.20",
+            localPort: 445,
+            remoteIp: "0.0.0.0",
+            remotePort: 0,
+            serverHost: "nas.home.arpa",
+            processName: "smbd",
+            state: "Listen");
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedHosts = ["Any"] });
+
+        // Assert
+        rules.Should().ContainSingle();
+    }
+
+    // One flow between the server nas.home.arpa (192.168.1.20) and the remote host 192.168.1.53, on the DNS port.
+    private static NetworkAuditEntry CreateRemoteNamedEntry(
+        SocketFlowDirection direction,
+        string remoteHost,
+        DateTimeOffset lastSeen,
+        long observationCount = 10,
+        string serverHost = "nas.home.arpa")
+    {
+        var isOutbound = direction == SocketFlowDirection.Outbound;
+        return CreateSampleEntry(
+            direction: direction,
+            localIp: "192.168.1.20",
+            localPort: isOutbound ? 51000 : 53,
+            remoteIp: "192.168.1.53",
+            remotePort: isOutbound ? 53 : 51000,
+            serverHost: serverHost,
+            remoteHost: remoteHost,
+            processName: "dnsproxy",
+            observationCount: observationCount,
+            firstSeen: lastSeen.AddMinutes(-1),
+            lastSeen: lastSeen);
+    }
+
     private static NetworkAuditEntry CreateSampleEntry(
         SocketFlowDirection direction,
         string localIp,

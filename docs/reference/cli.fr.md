@@ -170,6 +170,8 @@ Familles lues : entrées (`.csv`, `.ndjson`, `.jsonl`) et filtres de flux, avec 
 
 Une destination est `Internal` si c'est une adresse de bouclage, une adresse d'une plage privée, ou `0.0.0.0` / `::` ; sinon elle est `Public`.
 
+Une règle porte le nom du serveur et le nom distant trouvés sur n'importe laquelle de ses lignes de journal, le plus récemment vu quand plusieurs lignes diffèrent. `--include-hosts` et `--exclude-hosts` sont testés sur la règle consolidée, contre ses deux extrémités, par le nom et par l'adresse que la règle affiche : une correspondance suffit, pour garder la règle comme pour la retirer. La source `Any` d'une écoute n'est pas testée.
+
 Un journal CSV est lu avec le séparateur trouvé sur sa propre première ligne (`,`, `;`, tabulation ou `|`) : des journaux écrits avec des valeurs différentes de `CsvDelimiter` peuvent donc être consolidés ensemble. C'est le séparateur placé entre les noms de colonnes de l'en-tête ou, dans un journal sans en-tête, celui qui revient le plus souvent hors des champs entre guillemets. La matrice est écrite avec `CsvDelimiter`.
 
 ## export ndjson
