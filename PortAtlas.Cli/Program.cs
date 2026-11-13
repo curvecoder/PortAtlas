@@ -32,14 +32,14 @@ public static class Program
 
         // ProcessTerminationTimeout = null: the audit loop registers its own Ctrl+C and SIGTERM handlers to flush the
         // CSV writers before exiting; System.CommandLine must not force the process exit after its 2-second default.
-        // The default exception handler is off so that a configuration error reaches the catch below and is shown as
-        // one line instead of a stack trace; any other exception still ends the process with its stack trace.
+        // The default exception handler is off so that a configuration or filter error reaches the catch below and is
+        // shown as one line instead of a stack trace; any other exception still ends the process with its stack trace.
         var invocation = new InvocationConfiguration { ProcessTerminationTimeout = null, EnableDefaultExceptionHandler = false };
         try
         {
             return await PortAtlasCommandLine.CreateRootCommand().Parse(args).InvokeAsync(invocation).ConfigureAwait(false);
         }
-        catch (ConfigurationFileException ex)
+        catch (Exception ex) when (ex is ConfigurationFileException or FlowFilterFormatException)
         {
             await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
             return 1;

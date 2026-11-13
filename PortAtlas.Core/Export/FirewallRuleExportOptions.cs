@@ -1,3 +1,6 @@
+using PortAtlas.Core.Filtering;
+using TopologyForge.Models;
+
 namespace PortAtlas.Core.Export;
 
 /// <summary>
@@ -36,14 +39,14 @@ public sealed record FirewallRuleExportOptions
     public string Direction { get; init; } = "all";
 
     /// <summary>
-    /// Destination port numbers or ranges to include (e.g. "80", "443", "8000-8080").
+    /// Destination ports or port ranges to include.
     /// </summary>
-    public IReadOnlyList<string> IncludedPorts { get; init; } = [];
+    public IReadOnlyList<NetworkPortRange> IncludedPorts { get; init; } = [];
 
     /// <summary>
-    /// Destination port numbers or ranges to exclude.
+    /// Destination ports or port ranges to exclude.
     /// </summary>
-    public IReadOnlyList<string> ExcludedPorts { get; init; } = [];
+    public IReadOnlyList<NetworkPortRange> ExcludedPorts { get; init; } = [];
 
     /// <summary>
     /// Host name wildcard patterns to include (supports '*').
@@ -58,12 +61,12 @@ public sealed record FirewallRuleExportOptions
     /// <summary>
     /// IP addresses or CIDR subnets to include.
     /// </summary>
-    public IReadOnlyList<string> IncludedIps { get; init; } = [];
+    public IReadOnlyList<CidrRange> IncludedIps { get; init; } = [];
 
     /// <summary>
     /// IP addresses or CIDR subnets to exclude.
     /// </summary>
-    public IReadOnlyList<string> ExcludedIps { get; init; } = [];
+    public IReadOnlyList<CidrRange> ExcludedIps { get; init; } = [];
 
     /// <summary>
     /// Process names or targets to include.

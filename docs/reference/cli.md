@@ -78,6 +78,8 @@ Read by `audit` (for its map), `map` and `export rules`. List values are separat
 | `--listeners-only` | none | `MapListenersOnly` | Keep only listening sockets |
 | `--include-ephemeral-ports` | none | `MapExcludeEphemeralPorts` | Keep ports 49152-65535, removed by default |
 
+A port is a number between 0 and 65535, a range is written in increasing order (`8000-8080`). An address filter is an address (`192.168.1.50`, an IPv4 address being written with its four decimal bytes) or a CIDR subnet; a subnet written with the address of one of its hosts (`192.168.1.10/24`) is read as the subnet of that host (`192.168.1.0/24`). Any other value given to `--include-ports`, `--exclude-ports`, `--include-ips` or `--exclude-ips`, or to their configuration keys, stops the command before it starts: the message names the option, the key and the value, and the exit code is 1.
+
 ### Map rendering
 
 Read by `audit` and `map`. Accepted values are compared without case.
@@ -256,4 +258,4 @@ PortAtlas config init [<path>]
 | Code | Meaning |
 | :--- | :--- |
 | `0` | Success, or help printed |
-| `1` | Invalid command line, no audit log found, invalid CSV column name, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |
+| `1` | Invalid command line, no audit log found, invalid CSV column name, a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |

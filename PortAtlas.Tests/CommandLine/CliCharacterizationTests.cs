@@ -416,6 +416,107 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(output).Should().BeFalse();
     }
 
+    // A filter value that cannot be read used to be dropped without a word: an unreadable inclusion then meant
+    // "no filter" in the matrix, and an unreadable port ended the map command with a stack trace.
+    [Theory]
+    [InlineData("rules", "--include-ports", "http")]
+    [InlineData("rules", "--include-ports", "70000")]
+    [InlineData("rules", "--exclude-ports", "8080-8000")]
+    [InlineData("rules", "--include-ips", "nas")]
+    [InlineData("rules", "--exclude-ips", "192.168.1.0/33")]
+    [InlineData("map", "--include-ports", "http")]
+    [InlineData("map", "--exclude-ports", "8080-8000")]
+    [InlineData("map", "--include-ips", "nas")]
+    [InlineData("map", "--exclude-ips", "192.168.1.0/33")]
+    public async Task Main_WhenFlowFilterValueIsUnreadable_ReturnsExitCodeOneNamingTheOptionAndTheValue(
+        string command,
+        string option,
+        string value)
+    {
+        // Arrange
+        var output = Path.Combine(_directory, "unreadable-filter.out");
+        string[] commandArguments = command == "rules"
+            ? ["export", "rules", "-i", _auditPath, "-o", output]
+            : ["map", "-i", _auditPath, "--html", output];
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main([.. commandArguments, option, value, "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain(option).And.Contain($"'{value}'");
+        File.Exists(output).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Main_WhenFlowFilterKeyOfTheConfigurationIsUnreadable_ReturnsExitCodeOneNamingTheKey()
+    {
+        // Arrange
+        var config = await WriteConfigurationAsync(new { MapExcludedIps = new[] { "192.168.1.0/24", "pihole" } });
+        var matrix = Path.Combine(_directory, "unreadable-key.csv");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "rules", "-i", _auditPath, "-o", matrix, "--config", config]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain("MapExcludedIps").And.Contain("'pihole'");
+        File.Exists(matrix).Should().BeFalse();
+    }
+
+    // Same reading as the topology map, which masks the host bits of a subnet.
+    [Fact]
+    public async Task ExportRules_WhenIncludedSubnetIsWrittenWithHostBits_KeepsTheFlowsOfTheSubnet()
+    {
+        // Arrange
+        var matrix = Path.Combine(_directory, "host-bits.csv");
+
+        // Act
+        await RunAsync("export", "rules", "-o", matrix, "-i", _auditPath, "--include-ips", "10.20.1.99/24");
+
+        // Assert
+        var rows = (await File.ReadAllLinesAsync(matrix)).Skip(1).ToList();
+        rows.Should().ContainSingle().Which.Should().Contain(",10.20.1.5,db-oracle.example.test,");
+    }
+
+    // A configuration list can hold several ports in one string, which the topology map already splits.
+    [Fact]
+    public async Task ExportRules_WhenConfigurationGivesSeveralPortsInOneString_KeepsEachOfThem()
+    {
+        // Arrange
+        var config = await WriteConfigurationAsync(new { MapIncludedPorts = new[] { "1521; 8443" } });
+        var matrix = Path.Combine(_directory, "ports-in-one-string.csv");
+
+        // Act
+        await RunWithConfigurationAsync(config, "export", "rules", "-o", matrix, "-i", _auditPath);
+
+        // Assert
+        var rows = (await File.ReadAllLinesAsync(matrix)).Skip(1).ToList();
+        rows.Should().ContainSingle().Which.Should().Contain(",TCP,1521,");
+    }
+
     private Task RunAsync(params string[] commandArguments) =>
         RunWithConfigurationAsync(_emptyConfigPath, commandArguments);
 

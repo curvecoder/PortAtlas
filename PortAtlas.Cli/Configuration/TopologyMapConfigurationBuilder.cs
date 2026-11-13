@@ -1,4 +1,3 @@
-using System.Globalization;
 using TopologyForge.Export.Drawio.Adapters;
 using TopologyForge.Export.Drawio.Styling;
 using TopologyForge.Filtering;
@@ -21,8 +20,8 @@ public static class TopologyMapConfigurationBuilder
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var includedPorts = ParsePortRanges(config.MapIncludedPorts);
-        var excludedPorts = ParsePortRanges(config.MapExcludedPorts);
+        var filters = FlowFilters.Parse(config);
+        var excludedPorts = new List<NetworkPortRange>(filters.ExcludedPorts);
 
         foreach (var port in config.ExcludedLocalPorts.Concat(config.ExcludedRemotePorts))
         {
@@ -32,7 +31,7 @@ public static class TopologyMapConfigurationBuilder
             }
         }
 
-        var excludedIps = new List<string>(config.MapExcludedIps);
+        var excludedIps = filters.ExcludedIps.Select(range => range.ToString()).ToList();
         foreach (var ip in config.ExcludedRemoteIps)
         {
             if (!string.IsNullOrWhiteSpace(ip))
@@ -50,11 +49,11 @@ public static class TopologyMapConfigurationBuilder
             IncludeListeners = true,
             IncludeInboundFlows = includeInbound,
             IncludeOutboundFlows = includeOutbound,
-            IncludedPorts = includedPorts,
+            IncludedPorts = filters.IncludedPorts,
             ExcludedPorts = excludedPorts,
             IncludedHostPatterns = config.MapIncludedHosts,
             ExcludedHostPatterns = config.MapExcludedHosts,
-            IncludedIpRanges = config.MapIncludedIps,
+            IncludedIpRanges = filters.IncludedIps.Select(range => range.ToString()).ToList(),
             ExcludedIpRanges = excludedIps,
             IncludedProcesses = config.MapIncludedProcesses,
             ExcludedProcesses = config.MapExcludedProcesses
@@ -194,23 +193,4 @@ public static class TopologyMapConfigurationBuilder
         "IP" or "SUBNETIP" => TopologyNodeSortMethod.SubnetIp,
         _ => TopologyNodeSortMethod.BarycentricSugiyama
     };
-
-    private static List<NetworkPortRange> ParsePortRanges(IEnumerable<string> specifications)
-    {
-        var result = new List<NetworkPortRange>();
-        foreach (var spec in specifications)
-        {
-            if (string.IsNullOrWhiteSpace(spec))
-            {
-                continue;
-            }
-
-            foreach (var range in NetworkPortRange.ParseList(spec.ToString(CultureInfo.InvariantCulture)))
-            {
-                result.Add(range);
-            }
-        }
-
-        return result;
-    }
 }

@@ -2,6 +2,7 @@ using System.Net;
 using PortAtlas.Core.Filtering;
 using PortAtlas.Core.Models;
 using SocketForge.Models;
+using TopologyForge.Models;
 
 namespace PortAtlas.Core.Export;
 
@@ -63,7 +64,7 @@ public sealed class FirewallRuleAggregator
 
         var groups = new Dictionary<(string Direction, string SourceIp, string DestIp, int DestPort, string Protocol, string Process), AggregationAccumulator>();
 
-        var portFilter = BuildPortMatcher(options.IncludedPorts, options.ExcludedPorts);
+        var portFilter = new PortMatcher(options.IncludedPorts, options.ExcludedPorts);
         var ipMatcher = BuildIpMatcher(options.IncludedIps, options.ExcludedIps);
 
         foreach (var entry in entries)
@@ -316,43 +317,10 @@ public sealed class FirewallRuleAggregator
         return false;
     }
 
-    private static PortMatcher BuildPortMatcher(IReadOnlyList<string> included, IReadOnlyList<string> excluded)
+    private static IpMatcher BuildIpMatcher(IReadOnlyList<CidrRange> included, IReadOnlyList<CidrRange> excluded)
     {
-        var inc = ParsePortTokens(included);
-        var exc = ParsePortTokens(excluded);
-        return new PortMatcher(inc, exc);
-    }
-
-    private static HashSet<int> ParsePortTokens(IReadOnlyList<string> tokens)
-    {
-        var result = new HashSet<int>();
-        foreach (var token in tokens)
-        {
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                continue;
-            }
-
-            var parts = token.Split('-', StringSplitOptions.TrimEntries);
-            if (parts.Length == 2 && int.TryParse(parts[0], out var start) && int.TryParse(parts[1], out var end))
-            {
-                for (var p = start; p <= end; p++)
-                {
-                    result.Add(p);
-                }
-            }
-            else if (int.TryParse(token, out var single))
-            {
-                result.Add(single);
-            }
-        }
-        return result;
-    }
-
-    private static IpMatcher BuildIpMatcher(IReadOnlyList<string> included, IReadOnlyList<string> excluded)
-    {
-        var inc = included.Count > 0 ? new IpAddressRangeMatcher(included) : null;
-        var exc = excluded.Count > 0 ? new IpAddressRangeMatcher(excluded) : null;
+        var inc = included.Count > 0 ? IpAddressRangeMatcher.FromRanges(included) : null;
+        var exc = excluded.Count > 0 ? IpAddressRangeMatcher.FromRanges(excluded) : null;
         return new IpMatcher(inc, exc);
     }
 
@@ -437,19 +405,30 @@ public sealed class FirewallRuleAggregator
         }
     }
 
-    private sealed class PortMatcher(HashSet<int> included, HashSet<int> excluded)
+    private sealed class PortMatcher(IReadOnlyList<NetworkPortRange> included, IReadOnlyList<NetworkPortRange> excluded)
     {
         public bool IsAllowed(int port)
         {
-            if (excluded.Contains(port))
+            if (Holds(excluded, port))
             {
                 return false;
             }
-            if (included.Count > 0 && !included.Contains(port))
+
+            return included.Count == 0 || Holds(included, port);
+        }
+
+        // Called once per audit row: an indexed loop, where a LINQ query would allocate on each call.
+        private static bool Holds(IReadOnlyList<NetworkPortRange> ranges, int port)
+        {
+            for (var i = 0; i < ranges.Count; i++)
             {
-                return false;
+                if (ranges[i].Contains(port))
+                {
+                    return true;
+                }
             }
-            return true;
+
+            return false;
         }
     }
 

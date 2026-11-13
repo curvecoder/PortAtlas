@@ -64,6 +64,40 @@ public sealed class IpAddressRangeMatcherTests
         matcher.HasRules.Should().BeFalse();
     }
 
+    // A subnet written with the address of one of its hosts used to be dropped, which left the rule without effect.
+    [Theory]
+    [InlineData("192.168.1.10/24", "192.168.1.200")]
+    [InlineData("192.168.1.10/24", "192.168.1.10")]
+    [InlineData("2001:db8::1/64", "2001:db8::ffff")]
+    public void IsMatch_WhenSubnetRuleIsWrittenWithHostBits_MatchesTheWholeSubnet(string rule, string address)
+    {
+        // Arrange
+        var matcher = new IpAddressRangeMatcher([rule]);
+
+        // Act
+        var isMatch = matcher.IsMatch(IPAddress.Parse(address));
+
+        // Assert
+        isMatch.Should().BeTrue();
+    }
+
+    // A link-local peer is reported with the zone of the local interface (fe80::1%12).
+    [Theory]
+    [InlineData("fe80::1%12", "fe80::1%12")]
+    [InlineData("fe80::1", "fe80::1%12")]
+    [InlineData("fe80::1%12", "fe80::1")]
+    public void IsMatch_WhenLinkLocalRuleOrAddressCarriesAZone_MatchesTheSameAddress(string rule, string address)
+    {
+        // Arrange
+        var matcher = new IpAddressRangeMatcher([rule]);
+
+        // Act
+        var isMatch = matcher.IsMatch(IPAddress.Parse(address));
+
+        // Assert
+        isMatch.Should().BeTrue();
+    }
+
     [Fact]
     public void IsMatch_WhenAddressIsNull_ThrowsArgumentNullException()
     {

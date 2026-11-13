@@ -46,6 +46,7 @@ public sealed class ExportRulesCommand : Command
                 return 1;
             }
 
+            var filters = FlowFilters.Parse(config);
             var options = new FirewallRuleExportOptions
             {
                 // MapExcludeEphemeralPorts tunes the topology map only: a firewall matrix keeps excluding
@@ -56,12 +57,12 @@ public sealed class ExportRulesCommand : Command
                 DestinationZoneFilter = parseResult.GetValue(_zone) ?? "all",
                 ListenersOnly = config.MapListenersOnly,
                 Direction = config.MapDirection,
-                IncludedPorts = config.MapIncludedPorts,
-                ExcludedPorts = config.MapExcludedPorts,
+                IncludedPorts = filters.IncludedPorts,
+                ExcludedPorts = filters.ExcludedPorts,
                 IncludedHosts = config.MapIncludedHosts,
                 ExcludedHosts = config.MapExcludedHosts,
-                IncludedIps = config.MapIncludedIps,
-                ExcludedIps = config.MapExcludedIps,
+                IncludedIps = filters.IncludedIps,
+                ExcludedIps = filters.ExcludedIps,
                 IncludedProcesses = config.MapIncludedProcesses,
                 ExcludedProcesses = config.MapExcludedProcesses,
                 Delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',',

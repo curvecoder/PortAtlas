@@ -160,4 +160,35 @@ public sealed class AuditCommandTests
         // Assert
         updated.Should().BeEquivalentTo(fileConfiguration);
     }
+
+    // The audit reads its map filters when it writes the map, long after its start: an unreadable value must stop it
+    // before the first scan.
+    [Theory]
+    [InlineData("--include-ports", "http")]
+    [InlineData("--exclude-ports", "8080-8000")]
+    [InlineData("--include-ips", "nas")]
+    [InlineData("--exclude-ips", "192.168.1.0/33")]
+    public void BuildConfiguration_WhenFlowFilterValueIsUnreadable_ThrowsFlowFilterFormatExceptionNamingTheOptionAndTheValue(
+        string option,
+        string value)
+    {
+        // Act
+        var act = () => AuditCommandConfiguration.Build(new AppConfiguration(), "audit", option, value);
+
+        // Assert
+        act.Should().Throw<FlowFilterFormatException>().WithMessage($"*{option}*'{value}'*");
+    }
+
+    [Fact]
+    public void BuildConfiguration_WhenFlowFilterKeyOfTheFileIsUnreadable_ThrowsFlowFilterFormatExceptionNamingTheKey()
+    {
+        // Arrange
+        var fileConfiguration = new AppConfiguration { MapIncludedPorts = ["443", "https"] };
+
+        // Act
+        var act = () => AuditCommandConfiguration.Build(fileConfiguration, "audit");
+
+        // Assert
+        act.Should().Throw<FlowFilterFormatException>().WithMessage("*MapIncludedPorts*'https'*");
+    }
 }

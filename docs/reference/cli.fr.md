@@ -78,6 +78,8 @@ Lus par `audit` (pour sa carte), `map` et `export rules`. Les valeurs de liste s
 | `--listeners-only` | aucune | `MapListenersOnly` | Ne garder que les sockets en écoute |
 | `--include-ephemeral-ports` | aucune | `MapExcludeEphemeralPorts` | Garder les ports 49152-65535, retirés par défaut |
 
+Un port est un nombre entre 0 et 65535, une plage s'écrit dans l'ordre croissant (`8000-8080`). Un filtre d'adresses est une adresse (`192.168.1.50`, une adresse IPv4 s'écrivant avec ses quatre octets en décimal) ou un sous-réseau CIDR ; un sous-réseau écrit avec l'adresse d'un de ses hôtes (`192.168.1.10/24`) est lu comme le sous-réseau de cet hôte (`192.168.1.0/24`). Toute autre valeur donnée à `--include-ports`, `--exclude-ports`, `--include-ips` ou `--exclude-ips`, ou à leurs clés de configuration, arrête la commande avant qu'elle ne commence : le message nomme l'option, la clé et la valeur, et le code de sortie est 1.
+
 ### Rendu de la carte
 
 Lues par `audit` et `map`. Les valeurs admises sont comparées sans tenir compte de la casse.
@@ -256,4 +258,4 @@ PortAtlas config init [<path>]
 | Code | Signification |
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
-| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide, chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
+| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide, port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |

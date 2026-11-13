@@ -36,8 +36,9 @@ internal sealed class FlowFilterOptionSet
         command.Options.Add(IncludeEphemeralPorts);
     }
 
-    public AppConfiguration Apply(ParseResult parseResult, AppConfiguration config) =>
-        config with
+    public AppConfiguration Apply(ParseResult parseResult, AppConfiguration config)
+    {
+        var filtered = config with
         {
             MapIncludedPorts = OptionFactory.ReadList(parseResult, _includePorts, config.MapIncludedPorts),
             MapExcludedPorts = OptionFactory.ReadList(parseResult, _excludePorts, config.MapExcludedPorts),
@@ -51,4 +52,10 @@ internal sealed class FlowFilterOptionSet
             MapListenersOnly = config.MapListenersOnly || parseResult.GetValue(_listenersOnly),
             MapExcludeEphemeralPorts = config.MapExcludeEphemeralPorts && !parseResult.GetValue(IncludeEphemeralPorts)
         };
+
+        // The ports and addresses are read here, before the command does any work, so that an unreadable value stops
+        // the three commands the same way: the audit would otherwise find it out when it writes its map.
+        _ = FlowFilters.Parse(filtered);
+        return filtered;
+    }
 }
