@@ -107,6 +107,23 @@ public sealed class CliCharacterizationTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportRules_WhenListenersOnlyGivenAndUdpSocketIsBound_ExportsTheUdpService()
+    {
+        // Arrange
+        const string udpListenerRow = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,3,SRV-DNS-01,Windows,10.0.0.3,Udp,Listening,UDP,0.0.0.0,53,0.0.0.0,0,,5555,dns,C:\\Windows\\System32\\dns.exe,dns.exe,,SYSTEM";
+        var audit = Path.Combine(_directory, "audit_dns.csv");
+        await File.WriteAllLinesAsync(audit, [Header, udpListenerRow]);
+        var matrix = Path.Combine(_directory, "rules_udp_listeners.csv");
+
+        // Act
+        await RunAsync("export", "rules", "-o", matrix, "-i", audit, "--listeners-only");
+
+        // Assert
+        (await File.ReadAllLinesAsync(matrix)).Skip(1).Should().ContainSingle()
+            .Which.Should().StartWith("FLUX-001,Inbound,0.0.0.0,Any,0.0.0.0,SRV-DNS-01,Internal,UDP,53,DNS,");
+    }
+
+    [Fact]
     public async Task ExportNdjson_WhenCsvAuditGiven_WritesOneJsonLinePerFlow()
     {
         // Arrange

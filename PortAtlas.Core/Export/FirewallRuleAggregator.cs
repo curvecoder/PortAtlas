@@ -73,15 +73,12 @@ public sealed class FirewallRuleAggregator
                 continue;
             }
 
-            if (options.ListenersOnly && !string.Equals(entry.Socket.State, "Listen", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             // A listening socket becomes an inbound rule from any source to its local port. It is exported only on
             // request: in the default matrix the established inbound flows already describe the real clients.
+            // The direction decides, not the state text: a bound UDP socket has no "Listen" state ("UDP" on Windows,
+            // "Close" on Linux).
             var isListener = entry.Socket.Direction == SocketFlowDirection.Listening;
-            if (isListener && !options.ListenersOnly)
+            if (isListener != options.ListenersOnly)
             {
                 continue;
             }

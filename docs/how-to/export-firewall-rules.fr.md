@@ -36,7 +36,7 @@ PortAtlas export rules -i collected -o firewall_rules.csv --pairs-output firewal
 PortAtlas export rules -i collected -o services.csv --listeners-only
 ```
 
-Chaque socket en écoute devient une règle entrante depuis n'importe quelle source (`0.0.0.0`, hôte `Any`) vers son adresse et son port : le point de départ d'un jeu de règles entrantes.
+Chaque socket en écoute, écoute TCP ou socket UDP lié à un port, devient une règle entrante depuis n'importe quelle source (`0.0.0.0`, hôte `Any`) vers son adresse et son port : le point de départ d'un jeu de règles entrantes.
 
 ## Lire le résultat
 

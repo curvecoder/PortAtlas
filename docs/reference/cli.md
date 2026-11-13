@@ -166,7 +166,7 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 Families read: inputs (`.csv`, `.ndjson`, `.jsonl`) and flow filters, with two differences:
 
 - ephemeral destination ports (49152 and above) are removed unless `--include-ephemeral-ports` is given; the `MapExcludeEphemeralPorts` key is not read;
-- listening sockets are exported only with `--listeners-only` (or `MapListenersOnly`), as inbound rules from any source (`0.0.0.0`, host `Any`).
+- listening sockets are exported only with `--listeners-only` (or `MapListenersOnly`), as inbound rules from any source (`0.0.0.0`, host `Any`). A socket is listening when its `Direction` is `Listening`, whatever its state: TCP listeners and bound UDP sockets.
 
 A destination is `Internal` when it is a loopback address, an address of a private range, or `0.0.0.0` / `::`; otherwise it is `Public`.
 

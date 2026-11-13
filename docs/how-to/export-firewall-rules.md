@@ -36,7 +36,7 @@ PortAtlas export rules -i collected -o firewall_rules.csv --pairs-output firewal
 PortAtlas export rules -i collected -o services.csv --listeners-only
 ```
 
-Each listening socket becomes an inbound rule from any source (`0.0.0.0`, host `Any`) to its address and port: the starting point of an inbound rule set.
+Each listening socket, TCP listener or bound UDP socket, becomes an inbound rule from any source (`0.0.0.0`, host `Any`) to its address and port: the starting point of an inbound rule set.
 
 ## Read the result
 

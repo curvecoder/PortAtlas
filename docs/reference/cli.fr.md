@@ -166,7 +166,7 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 Familles lues : entrées (`.csv`, `.ndjson`, `.jsonl`) et filtres de flux, avec deux différences :
 
 - les ports de destination éphémères (49152 et au-delà) sont retirés sauf avec `--include-ephemeral-ports` ; la clé `MapExcludeEphemeralPorts` n'est pas lue ;
-- les sockets en écoute ne sont exportés qu'avec `--listeners-only` (ou `MapListenersOnly`), sous forme de règles entrantes depuis n'importe quelle source (`0.0.0.0`, hôte `Any`).
+- les sockets en écoute ne sont exportés qu'avec `--listeners-only` (ou `MapListenersOnly`), sous forme de règles entrantes depuis n'importe quelle source (`0.0.0.0`, hôte `Any`). Un socket est en écoute quand sa `Direction` vaut `Listening`, quel que soit son état : écoutes TCP et sockets UDP liés à un port.
 
 Une destination est `Internal` si c'est une adresse de bouclage, une adresse d'une plage privée, ou `0.0.0.0` / `::` ; sinon elle est `Public`.
 

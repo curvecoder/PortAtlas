@@ -101,6 +101,64 @@ public sealed class FirewallRuleAggregatorTests
         rule.DestinationHost.Should().Be("SRV-SSH-01");
     }
 
+    // A bound UDP socket has no TCP state: the Windows scanner reports "UDP", /proc/net/udp reports state 07 ("Close").
+    [Theory]
+    [InlineData("UDP")]
+    [InlineData("Close")]
+    public void Aggregate_WhenListenersOnlyAndUdpSocketIsBound_ReturnsInboundUdpRuleFromAnySource(string state)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateSampleEntry(
+            direction: SocketFlowDirection.Listening,
+            localIp: "0.0.0.0",
+            localPort: 53,
+            remoteIp: "0.0.0.0",
+            remotePort: 0,
+            serverHost: "SRV-DNS-01",
+            processName: "dnsmasq",
+            state: state,
+            protocol: SocketTransportProtocol.Udp);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ListenersOnly = true });
+
+        // Assert
+        var rule = rules.Should().ContainSingle().Subject;
+        rule.Direction.Should().Be("Inbound");
+        rule.Protocol.Should().Be("UDP");
+        rule.SourceHost.Should().Be("Any");
+        rule.DestinationHost.Should().Be("SRV-DNS-01");
+        rule.DestinationPort.Should().Be(53);
+        rule.ServiceName.Should().Be("DNS");
+    }
+
+    // The state text alone never makes a listener: a log row whose direction cannot be read is loaded as outbound
+    // and keeps its "Listen" state, and would otherwise become a rule towards 0.0.0.0:0.
+    [Theory]
+    [InlineData(SocketFlowDirection.Inbound, "Established")]
+    [InlineData(SocketFlowDirection.Outbound, "Established")]
+    [InlineData(SocketFlowDirection.Inbound, "Listen")]
+    [InlineData(SocketFlowDirection.Outbound, "Listen")]
+    public void Aggregate_WhenListenersOnlyAndSocketIsNotListening_IgnoresTheFlow(SocketFlowDirection direction, string state)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateSampleEntry(
+            direction: direction,
+            localIp: "10.0.0.10",
+            localPort: 443,
+            remoteIp: "10.20.1.5",
+            remotePort: 8443,
+            state: state);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ListenersOnly = true });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
     [Fact]
     public void Aggregate_WhenListenersOnlyIsNotSet_IgnoresListeningSockets()
     {
@@ -279,11 +337,12 @@ public sealed class FirewallRuleAggregatorTests
         long observationCount = 10,
         DateTimeOffset? firstSeen = null,
         DateTimeOffset? lastSeen = null,
-        string state = "Established")
+        string state = "Established",
+        SocketTransportProtocol protocol = SocketTransportProtocol.Tcp)
     {
         var now = DateTimeOffset.UtcNow;
         var socket = new ActiveSocketConnection(
-            SocketTransportProtocol.Tcp,
+            protocol,
             direction,
             new SocketEndpoint(IPAddress.Parse(localIp), localPort),
             new SocketEndpoint(IPAddress.Parse(remoteIp), remotePort),
