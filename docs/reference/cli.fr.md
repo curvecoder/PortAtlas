@@ -250,4 +250,4 @@ PortAtlas config init [<path>]
 | Code | Signification |
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
-| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
+| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide, chemin donné par `--config` introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |

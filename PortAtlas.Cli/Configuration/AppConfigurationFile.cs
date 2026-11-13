@@ -31,26 +31,43 @@ public static class AppConfigurationFile
     /// Requested path, or <see langword="null"/> for <see cref="DefaultPath"/>. A relative path missing from the working
     /// directory is looked up next to the executable, where the release archives place the template.
     /// </param>
-    /// <returns>The configuration and the path it was read from; default values when the file is missing.</returns>
+    /// <returns>
+    /// The configuration and the path it was read from; default values when no path is requested and
+    /// <see cref="DefaultPath"/> is missing from both directories.
+    /// </returns>
     /// <exception cref="ConfigurationFileException">
-    /// When the file exists but is locked, denied to the user, not valid JSON, holds a key that is not a setting, a
-    /// value of the wrong type, a <c>null</c> where a value is needed, or still sets the removed <c>IsolatedMode</c>
-    /// key to <see langword="true"/>.
+    /// When a requested path is missing from both directories, or when the file exists but is locked, denied to the
+    /// user, not valid JSON, holds a key that is not a setting, a value of the wrong type, a <c>null</c> where a value
+    /// is needed, or still sets the removed <c>IsolatedMode</c> key to <see langword="true"/>.
     /// </exception>
-    public static LoadedAppConfiguration Load(string? path)
+    public static LoadedAppConfiguration Load(string? path) =>
+        Load(path, Directory.GetCurrentDirectory(), AppContext.BaseDirectory);
+
+    // The two directories are parameters so that a test chooses what each one holds without changing the current
+    // directory of the test process, which the other tests share.
+    internal static LoadedAppConfiguration Load(string? path, string workingDirectory, string executableDirectory)
     {
-        var configPath = string.IsNullOrWhiteSpace(path) ? DefaultPath : path;
-        if (!File.Exists(configPath))
+        var requestedPath = string.IsNullOrWhiteSpace(path) ? null : path;
+        var inWorkingDirectory = Path.Combine(workingDirectory, requestedPath ?? DefaultPath);
+        var besideExecutable = Path.Combine(executableDirectory, requestedPath ?? DefaultPath);
+
+        var existingPath = new[] { inWorkingDirectory, besideExecutable }.FirstOrDefault(File.Exists);
+        if (existingPath is not null)
         {
-            var besideExecutable = Path.Combine(AppContext.BaseDirectory, configPath);
-            if (File.Exists(besideExecutable))
-            {
-                configPath = besideExecutable;
-            }
+            // Tokens are expanded here so that every command reads the same file names the audit writes.
+            return new LoadedAppConfiguration(ResolveOutputPathTokens(Read(existingPath)), existingPath);
         }
 
-        // Tokens are expanded here so that every command reads the same file names the audit writes.
-        return new LoadedAppConfiguration(ResolveOutputPathTokens(Read(configPath)), configPath);
+        // A path given on the command line states which file the operator wants. A mistyped one would otherwise start
+        // the command on the built-in defaults, RDAP queries included, without a word.
+        if (requestedPath is not null)
+        {
+            throw new ConfigurationFileException(DescribeMissingRequestedFile(requestedPath, workingDirectory, executableDirectory));
+        }
+
+        // Without the option, a missing portatlas.json is the plain first run: the defaults apply, and an exclusion
+        // added from the dashboard creates the file in the working directory.
+        return new LoadedAppConfiguration(ResolveOutputPathTokens(new AppConfiguration()), inWorkingDirectory);
     }
 
     /// <summary>
@@ -73,13 +90,19 @@ public static class AppConfigurationFile
         };
     }
 
+    private static string DescribeMissingRequestedFile(string requestedPath, string workingDirectory, string executableDirectory)
+    {
+        // Path.Combine returns a rooted path as it is, so only a relative one was looked up in the two directories.
+        var lookedIn = Path.IsPathRooted(requestedPath)
+            ? string.Empty
+            : $", neither in {workingDirectory} nor in {executableDirectory}";
+
+        return $"{requestedPath}: the configuration file given by --config does not exist{lookedIn}. " +
+            $"Correct the path, or remove the option to read {DefaultPath}.";
+    }
+
     private static AppConfiguration Read(string configPath)
     {
-        if (!File.Exists(configPath))
-        {
-            return new AppConfiguration();
-        }
-
         // A file that is present states what the operator wants. Starting on the built-in defaults in its place would
         // turn the RDAP queries back on (ResolveIpOwners defaults to true) on a server whose file switched them off,
         // so every failure to read it stops the command instead.

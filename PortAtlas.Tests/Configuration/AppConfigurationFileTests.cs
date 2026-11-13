@@ -47,7 +47,7 @@ public sealed class AppConfigurationFileTests : IDisposable
     public void Load_WhenFileIsMissing_KeepsSystemAccountProcessesRecorded()
     {
         // Act
-        var loaded = AppConfigurationFile.Load(Path.Combine(_directory, "absent.json"));
+        var loaded = AppConfigurationFile.Load(path: null, _directory, _directory);
 
         // Assert
         loaded.Configuration.ExcludeSystemAccounts.Should().BeFalse();
@@ -57,10 +57,129 @@ public sealed class AppConfigurationFileTests : IDisposable
     public void Load_WhenFileIsMissing_WaitsThreeSecondsForReverseDns()
     {
         // Act
-        var loaded = AppConfigurationFile.Load(Path.Combine(_directory, "absent.json"));
+        var loaded = AppConfigurationFile.Load(path: null, _directory, _directory);
 
         // Assert
         loaded.Configuration.DnsResolutionTimeoutMs.Should().Be(3000);
+    }
+
+    [Fact]
+    public void Load_WhenGivenPathDoesNotExist_ThrowsConfigurationFileException()
+    {
+        // Arrange
+        var path = Path.Combine(_directory, "absent.json");
+
+        // Act
+        var act = () => AppConfigurationFile.Load(path);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith(path)
+            .And.Contain("given by --config does not exist")
+            .And.NotContain("neither in", "an absolute path is looked up in one place only");
+    }
+
+    [Fact]
+    public void Load_WhenGivenRelativePathIsMissingFromBothDirectories_ThrowsConfigurationFileExceptionNamingThem()
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+
+        // Act
+        var act = () => AppConfigurationFile.Load("custom.json", workingDirectory, executableDirectory);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith("custom.json")
+            .And.Contain("given by --config does not exist")
+            .And.Contain(workingDirectory)
+            .And.Contain(executableDirectory);
+    }
+
+    [Fact]
+    public void Load_WhenGivenRelativePathExistsOnlyBesideTheExecutable_ReadsIt()
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+        var besideExecutable = Path.Combine(executableDirectory, "custom.json");
+        File.WriteAllText(besideExecutable, """{ "ScanIntervalSeconds": 9 }""");
+
+        // Act
+        var loaded = AppConfigurationFile.Load("custom.json", workingDirectory, executableDirectory);
+
+        // Assert
+        loaded.Configuration.ScanIntervalSeconds.Should().Be(9);
+        loaded.FilePath.Should().Be(besideExecutable);
+    }
+
+    [Fact]
+    public void Load_WhenGivenRelativePathExistsInBothDirectories_ReadsTheOneOfTheWorkingDirectory()
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+        var inWorkingDirectory = Path.Combine(workingDirectory, "custom.json");
+        File.WriteAllText(inWorkingDirectory, """{ "ScanIntervalSeconds": 7 }""");
+        File.WriteAllText(Path.Combine(executableDirectory, "custom.json"), """{ "ScanIntervalSeconds": 9 }""");
+
+        // Act
+        var loaded = AppConfigurationFile.Load("custom.json", workingDirectory, executableDirectory);
+
+        // Assert
+        loaded.Configuration.ScanIntervalSeconds.Should().Be(7);
+        loaded.FilePath.Should().Be(inWorkingDirectory);
+    }
+
+    [Fact]
+    public void Load_WhenNoPathIsGivenAndFileExistsOnlyBesideTheExecutable_ReadsIt()
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+        var besideExecutable = Path.Combine(executableDirectory, AppConfigurationFile.DefaultPath);
+        File.WriteAllText(besideExecutable, """{ "ScanIntervalSeconds": 9 }""");
+
+        // Act
+        var loaded = AppConfigurationFile.Load(path: null, workingDirectory, executableDirectory);
+
+        // Assert
+        loaded.Configuration.ScanIntervalSeconds.Should().Be(9);
+        loaded.FilePath.Should().Be(besideExecutable);
+    }
+
+    [Fact]
+    public void Load_WhenNoPathIsGivenAndFileExistsInBothDirectories_ReadsTheOneOfTheWorkingDirectory()
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+        var inWorkingDirectory = Path.Combine(workingDirectory, AppConfigurationFile.DefaultPath);
+        File.WriteAllText(inWorkingDirectory, """{ "ScanIntervalSeconds": 7 }""");
+        File.WriteAllText(Path.Combine(executableDirectory, AppConfigurationFile.DefaultPath), """{ "ScanIntervalSeconds": 9 }""");
+
+        // Act
+        var loaded = AppConfigurationFile.Load(path: null, workingDirectory, executableDirectory);
+
+        // Assert
+        loaded.Configuration.ScanIntervalSeconds.Should().Be(7);
+        loaded.FilePath.Should().Be(inWorkingDirectory);
+    }
+
+    [Fact]
+    public void Load_WhenNoPathIsGivenAndNoFileExists_ReturnsDefaultsAndNamesTheFileOfTheWorkingDirectory()
+    {
+        // Arrange
+        var workingDirectory = CreateSubdirectory("work");
+        var executableDirectory = CreateSubdirectory("exe");
+
+        // Act
+        var loaded = AppConfigurationFile.Load(path: null, workingDirectory, executableDirectory);
+
+        // Assert
+        loaded.Configuration.ScanIntervalSeconds.Should().Be(5);
+        loaded.FilePath.Should().Be(Path.Combine(workingDirectory, AppConfigurationFile.DefaultPath));
     }
 
     [Fact]
@@ -350,11 +469,14 @@ public sealed class AppConfigurationFileTests : IDisposable
         File.WriteAllText(Path.Combine(_directory, "netflowaudit.json"), """{ "ScanIntervalSeconds": 42 }""");
 
         // Act
-        var loaded = AppConfigurationFile.Load(Path.Combine(_directory, AppConfigurationFile.DefaultPath));
+        var loaded = AppConfigurationFile.Load(path: null, _directory, _directory);
 
         // Assert
         loaded.Configuration.ScanIntervalSeconds.Should().Be(5);
     }
+
+    private string CreateSubdirectory(string name) =>
+        Directory.CreateDirectory(Path.Combine(_directory, name)).FullName;
 
     private string WriteConfiguration(string json)
     {

@@ -22,7 +22,7 @@ public sealed class CliCharacterizationTests : IDisposable
 
     private readonly string _directory;
     private readonly string _auditPath;
-    private readonly string _missingConfigPath;
+    private readonly string _emptyConfigPath;
 
     public CliCharacterizationTests()
     {
@@ -30,7 +30,10 @@ public sealed class CliCharacterizationTests : IDisposable
         Directory.CreateDirectory(_directory);
         _auditPath = Path.Combine(_directory, "audit_srv1.csv");
         File.WriteAllLines(_auditPath, [Header, OracleRow, PublicRow, ListenerRow]);
-        _missingConfigPath = Path.Combine(_directory, "absent-config.json");
+        // A command given a configuration file that does not exist stops; the commands under test run on the
+        // default settings, which an empty document gives.
+        _emptyConfigPath = Path.Combine(_directory, "empty-config.json");
+        File.WriteAllText(_emptyConfigPath, "{}");
     }
 
     public void Dispose()
@@ -203,7 +206,7 @@ public sealed class CliCharacterizationTests : IDisposable
     public async Task Resolve_WhenNeitherInputNorCacheGivenAndNoAuditExists_ReturnsNonZeroExitCode()
     {
         // Act
-        var exitCode = await Program.Main(["resolve", "--config", _missingConfigPath, "--cache-only"]);
+        var exitCode = await Program.Main(["resolve", "--config", _emptyConfigPath, "--cache-only"]);
 
         // Assert
         exitCode.Should().NotBe(0);
@@ -343,8 +346,35 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(output).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Main_WhenConfigurationFileGivenByOptionDoesNotExist_ReturnsExitCodeOne()
+    {
+        // Arrange
+        var config = Path.Combine(_directory, "mistyped.json");
+        var output = Path.Combine(_directory, "mistyped.ndjson");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "ndjson", "-i", _auditPath, "-o", output, "--config", config]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain(config).And.Contain("does not exist");
+        File.Exists(output).Should().BeFalse();
+    }
+
     private Task RunAsync(params string[] commandArguments) =>
-        RunWithConfigurationAsync(_missingConfigPath, commandArguments);
+        RunWithConfigurationAsync(_emptyConfigPath, commandArguments);
 
     private static async Task RunWithConfigurationAsync(string configPath, params string[] commandArguments)
     {
