@@ -181,4 +181,164 @@ public sealed class FlowExclusionConfiguratorTests : IDisposable
         loaded.Should().NotBeNull();
         loaded!.ExcludedExactNames.Should().Contain("custom-daemon.exe");
     }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenFileContainsDateToken_KeepsTheTokenInTheFile()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "OutputCsvPath": "audit_{Date}.csv" }""");
+        var configurator = CreateConfigurator(new AppConfiguration { OutputCsvPath = "audit_2026-11-13.csv" });
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        ReadConfigurationFile().GetProperty("OutputCsvPath").GetString().Should().Be("audit_{Date}.csv");
+    }
+
+    [Fact]
+    public void ExcludeRemoteIp_WhenRunUsesCommandLineOverrides_DoesNotWriteThemToTheFile()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9 }""");
+        var effectiveConfiguration = new AppConfiguration
+        {
+            ScanIntervalSeconds = 9,
+            ResolveRemoteHostNames = false,
+            MaskServerName = "HOMELAB-01",
+            MaskLocalIp = "192.168.1.10",
+            ExcludedRemoteIps = ["192.168.1.50"]
+        };
+        var configurator = CreateConfigurator(effectiveConfiguration);
+
+        // Act
+        configurator.ExcludeRemoteIp("52.123.242.181");
+
+        // Assert
+        var document = ReadConfigurationFile();
+        document.EnumerateObject().Select(property => property.Name).Should().Equal("ScanIntervalSeconds", "ExcludedRemoteIps");
+        document.GetProperty("ExcludedRemoteIps").EnumerateArray().Select(ip => ip.GetString()).Should().Equal("52.123.242.181");
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenFileHasUnknownKeys_KeepsThem()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "Comment": "NAS audit", "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        ReadConfigurationFile().GetProperty("Comment").GetString().Should().Be("NAS audit");
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenFileHoldsNonAsciiText_WritesItUnescaped()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "MaskServerName": "Média-NAS" }""");
+        var configurator = CreateConfigurator(new AppConfiguration { MaskServerName = "Média-NAS" });
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        File.ReadAllText(_tempConfigFile).Should().Contain("Média-NAS");
+    }
+
+    [Theory]
+    [InlineData("""{ "ScanIntervalSeconds": 9,""")]
+    [InlineData("""{ "ScanIntervalSeconds": 9, "ScanIntervalSeconds": 5 }""")]
+    [InlineData("""{ "ExcludedLocalPorts": "none" }""")]
+    [InlineData("""{ "ExcludedLocalPorts": null }""")]
+    [InlineData("""{ "ExcludedLocalPorts": [ "http" ] }""")]
+    [InlineData("""[ 8088 ]""")]
+    public void ExcludeLocalPort_WhenFileIsNoLongerAValidConfiguration_LeavesItUntouched(string editedByHand)
+    {
+        // Arrange
+        var configurator = CreateConfigurator(new AppConfiguration());
+        File.WriteAllText(_tempConfigFile, editedByHand);
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        File.ReadAllText(_tempConfigFile).Should().Be(editedByHand);
+    }
+
+    [Fact]
+    public void ExcludeProcess_WhenFileHasNoExclusionList_KeepsTheBuiltInNames()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+
+        // Act
+        configurator.ExcludeProcess("telemetry-agent");
+
+        // Assert
+        ReadConfigurationFile().GetProperty("ExcludedExactNames").EnumerateArray().Select(name => name.GetString())
+            .Should().Equal("System", "Idle", "telemetry-agent");
+    }
+
+    [Fact]
+    public void ExcludeProcess_WhenFileEmptiedTheExclusionList_DoesNotBringTheBuiltInNamesBack()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ExcludedExactNames": [] }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ExcludedExactNames = [] });
+
+        // Act
+        configurator.ExcludeProcess("telemetry-agent");
+
+        // Assert
+        ReadConfigurationFile().GetProperty("ExcludedExactNames").EnumerateArray().Select(name => name.GetString())
+            .Should().Equal("telemetry-agent");
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenFileAlreadyListsThePort_DoesNotDuplicateIt()
+    {
+        // Arrange
+        var configurator = CreateConfigurator(new AppConfiguration());
+        File.WriteAllText(_tempConfigFile, """{ "ExcludedLocalPorts": [ 8088 ] }""");
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        ReadExcludedLocalPorts().Should().Equal(8088);
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenThePreviousSaveFailed_WritesBothPorts()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+        using (new FileStream(_tempConfigFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            configurator.ExcludeLocalPort(8088);
+        }
+
+        // Act
+        configurator.ExcludeLocalPort(9090);
+
+        // Assert
+        ReadExcludedLocalPorts().Should().Equal(8088, 9090);
+    }
+
+    private FlowExclusionConfigurator CreateConfigurator(AppConfiguration effectiveConfiguration) =>
+        new(
+            effectiveConfiguration,
+            _tempConfigFile,
+            new NetworkFlowFilter(new NetworkFlowFilterOptions()),
+            new ProcessExclusionFilter(new ProcessExclusionOptions()));
+
+    private JsonElement ReadConfigurationFile() => JsonSerializer.Deserialize<JsonElement>(File.ReadAllText(_tempConfigFile));
+
+    private IEnumerable<int> ReadExcludedLocalPorts() =>
+        ReadConfigurationFile().GetProperty("ExcludedLocalPorts").EnumerateArray().Select(port => port.GetInt32());
 }

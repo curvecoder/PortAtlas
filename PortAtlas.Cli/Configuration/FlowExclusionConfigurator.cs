@@ -6,7 +6,7 @@ using ProcessForge.Filtering;
 namespace PortAtlas.Cli.Configuration;
 
 /// <summary>
-/// Dynamic flow exclusion configurator that updates in-memory filters and persists rules to JSON configuration.
+/// Applies the exclusions chosen in the dashboard to the in-memory filters and adds them to the configuration file.
 /// </summary>
 public sealed class FlowExclusionConfigurator(
     AppConfiguration initialConfiguration,
@@ -15,7 +15,11 @@ public sealed class FlowExclusionConfigurator(
     ProcessExclusionFilter processExclusionFilter) : IFlowExclusionConfigurator
 {
     private readonly object _syncLock = new();
-    private readonly string _configurationFilePath = configurationFilePath ?? throw new ArgumentNullException(nameof(configurationFilePath));
+    private readonly ConfigurationFileExclusionWriter _configurationFile = new(configurationFilePath);
+    private readonly List<int> _addedLocalPorts = [];
+    private readonly List<int> _addedRemotePorts = [];
+    private readonly List<string> _addedRemoteIps = [];
+    private readonly List<string> _addedExactNames = [];
     private readonly INetworkFlowFilter _networkFlowFilter = networkFlowFilter ?? throw new ArgumentNullException(nameof(networkFlowFilter));
     private readonly ProcessExclusionFilter _processExclusionFilter = processExclusionFilter ?? throw new ArgumentNullException(nameof(processExclusionFilter));
 
@@ -44,7 +48,8 @@ public sealed class FlowExclusionConfigurator(
             {
                 var updatedPorts = new List<int>(_currentConfiguration.ExcludedLocalPorts) { port };
                 _currentConfiguration = _currentConfiguration with { ExcludedLocalPorts = updatedPorts };
-                SaveConfigurationFile(_currentConfiguration);
+                _addedLocalPorts.Add(port);
+                SaveAddedExclusions();
             }
 
             return $"Excluded local port {port}";
@@ -70,7 +75,8 @@ public sealed class FlowExclusionConfigurator(
             {
                 var updatedIps = new List<string>(_currentConfiguration.ExcludedRemoteIps) { cleanIp };
                 _currentConfiguration = _currentConfiguration with { ExcludedRemoteIps = updatedIps };
-                SaveConfigurationFile(_currentConfiguration);
+                _addedRemoteIps.Add(cleanIp);
+                SaveAddedExclusions();
             }
 
             return $"Excluded remote IP {cleanIp}";
@@ -88,7 +94,8 @@ public sealed class FlowExclusionConfigurator(
             {
                 var updatedPorts = new List<int>(_currentConfiguration.ExcludedRemotePorts) { port };
                 _currentConfiguration = _currentConfiguration with { ExcludedRemotePorts = updatedPorts };
-                SaveConfigurationFile(_currentConfiguration);
+                _addedRemotePorts.Add(port);
+                SaveAddedExclusions();
             }
 
             return $"Excluded remote port {port}";
@@ -111,6 +118,7 @@ public sealed class FlowExclusionConfigurator(
             if (!updatedNames.Contains(cleanName, StringComparer.OrdinalIgnoreCase))
             {
                 updatedNames.Add(cleanName);
+                _addedExactNames.Add(cleanName);
                 changed = true;
             }
 
@@ -121,6 +129,7 @@ public sealed class FlowExclusionConfigurator(
                 if (!updatedNames.Contains(baseName, StringComparer.OrdinalIgnoreCase))
                 {
                     updatedNames.Add(baseName);
+                    _addedExactNames.Add(baseName);
                     changed = true;
                 }
             }
@@ -128,7 +137,7 @@ public sealed class FlowExclusionConfigurator(
             if (changed)
             {
                 _currentConfiguration = _currentConfiguration with { ExcludedExactNames = updatedNames };
-                SaveConfigurationFile(_currentConfiguration);
+                SaveAddedExclusions();
             }
 
             return $"Excluded process '{cleanName}'";
@@ -160,6 +169,7 @@ public sealed class FlowExclusionConfigurator(
             if (!updatedNames.Contains(cleanTarget, StringComparer.OrdinalIgnoreCase))
             {
                 updatedNames.Add(cleanTarget);
+                _addedExactNames.Add(cleanTarget);
                 changed = true;
             }
 
@@ -170,6 +180,7 @@ public sealed class FlowExclusionConfigurator(
                 if (!updatedNames.Contains(baseName, StringComparer.OrdinalIgnoreCase))
                 {
                     updatedNames.Add(baseName);
+                    _addedExactNames.Add(baseName);
                     changed = true;
                 }
             }
@@ -177,29 +188,27 @@ public sealed class FlowExclusionConfigurator(
             if (changed)
             {
                 _currentConfiguration = _currentConfiguration with { ExcludedExactNames = updatedNames };
-                SaveConfigurationFile(_currentConfiguration);
+                SaveAddedExclusions();
             }
 
             return $"Excluded target '{cleanTarget}'";
         }
     }
 
-    private void SaveConfigurationFile(AppConfiguration configurationToPersist)
+    // Every exclusion of the run is handed over each time, not only the latest one: a save that failed (file locked
+    // by an editor or a backup) is caught up by the next one. An exclusion removed from the file by hand during the
+    // run therefore comes back with the next save, in line with the filters, which keep it until the audit stops.
+    private void SaveAddedExclusions()
     {
         try
         {
-            var serializerOptions = new JsonSerializerOptions
-            {
-                WriteIndented = true
-            };
-
-            var json = JsonSerializer.Serialize(configurationToPersist, serializerOptions);
-            File.WriteAllText(_configurationFilePath, json);
+            _configurationFile.Add(new DashboardExclusions(_addedLocalPorts, _addedRemotePorts, _addedRemoteIps, _addedExactNames));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
-            // Disk write failure (restricted permissions or locked file) must not interrupt live monitoring;
-            // the exclusion remains active in memory.
+            // A file that cannot be written, or that was edited into something that is no longer a configuration
+            // document, must not interrupt live monitoring: the file is left as it is and the exclusion remains
+            // active in memory for this run.
         }
     }
 }
