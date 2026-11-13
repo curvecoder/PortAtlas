@@ -21,16 +21,13 @@ public sealed class FlowExclusionConfiguratorTests : IDisposable
 
     public void Dispose()
     {
-        if (File.Exists(_tempConfigFile))
+        try
         {
-            try
-            {
-                File.Delete(_tempConfigFile);
-            }
-            catch (IOException)
-            {
-                // Tolerated for test cleanup
-            }
+            File.Delete(_tempConfigFile);
+        }
+        catch (IOException)
+        {
+            // A file still held by the OS must not fail the test run; it lives in the temp directory.
         }
     }
 
@@ -328,6 +325,83 @@ public sealed class FlowExclusionConfiguratorTests : IDisposable
 
         // Assert
         ReadExcludedLocalPorts().Should().Equal(8088, 9090);
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenSaved_DoesNotMentionTheSave()
+    {
+        // Arrange
+        var configurator = CreateConfigurator(new AppConfiguration());
+
+        // Act
+        var message = configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        message.Should().Be("Excluded local port 8088");
+        ReadExcludedLocalPorts().Should().Contain(8088);
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenFileIsLockedByAnotherProcess_SaysTheExclusionWasNotSaved()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+        using var exclusiveHandle = new FileStream(_tempConfigFile, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        // Act
+        var message = configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        message.Should().StartWith("Excluded local port 8088").And.Contain("not saved").And.Contain(Path.GetFileName(_tempConfigFile));
+    }
+
+    [Fact]
+    public void ExcludeRemoteIp_WhenFileIsNoLongerAValidConfiguration_SaysTheExclusionWasNotSaved()
+    {
+        // Arrange
+        var configurator = CreateConfigurator(new AppConfiguration());
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9,""");
+
+        // Act
+        var message = configurator.ExcludeRemoteIp("192.0.2.7");
+
+        // Assert
+        message.Should().StartWith("Excluded remote IP 192.0.2.7").And.Contain("not saved").And.Contain("valid configuration");
+    }
+
+    [Fact]
+    public void ExcludeProcess_WhenAnEarlierExclusionIsStillUnsaved_SaysSoEvenWithoutANewSave()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+        using var exclusiveHandle = new FileStream(_tempConfigFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        configurator.ExcludeProcess("telemetry-agent");
+
+        // Act
+        var message = configurator.ExcludeProcess("telemetry-agent");
+
+        // Assert
+        message.Should().Contain("not saved");
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenTheSaveSucceedsAfterAFailure_NoLongerSaysNotSaved()
+    {
+        // Arrange
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+        using (new FileStream(_tempConfigFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            configurator.ExcludeLocalPort(8088);
+        }
+
+        // Act
+        var message = configurator.ExcludeLocalPort(9090);
+
+        // Assert
+        message.Should().Be("Excluded local port 9090");
     }
 
     private FlowExclusionConfigurator CreateConfigurator(AppConfiguration effectiveConfiguration) =>

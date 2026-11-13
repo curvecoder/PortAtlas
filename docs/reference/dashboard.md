@@ -41,6 +41,8 @@ Excluding a cell adds its value to the configuration file given by `--config` (o
 | Process | `ExcludedExactNames` |
 | Target | `ExcludedExactNames` |
 
+When the file cannot be written (in use, read-only, access denied) or no longer holds a valid configuration, it is left as it is and the banner ends with `not saved to …` and the cause. The exclusion still applies until the audit stops, and the next exclusion that can be saved writes the earlier ones too.
+
 ## Masking for screenshots
 
 `--mask-server`, `--mask-ip` and `--obfuscate` change only what the dashboard displays; the audit log keeps the real values.

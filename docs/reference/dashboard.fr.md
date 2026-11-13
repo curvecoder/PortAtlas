@@ -41,6 +41,8 @@ Exclure une cellule ajoute sa valeur au fichier de configuration donné par `--c
 | Processus | `ExcludedExactNames` |
 | Cible | `ExcludedExactNames` |
 
+Quand le fichier ne peut pas être écrit (en cours d'utilisation, en lecture seule, accès refusé) ou ne contient plus une configuration valide, il est laissé tel quel et le bandeau se termine par `not saved to …` et la cause. L'exclusion s'applique quand même jusqu'à l'arrêt de l'audit, et la prochaine exclusion qui peut être enregistrée écrit aussi les précédentes.
+
 ## Masquer pour des captures d'écran
 
 `--mask-server`, `--mask-ip` et `--obfuscate` ne changent que l'affichage du tableau de bord ; le journal d'audit garde les vraies valeurs.

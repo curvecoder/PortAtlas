@@ -23,7 +23,10 @@ public sealed class FlowExclusionConfigurator(
     private readonly INetworkFlowFilter _networkFlowFilter = networkFlowFilter ?? throw new ArgumentNullException(nameof(networkFlowFilter));
     private readonly ProcessExclusionFilter _processExclusionFilter = processExclusionFilter ?? throw new ArgumentNullException(nameof(processExclusionFilter));
 
+    private readonly string _configurationFileName = Path.GetFileName(configurationFilePath);
+
     private AppConfiguration _currentConfiguration = initialConfiguration ?? throw new ArgumentNullException(nameof(initialConfiguration));
+    private string? _unsavedReason;
 
     /// <inheritdoc />
     public AppConfiguration CurrentConfiguration
@@ -52,7 +55,7 @@ public sealed class FlowExclusionConfigurator(
                 SaveAddedExclusions();
             }
 
-            return $"Excluded local port {port}";
+            return WithSaveStatus($"Excluded local port {port}");
         }
     }
 
@@ -79,7 +82,7 @@ public sealed class FlowExclusionConfigurator(
                 SaveAddedExclusions();
             }
 
-            return $"Excluded remote IP {cleanIp}";
+            return WithSaveStatus($"Excluded remote IP {cleanIp}");
         }
     }
 
@@ -98,7 +101,7 @@ public sealed class FlowExclusionConfigurator(
                 SaveAddedExclusions();
             }
 
-            return $"Excluded remote port {port}";
+            return WithSaveStatus($"Excluded remote port {port}");
         }
     }
 
@@ -140,7 +143,7 @@ public sealed class FlowExclusionConfigurator(
                 SaveAddedExclusions();
             }
 
-            return $"Excluded process '{cleanName}'";
+            return WithSaveStatus($"Excluded process '{cleanName}'");
         }
     }
 
@@ -191,7 +194,7 @@ public sealed class FlowExclusionConfigurator(
                 SaveAddedExclusions();
             }
 
-            return $"Excluded target '{cleanTarget}'";
+            return WithSaveStatus($"Excluded target '{cleanTarget}'");
         }
     }
 
@@ -203,12 +206,25 @@ public sealed class FlowExclusionConfigurator(
         try
         {
             _configurationFile.Add(new DashboardExclusions(_addedLocalPorts, _addedRemotePorts, _addedRemoteIps, _addedExactNames));
+            _unsavedReason = null;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        catch (JsonException)
         {
-            // A file that cannot be written, or that was edited into something that is no longer a configuration
-            // document, must not interrupt live monitoring: the file is left as it is and the exclusion remains
-            // active in memory for this run.
+            // A file edited into something that is no longer a configuration document must not interrupt live
+            // monitoring: it is left as it is, the exclusion stays active in memory for this run, and the banner
+            // tells the operator that the file does not hold it.
+            _unsavedReason = "the file is no longer a valid configuration";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Same tolerance for a file that is locked, read-only or held open by another program: the next
+            // exclusion saves this one too.
+            _unsavedReason = "the file is in use or cannot be written";
         }
     }
+
+    // The reason stays until a save succeeds, so that an exclusion that needs no new save (value already excluded
+    // in memory) does not read as if the file were up to date.
+    private string WithSaveStatus(string action) =>
+        _unsavedReason is null ? action : $"{action} - not saved to {_configurationFileName}: {_unsavedReason}";
 }
