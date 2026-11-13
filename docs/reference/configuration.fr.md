@@ -2,7 +2,7 @@
 
 # Référence du fichier de configuration
 
-PortAtlas lit un fichier JSON : celui donné par `--config`, sinon `portatlas.json` dans le dossier de travail, sinon `portatlas.json` à côté de l'exécutable. Une clé absente prend sa valeur par défaut ; une clé inconnue est ignorée. Un fichier illisible ou mal formé affiche un avertissement et les valeurs par défaut s'appliquent.
+PortAtlas lit un fichier JSON : celui donné par `--config`, sinon `portatlas.json` dans le dossier de travail, sinon `portatlas.json` à côté de l'exécutable. Une clé absente prend sa valeur par défaut ; une clé inconnue est ignorée. Un fichier présent mais illisible (verrouillé, accès refusé), qui n'est pas du JSON valide, qui contient une valeur du mauvais type ou qui vaut `null` arrête la commande avec une erreur nommant le fichier et la cause, et le code de sortie 1 : les valeurs par défaut ne s'appliquent pas à sa place.
 
 `PortAtlas config init` écrit un fichier contenant chaque clé avec sa valeur par défaut. Les options de la ligne de commande passent avant le fichier ([référence de la CLI](cli.fr.md#origine-des-valeurs)).
 

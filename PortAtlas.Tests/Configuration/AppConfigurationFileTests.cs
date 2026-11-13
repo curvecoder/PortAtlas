@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using AwesomeAssertions;
 using PortAtlas.Cli.Configuration;
 using Xunit;
@@ -84,6 +86,93 @@ public sealed class AppConfigurationFileTests : IDisposable
 
         // Assert
         loaded.Configuration.ScanIntervalSeconds.Should().Be(9);
+    }
+
+    [Fact]
+    public void Load_WhenFileIsMalformedJson_ThrowsConfigurationFileException()
+    {
+        // Arrange
+        var path = WriteConfiguration("""{ "ResolveIpOwners": false, """);
+
+        // Act
+        var act = () => AppConfigurationFile.Load(path);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith(path).And.Contain("not valid JSON");
+    }
+
+    [Fact]
+    public void Load_WhenValueHasTheWrongType_ThrowsConfigurationFileException()
+    {
+        // Arrange
+        var path = WriteConfiguration("""{ "ResolveIpOwners": false, "ScanIntervalSeconds": "five" }""");
+
+        // Act
+        var act = () => AppConfigurationFile.Load(path);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith(path).And.Contain("$.ScanIntervalSeconds");
+    }
+
+    [Fact]
+    public void Load_WhenDocumentIsNull_ThrowsConfigurationFileException()
+    {
+        // Arrange
+        var path = WriteConfiguration("null");
+
+        // Act
+        var act = () => AppConfigurationFile.Load(path);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith(path).And.Contain("JSON object");
+    }
+
+    [Fact]
+    public void Load_WhenFileIsLockedByAnotherProcess_ThrowsConfigurationFileException()
+    {
+        // Arrange
+        var path = WriteConfiguration("""{ "ResolveIpOwners": false }""");
+        using var exclusiveHandle = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        // Act
+        var act = () => AppConfigurationFile.Load(path);
+
+        // Assert
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().StartWith(path).And.Contain("cannot be read");
+    }
+
+    [Fact]
+    public void Load_WhenFileContentIsDeniedToTheUser_ThrowsConfigurationFileException()
+    {
+        // Arrange
+        var path = WriteConfiguration("""{ "ResolveIpOwners": false }""");
+        var file = new FileInfo(path);
+        var denyContent = new FileSystemAccessRule(
+            new SecurityIdentifier(WellKnownSidType.WorldSid, domainSid: null),
+            FileSystemRights.ReadData,
+            AccessControlType.Deny);
+        var security = file.GetAccessControl();
+        security.AddAccessRule(denyContent);
+        file.SetAccessControl(security);
+
+        try
+        {
+            // Act
+            var act = () => AppConfigurationFile.Load(path);
+
+            // Assert
+            act.Should().Throw<ConfigurationFileException>()
+                .Which.Message.Should().StartWith(path).And.Contain("cannot be read");
+        }
+        finally
+        {
+            security.RemoveAccessRule(denyContent);
+            file.SetAccessControl(security);
+        }
     }
 
     [Fact]

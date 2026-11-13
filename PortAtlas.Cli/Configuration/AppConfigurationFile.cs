@@ -6,7 +6,7 @@ namespace PortAtlas.Cli.Configuration;
 /// <summary>
 /// Configuration read from a <c>portatlas.json</c> file, with the path it was read from.
 /// </summary>
-/// <param name="Configuration">Configuration values (defaults when the file is missing or unreadable).</param>
+/// <param name="Configuration">Configuration values (defaults when the file is missing).</param>
 /// <param name="FilePath">Path of the configuration file, used to save exclusions added from the dashboard.</param>
 public sealed record LoadedAppConfiguration(AppConfiguration Configuration, string FilePath);
 
@@ -20,6 +20,8 @@ public static class AppConfigurationFile
     /// </summary>
     public const string DefaultPath = "portatlas.json";
 
+    private const string DefaultsNotApplied = "Correct the file, or remove it to run on the default settings.";
+
     /// <summary>
     /// Loads the configuration file.
     /// </summary>
@@ -27,7 +29,11 @@ public static class AppConfigurationFile
     /// Requested path, or <see langword="null"/> for <see cref="DefaultPath"/>. A relative path missing from the working
     /// directory is looked up next to the executable, where the release archives place the template.
     /// </param>
-    /// <returns>The configuration and the path it was read from; default values when the file is missing or invalid.</returns>
+    /// <returns>The configuration and the path it was read from; default values when the file is missing.</returns>
+    /// <exception cref="ConfigurationFileException">
+    /// When the file exists but is locked, denied to the user, not valid JSON, holds a value of the wrong type or
+    /// <c>null</c>, or still sets the removed <c>IsolatedMode</c> key to <see langword="true"/>.
+    /// </exception>
     public static LoadedAppConfiguration Load(string? path)
     {
         var configPath = string.IsNullOrWhiteSpace(path) ? DefaultPath : path;
@@ -71,18 +77,32 @@ public static class AppConfigurationFile
             return new AppConfiguration();
         }
 
+        // A file that is present states what the operator wants. Starting on the built-in defaults in its place would
+        // turn the RDAP queries back on (ResolveIpOwners defaults to true) on a server whose file switched them off,
+        // so every failure to read it stops the command instead.
+        string json;
         try
         {
-            var json = File.ReadAllText(configPath);
-            RejectRemovedIsolatedMode(json, configPath);
-            return JsonSerializer.Deserialize<AppConfiguration>(json) ?? new AppConfiguration();
+            json = File.ReadAllText(configPath);
         }
-        catch (Exception ex) when (ex is IOException or JsonException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // The agent must still start on a server whose configuration file is locked or malformed; the
-            // operator sees the warning and the run uses the built-in defaults.
-            Console.WriteLine($"Warning: Could not load {configPath} ({ex.Message}), using default settings.");
-            return new AppConfiguration();
+            throw new ConfigurationFileException(
+                $"{configPath}: the configuration file cannot be read ({ex.Message}). {DefaultsNotApplied}", ex);
+        }
+
+        try
+        {
+            RejectRemovedIsolatedMode(json, configPath);
+            return JsonSerializer.Deserialize<AppConfiguration>(json)
+                ?? throw new ConfigurationFileException(
+                    $"{configPath}: the configuration file holds null instead of a JSON object. {DefaultsNotApplied}");
+        }
+        catch (JsonException ex)
+        {
+            throw new ConfigurationFileException(
+                $"{configPath}: the configuration file is not valid JSON or holds a value of the wrong type ({ex.Message}). {DefaultsNotApplied}",
+                ex);
         }
     }
 

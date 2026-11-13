@@ -250,4 +250,4 @@ PortAtlas config init [<path>]
 | Code | Meaning |
 | :--- | :--- |
 | `0` | Success, or help printed |
-| `1` | Invalid command line, no audit log found, invalid CSV column name, or a configuration file with `"IsolatedMode": true` |
+| `1` | Invalid command line, no audit log found, invalid CSV column name, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |

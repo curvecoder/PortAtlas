@@ -1,8 +1,8 @@
 namespace PortAtlas.Cli.Configuration;
 
 /// <summary>
-/// Raised when the configuration file contains a setting that must not be ignored, such as a removed key whose
-/// former value would change what the agent sends on the network.
+/// Raised when the configuration file cannot be read or parsed, or contains a setting that must not be ignored,
+/// such as a removed key whose former value would change what the agent sends on the network.
 /// </summary>
 public sealed class ConfigurationFileException : Exception
 {

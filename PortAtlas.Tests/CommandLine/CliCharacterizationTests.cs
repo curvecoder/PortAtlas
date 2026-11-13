@@ -315,6 +315,34 @@ public sealed class CliCharacterizationTests : IDisposable
         exitCode.Should().NotBe(0);
     }
 
+    [Fact]
+    public async Task Main_WhenConfigurationFileIsMalformed_ReturnsNonZeroExitCode()
+    {
+        // Arrange
+        var config = Path.Combine(_directory, "portatlas.json");
+        await File.WriteAllTextAsync(config, """{ "ResolveIpOwners": false, """);
+        var output = Path.Combine(_directory, "malformed.ndjson");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "ndjson", "-i", _auditPath, "-o", output, "--config", config]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain(config).And.Contain("not valid JSON");
+        File.Exists(output).Should().BeFalse();
+    }
+
     private Task RunAsync(params string[] commandArguments) =>
         RunWithConfigurationAsync(_missingConfigPath, commandArguments);
 
