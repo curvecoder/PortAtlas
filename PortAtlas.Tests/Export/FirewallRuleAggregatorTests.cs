@@ -599,6 +599,186 @@ public sealed class FirewallRuleAggregatorTests
         rules.Should().ContainSingle();
     }
 
+    // Same rule as the topology map: an address filter is tested against both ends of the flow, whatever its direction.
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.48/29")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.48/29")]
+    public void Aggregate_WhenExcludedAddressMatchesOneEndOfTheFlow_RemovesTheRule(SocketFlowDirection direction, string excluded)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ExcludedIps = [excluded] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.48/29")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.48/29")]
+    public void Aggregate_WhenIncludedAddressMatchesOneEndOfTheFlow_KeepsTheRule(SocketFlowDirection direction, string included)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedIps = [included] });
+
+        // Assert
+        rules.Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound)]
+    [InlineData(SocketFlowDirection.Inbound)]
+    public void Aggregate_WhenIncludedAddressMatchesNoEndOfTheFlow_RemovesTheRule(SocketFlowDirection direction)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedIps = ["192.168.1.2"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.20", "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Outbound, "192.168.1.53", "192.168.1.20")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.20", "192.168.1.53")]
+    [InlineData(SocketFlowDirection.Inbound, "192.168.1.53", "192.168.1.20")]
+    public void Aggregate_WhenOneEndIsIncludedAndTheOtherExcluded_RemovesTheRule(
+        SocketFlowDirection direction,
+        string included,
+        string excluded)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { IncludedIps = [included], ExcludedIps = [excluded] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    // A listening socket has no remote end: its remote address is the unset 0.0.0.0, which no address filter may read
+    // as a host. Only the address it is bound to is tested.
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("0.0.0.0/8")]
+    public void Aggregate_WhenListenersOnlyAndExcludedAddressMatchesTheUnsetRemoteAddress_KeepsTheListener(string excluded)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateListenerEntry();
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedIps = [excluded] });
+
+        // Assert
+        rules.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Aggregate_WhenListenersOnlyAndIncludedAddressMatchesOnlyTheUnsetRemoteAddress_RemovesTheListener()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateListenerEntry();
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = ["0.0.0.0"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Aggregate_WhenListenersOnlyAndIncludedAddressMatchesTheBoundAddress_KeepsTheListener()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateListenerEntry();
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = ["192.168.1.0/24"] });
+
+        // Assert
+        rules.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Aggregate_WhenListenersOnlyAndExcludedAddressMatchesTheBoundAddress_RemovesTheListener()
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateListenerEntry();
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedIps = ["192.168.1.0/24"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    // The matrix tests the address the rule shows, not the primary address of the server as the topology map does:
+    // a listener bound to every interface is not in the subnet of its server.
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    public void Aggregate_WhenListenerIsBoundToEveryInterfaceAndIncludedSubnetIsTheOneOfTheServer_RemovesTheListener(string boundAddress)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var entry = CreateListenerEntry(boundAddress);
+
+        // Act
+        var rules = aggregator.Aggregate(
+            [entry],
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = ["192.168.1.0/24"] });
+
+        // Assert
+        rules.Should().BeEmpty();
+    }
+
+    // The SMB service of nas.home.arpa, bound to 192.168.1.20 unless another address is given.
+    private static NetworkAuditEntry CreateListenerEntry(string boundAddress = "192.168.1.20") =>
+        CreateSampleEntry(
+            direction: SocketFlowDirection.Listening,
+            localIp: boundAddress,
+            localPort: 445,
+            remoteIp: boundAddress == "::" ? "::" : "0.0.0.0",
+            remotePort: 0,
+            serverHost: "nas.home.arpa",
+            processName: "smbd",
+            state: "Listen");
+
     // One flow between the server nas.home.arpa (192.168.1.20) and the remote host 192.168.1.53, on the DNS port.
     private static NetworkAuditEntry CreateRemoteNamedEntry(
         SocketFlowDirection direction,

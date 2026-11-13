@@ -116,7 +116,7 @@ public sealed class FirewallRuleAggregator
             }
 
             // IP inclusion / exclusion
-            if (IPAddress.TryParse(destIp, out var parsedDestIp) && !ipMatcher.IsAllowed(parsedDestIp))
+            if (!ipMatcher.IsAllowed(entry.Socket))
             {
                 continue;
             }
@@ -453,19 +453,28 @@ public sealed class FirewallRuleAggregator
         }
     }
 
+    // As in the topology map, an address filter is tested against both ends of the flow, whatever its direction, and
+    // one match is enough to exclude the rule as to include it: excluding a remote address must also drop the flows
+    // it opens towards the server. A listening socket has no remote end (its remote address is the unset 0.0.0.0 or
+    // ::), so only the address it is bound to is tested. The local address is the one the rule shows, where the map
+    // tests the primary address of the server.
     private sealed class IpMatcher(IpAddressRangeMatcher? included, IpAddressRangeMatcher? excluded)
     {
-        public bool IsAllowed(IPAddress ip)
+        public bool IsAllowed(ActiveSocketConnection socket)
         {
-            if (excluded is not null && excluded.IsMatch(ip))
+            var hasRemoteEnd = socket.Direction != SocketFlowDirection.Listening;
+            var localAddress = socket.LocalEndpoint.Address;
+            var remoteAddress = socket.RemoteEndpoint.Address;
+
+            if (excluded is not null &&
+                (excluded.IsMatch(localAddress) || (hasRemoteEnd && excluded.IsMatch(remoteAddress))))
             {
                 return false;
             }
-            if (included is not null && !included.IsMatch(ip))
-            {
-                return false;
-            }
-            return true;
+
+            return included is null ||
+                   included.IsMatch(localAddress) ||
+                   (hasRemoteEnd && included.IsMatch(remoteAddress));
         }
     }
 }
