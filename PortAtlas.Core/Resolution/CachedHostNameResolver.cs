@@ -28,6 +28,13 @@ public sealed class CachedHostNameResolver(
     /// </summary>
     public static readonly TimeSpan TransientFailureRetryDelay = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// Time after which an address whose owner lookup (RDAP) got no answer is asked again. Longer than
+    /// <see cref="TransientFailureRetryDelay"/> so that a server cut off from the Internet does not query its DNS
+    /// server for every unnamed address each minute.
+    /// </summary>
+    public static readonly TimeSpan RdapUnavailableRetryDelay = TimeSpan.FromMinutes(15);
+
     private const string CustomSource = "Custom";
     private const string ExcludedSource = "Excluded";
 
@@ -40,7 +47,10 @@ public sealed class CachedHostNameResolver(
     private readonly IReadOnlyDictionary<IPAddress, string> _customAliases = ParseAliases(customHostAliases);
     private readonly ConcurrentDictionary<IPAddress, DnsCacheEntry> _cache = LoadCache(cacheStore);
     private readonly ConcurrentDictionary<IPAddress, byte> _queuedAddresses = new();
-    private readonly ConcurrentDictionary<IPAddress, DateTimeOffset> _transientFailures = new();
+    // Addresses whose last resolution got no answer (DNS timeout or RDAP unavailable), with the time before which they
+    // are not queued again. An address present here may also have a cache entry: its DNS name is kept while the owner
+    // lookup is pending.
+    private readonly ConcurrentDictionary<IPAddress, DateTimeOffset> _retryNotBefore = new();
     private readonly Channel<IPAddress> _channel = Channel.CreateUnbounded<IPAddress>();
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _concurrencySemaphore = new(10, 10);
@@ -191,13 +201,7 @@ public sealed class CachedHostNameResolver(
             return;
         }
 
-        if (TryGetCurrentEntry(address, out _))
-        {
-            return;
-        }
-
-        if (_transientFailures.TryGetValue(address, out var failedAt) &&
-            _timeProvider.GetUtcNow() - failedAt < TransientFailureRetryDelay)
+        if (!IsResolutionDue(address))
         {
             return;
         }
@@ -242,6 +246,16 @@ public sealed class CachedHostNameResolver(
         {
             _concurrencySemaphore.Release();
         }
+    }
+
+    private bool IsResolutionDue(IPAddress address)
+    {
+        if (_retryNotBefore.TryGetValue(address, out var notBefore))
+        {
+            return _timeProvider.GetUtcNow() >= notBefore;
+        }
+
+        return !TryGetCurrentEntry(address, out _);
     }
 
     private bool IsFastTrackAddress(IPAddress address, out string hostName)
@@ -294,13 +308,13 @@ public sealed class CachedHostNameResolver(
         {
             // The DNS server did not answer within the timeout: a slow server is not a missing record, so nothing is
             // cached and the address is asked again after TransientFailureRetryDelay.
-            _transientFailures[address] = _timeProvider.GetUtcNow();
+            _retryNotBefore[address] = _timeProvider.GetUtcNow() + TransientFailureRetryDelay;
             return string.Empty;
         }
         catch (SocketException ex) when (ex.SocketErrorCode == SocketError.TryAgain)
         {
             // TryAgain is the resolver's own timeout or a temporary server failure: treated like the timeout above.
-            _transientFailures[address] = _timeProvider.GetUtcNow();
+            _retryNotBefore[address] = _timeProvider.GetUtcNow() + TransientFailureRetryDelay;
             return string.Empty;
         }
         catch (Exception ex) when (ex is SocketException or TimeoutException or ArgumentException)
@@ -309,22 +323,19 @@ public sealed class CachedHostNameResolver(
             // result below is cached and asked again after NegativeResultRetryDelay.
         }
 
-        _transientFailures.TryRemove(address, out _);
-        IpOwnerMetadata? ownerDetails = null;
-
-        // 2. Query RDAP if organization resolver is configured AND (no PTR found OR address is public routable)
-        var organizationResolver = _organizationResolver;
-        // 2. Query RDAP if organization resolver is configured AND (no PTR found OR address is public routable)
-        if (organizationResolver is not null &&
-            (string.IsNullOrWhiteSpace(dnsHostName) || RdapIpOrganizationResolver.IsPublicRoutable(address)))
+        var (ownerDetails, isOwnerLookupPending) = await LookUpOwnerAsync(address, dnsHostName, cancellationToken).ConfigureAwait(false);
+        if (!isOwnerLookupPending)
         {
-            try
+            _retryNotBefore.TryRemove(address, out _);
+        }
+        else
+        {
+            // No RDAP answer is not "no owner": an address without name is not cached at all, and a DNS name is cached
+            // without organization; both are asked again after RdapUnavailableRetryDelay.
+            _retryNotBefore[address] = _timeProvider.GetUtcNow() + RdapUnavailableRetryDelay;
+            if (string.IsNullOrWhiteSpace(dnsHostName))
             {
-                ownerDetails = await organizationResolver.ResolveOwnerDetailsAsync(address, cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is HttpRequestException or SocketException or TimeoutException or OperationCanceledException)
-            {
-                // Tolerated: Network-isolated environment, RDAP server unreachable, or cancellation requested
+                return string.Empty;
             }
         }
 
@@ -362,6 +373,33 @@ public sealed class CachedHostNameResolver(
         return hostName;
     }
 
+    // RDAP is asked when no PTR name was found, or for a public address whose owner is shown next to its DNS name.
+    private async Task<(IpOwnerMetadata? Owner, bool IsPending)> LookUpOwnerAsync(
+        IPAddress address,
+        string? dnsHostName,
+        CancellationToken cancellationToken)
+    {
+        var organizationResolver = _organizationResolver;
+        if (organizationResolver is null ||
+            (!string.IsNullOrWhiteSpace(dnsHostName) && !RdapIpOrganizationResolver.IsPublicRoutable(address)))
+        {
+            return (null, false);
+        }
+
+        try
+        {
+            var owner = await organizationResolver.ResolveOwnerDetailsAsync(address, cancellationToken).ConfigureAwait(false);
+            return (owner, false);
+        }
+        catch (Exception ex) when (ex is IpOwnerLookupUnavailableException or HttpRequestException or SocketException or TimeoutException ||
+                                   (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
+        {
+            // The registry did not answer (offline server, rate limit, error status, suspended queries): the caller
+            // keeps the outcome open instead of recording "no owner".
+            return (null, true);
+        }
+    }
+
     private async Task ProcessQueueAsync(CancellationToken cancellationToken)
     {
         try
@@ -375,7 +413,7 @@ public sealed class CachedHostNameResolver(
                         break;
                     }
 
-                    if (TryGetCurrentEntry(address, out _))
+                    if (!IsResolutionDue(address))
                     {
                         // Named meanwhile by a direct call: the queued flag must be cleared, otherwise QueueResolution
                         // would ignore this address for the rest of the run.

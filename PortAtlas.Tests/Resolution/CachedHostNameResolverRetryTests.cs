@@ -13,6 +13,7 @@ namespace PortAtlas.Tests.Resolution;
 public sealed class CachedHostNameResolverRetryTests : IDisposable
 {
     private static readonly IPAddress Server = IPAddress.Parse("192.0.2.79");
+    private static readonly IPAddress PublicServer = IPAddress.Parse("52.123.242.181");
     private readonly ManualTimeProvider _clock = new(new DateTimeOffset(2026, 10, 28, 8, 0, 0, TimeSpan.Zero));
     private readonly string _directory;
 
@@ -128,6 +129,91 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
         dns.Calls.Should().Be(2);
     }
 
+    [Fact]
+    public async Task ResolveHostNameAsync_WhenNoPtrAndOwnerLookupUnavailable_DoesNotCacheTheAddress()
+    {
+        // Arrange
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.NotFound());
+        var owners = new ScriptedOwnerResolver(_ => OwnerAnswer.Unavailable());
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners);
+
+        // Act
+        var name = await resolver.ResolveHostNameAsync(Server);
+
+        // Assert
+        name.Should().BeEmpty();
+        resolver.TryGetCachedEntry(Server, out _).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task QueueResolution_WhenOwnerLookupUnavailable_WaitsTheRdapDelayBeforeAskingAgain()
+    {
+        // Arrange
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.NotFound());
+        var owners = new ScriptedOwnerResolver(_ => OwnerAnswer.Unavailable());
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners);
+        resolver.QueueResolution(Server);
+        await WaitUntilAsync(() => owners.Calls == 1 && !resolver.IsQueued(Server));
+
+        // Act
+        _clock.Advance(CachedHostNameResolver.TransientFailureRetryDelay);
+        resolver.QueueResolution(Server);
+        await Task.Delay(300);
+        var callsWithinDelay = owners.Calls;
+        _clock.Advance(CachedHostNameResolver.RdapUnavailableRetryDelay);
+        resolver.QueueResolution(Server);
+        await WaitUntilAsync(() => owners.Calls == 2);
+
+        // Assert
+        callsWithinDelay.Should().Be(1);
+        owners.Calls.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task QueueResolution_WhenDnsNamedButOwnerLookupUnavailable_KeepsNameAndCompletesOwnerAfterDelay()
+    {
+        // Arrange
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.Now("edge.example.net"));
+        var owners = new ScriptedOwnerResolver(call => call == 1
+            ? OwnerAnswer.Unavailable()
+            : OwnerAnswer.Found(new IpOwnerMetadata("Example Networks", "FR", "52.123.0.0 - 52.123.255.255", "EXAMPLE")));
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners);
+        resolver.QueueResolution(PublicServer);
+        await WaitUntilAsync(() => owners.Calls == 1 && !resolver.IsQueued(PublicServer));
+        resolver.TryGetCachedEntry(PublicServer, out var entryAfterFailure);
+
+        // Act
+        _clock.Advance(CachedHostNameResolver.RdapUnavailableRetryDelay);
+        resolver.QueueResolution(PublicServer);
+        await WaitUntilAsync(() => owners.Calls == 2 && !resolver.IsQueued(PublicServer));
+        resolver.TryGetCachedEntry(PublicServer, out var entryAfterRetry);
+
+        // Assert
+        entryAfterFailure.Should().NotBeNull();
+        entryAfterFailure!.HostName.Should().Be("edge.example.net");
+        entryAfterFailure.Organization.Should().BeNull();
+        entryAfterRetry.Should().NotBeNull();
+        entryAfterRetry!.HostName.Should().Be("edge.example.net");
+        entryAfterRetry.Organization.Should().Be("Example Networks");
+    }
+
+    [Fact]
+    public async Task ResolveHostNameAsync_WhenCancelledDuringOwnerLookup_ThrowsAndCachesNothing()
+    {
+        // Arrange
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.NotFound());
+        var owners = new ScriptedOwnerResolver(_ => OwnerAnswer.Never());
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        // Act
+        var act = () => resolver.ResolveHostNameAsync(Server, cancellation.Token);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        resolver.TryGetCachedEntry(Server, out _).Should().BeFalse();
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
@@ -138,8 +224,12 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
         }
     }
 
-    private CachedHostNameResolver CreateResolver(IReverseDnsLookup dns, TimeSpan timeout, PersistentDnsCacheStore? store = null) =>
-        new(timeout, cacheStore: store, reverseDnsLookup: dns, timeProvider: _clock);
+    private CachedHostNameResolver CreateResolver(
+        IReverseDnsLookup dns,
+        TimeSpan timeout,
+        PersistentDnsCacheStore? store = null,
+        IIpOrganizationResolver? owners = null) =>
+        new(timeout, cacheStore: store, organizationResolver: owners, reverseDnsLookup: dns, timeProvider: _clock);
 
     private sealed class ManualTimeProvider(DateTimeOffset start) : TimeProvider
     {
@@ -177,6 +267,46 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
 
             await Task.Delay(answer.Delay, cancellationToken);
             return answer.HostName ?? throw new SocketException((int)SocketError.HostNotFound);
+        }
+    }
+
+    private sealed record OwnerAnswer(IpOwnerMetadata? Metadata, bool IsUnavailable, bool Hangs)
+    {
+        public static OwnerAnswer Found(IpOwnerMetadata metadata) => new(metadata, IsUnavailable: false, Hangs: false);
+
+        public static OwnerAnswer Unavailable() => new(null, IsUnavailable: true, Hangs: false);
+
+        public static OwnerAnswer Never() => new(null, IsUnavailable: false, Hangs: true);
+    }
+
+    private sealed class ScriptedOwnerResolver(Func<int, OwnerAnswer> script) : IIpOrganizationResolver
+    {
+        private int _calls;
+
+        public int Calls => _calls;
+
+        public async Task<string?> ResolveOrganizationAsync(IPAddress address, CancellationToken cancellationToken = default) =>
+            (await ResolveOwnerDetailsAsync(address, cancellationToken))?.Organization;
+
+        public async Task<IpOwnerMetadata?> ResolveOwnerDetailsAsync(IPAddress address, CancellationToken cancellationToken = default)
+        {
+            var answer = script(Interlocked.Increment(ref _calls));
+            if (answer.Hangs)
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+
+            if (answer.IsUnavailable)
+            {
+                throw new IpOwnerLookupUnavailableException("RDAP registry did not answer.");
+            }
+
+            return answer.Metadata;
+        }
+
+        public void Dispose()
+        {
+            // Nothing to release: the script holds no resource.
         }
     }
 }

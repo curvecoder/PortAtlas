@@ -91,7 +91,7 @@ public sealed class OfflineDnsResolver(
             {
                 ownerDetails = await organizationResolver.ResolveOwnerDetailsAsync(address, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is HttpRequestException or SocketException or TimeoutException or OperationCanceledException)
+            catch (Exception ex) when (ex is IpOwnerLookupUnavailableException or HttpRequestException or SocketException or TimeoutException or OperationCanceledException)
             {
                 // Expected: RDAP server unreachable, air-gapped, or cancelled
             }

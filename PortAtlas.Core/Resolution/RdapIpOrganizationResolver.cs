@@ -118,7 +118,7 @@ public sealed class RdapIpOrganizationResolver : IIpOrganizationResolver, IDispo
         // 2. Circuit breaker check: prevents cumulative network latency in isolated air-gapped environments
         if (IsCircuitOpen())
         {
-            return null;
+            throw new IpOwnerLookupUnavailableException($"RDAP lookup for {address} skipped: queries suspended after repeated network failures.");
         }
 
         try
@@ -138,7 +138,10 @@ public sealed class RdapIpOrganizationResolver : IIpOrganizationResolver, IDispo
 
             if (!response.IsSuccessStatusCode)
             {
-                return null;
+                // A rate-limited or failing registry is counted like a network failure, so that the circuit breaker
+                // stops the queries instead of asking it again for every address.
+                RecordFailure();
+                throw new IpOwnerLookupUnavailableException($"RDAP lookup for {address} failed with HTTP status {(int)response.StatusCode}.");
             }
 
             var content = await response.Content.ReadAsStringAsync(timeoutCts.Token).ConfigureAwait(false);
@@ -148,16 +151,22 @@ public sealed class RdapIpOrganizationResolver : IIpOrganizationResolver, IDispo
             Interlocked.Exchange(ref _consecutiveFailures, 0);
             return details;
         }
-        catch (Exception ex) when (ex is HttpRequestException or SocketException or TimeoutException or OperationCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or SocketException or TimeoutException ||
+                                   (ex is OperationCanceledException && !cancellationToken.IsCancellationRequested))
         {
-            // Tolerated: Server isolated from Internet, external DNS unreachable, or request timed out
-            var failures = Interlocked.Increment(ref _consecutiveFailures);
-            if (failures >= _circuitBreakerThreshold)
-            {
-                Interlocked.Exchange(ref _circuitBreakerTripTimestamp, Stopwatch.GetTimestamp());
-            }
+            // Server isolated from the Internet, external DNS unreachable, or request timed out: counted by the circuit
+            // breaker, then reported as "no answer" so that the caller does not cache it as "no record".
+            RecordFailure();
+            throw new IpOwnerLookupUnavailableException($"RDAP lookup for {address} got no answer.", ex);
+        }
+    }
 
-            return null;
+    private void RecordFailure()
+    {
+        var failures = Interlocked.Increment(ref _consecutiveFailures);
+        if (failures >= _circuitBreakerThreshold)
+        {
+            Interlocked.Exchange(ref _circuitBreakerTripTimestamp, Stopwatch.GetTimestamp());
         }
     }
 

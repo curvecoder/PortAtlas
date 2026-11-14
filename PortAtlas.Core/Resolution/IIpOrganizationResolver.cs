@@ -12,7 +12,9 @@ public interface IIpOrganizationResolver : IDisposable
     /// </summary>
     /// <param name="address">Target IP address to resolve.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>Organization name, or null if not found.</returns>
+    /// <returns>Organization name, or null if the registry holds no record for the address.</returns>
+    /// <exception cref="IpOwnerLookupUnavailableException">The registry gave no usable answer; the outcome is unknown.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     Task<string?> ResolveOrganizationAsync(IPAddress address, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -20,6 +22,8 @@ public interface IIpOrganizationResolver : IDisposable
     /// </summary>
     /// <param name="address">Target IP address to resolve.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>Detailed owner metadata, or null if not found.</returns>
+    /// <returns>Detailed owner metadata, or null if the registry holds no record for the address.</returns>
+    /// <exception cref="IpOwnerLookupUnavailableException">The registry gave no usable answer; the outcome is unknown.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled.</exception>
     Task<IpOwnerMetadata?> ResolveOwnerDetailsAsync(IPAddress address, CancellationToken cancellationToken = default);
 }
