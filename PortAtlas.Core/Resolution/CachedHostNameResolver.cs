@@ -28,13 +28,17 @@ public sealed class CachedHostNameResolver(
     /// </summary>
     public static readonly TimeSpan TransientFailureRetryDelay = TimeSpan.FromMinutes(1);
 
+    private const string CustomSource = "Custom";
+    private const string ExcludedSource = "Excluded";
+
     private readonly TimeSpan _resolutionTimeout = resolutionTimeout;
     private readonly IReverseDnsLookup _reverseDnsLookup = reverseDnsLookup ?? new SystemReverseDnsLookup();
     private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly DnsAddressExclusionEvaluator _exclusionEvaluator = exclusionEvaluator ?? new DnsAddressExclusionEvaluator([]);
     private readonly PersistentDnsCacheStore? _cacheStore = cacheStore;
     private readonly IIpOrganizationResolver? _organizationResolver = organizationResolver;
-    private readonly ConcurrentDictionary<IPAddress, DnsCacheEntry> _cache = LoadCache(cacheStore, customHostAliases);
+    private readonly IReadOnlyDictionary<IPAddress, string> _customAliases = ParseAliases(customHostAliases);
+    private readonly ConcurrentDictionary<IPAddress, DnsCacheEntry> _cache = LoadCache(cacheStore);
     private readonly ConcurrentDictionary<IPAddress, byte> _queuedAddresses = new();
     private readonly ConcurrentDictionary<IPAddress, DateTimeOffset> _transientFailures = new();
     private readonly Channel<IPAddress> _channel = Channel.CreateUnbounded<IPAddress>();
@@ -54,37 +58,48 @@ public sealed class CachedHostNameResolver(
     {
     }
 
-    private static ConcurrentDictionary<IPAddress, DnsCacheEntry> LoadCache(PersistentDnsCacheStore? cacheStore, IReadOnlyDictionary<string, string>? customHostAliases)
+    // Aliases and exclusions are read from the configuration at each start and never cached: an entry written by an
+    // older version with one of these sources would keep applying after its removal from the configuration.
+    private static ConcurrentDictionary<IPAddress, DnsCacheEntry> LoadCache(PersistentDnsCacheStore? cacheStore)
     {
         var cache = new ConcurrentDictionary<IPAddress, DnsCacheEntry>();
-        if (cacheStore is not null)
+        if (cacheStore is null)
         {
-            var loaded = cacheStore.Load();
-            foreach (var kvp in loaded)
-            {
-                if (IPAddress.TryParse(kvp.Key, out var address))
-                {
-                    cache.TryAdd(address, kvp.Value);
-                }
-            }
+            return cache;
         }
-        if (customHostAliases is not null)
+
+        foreach (var (key, entry) in cacheStore.Load())
         {
-            foreach (var (ipStr, hostName) in customHostAliases)
+            if (IPAddress.TryParse(key, out var address) && !IsConfigurationSource(entry.Source))
             {
-                if (IPAddress.TryParse(ipStr, out var address) && !string.IsNullOrWhiteSpace(hostName))
-                {
-                    cache[address] = new DnsCacheEntry
-                    {
-                        HostName = hostName.Trim(),
-                        Source = "Custom",
-                        ResolvedAtUtc = DateTimeOffset.UtcNow
-                    };
-                }
+                cache.TryAdd(address, entry);
             }
         }
 
         return cache;
+    }
+
+    private static bool IsConfigurationSource(string source) =>
+        string.Equals(source, CustomSource, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(source, ExcludedSource, StringComparison.OrdinalIgnoreCase);
+
+    private static Dictionary<IPAddress, string> ParseAliases(IReadOnlyDictionary<string, string>? customHostAliases)
+    {
+        var aliases = new Dictionary<IPAddress, string>();
+        if (customHostAliases is null)
+        {
+            return aliases;
+        }
+
+        foreach (var (ipStr, hostName) in customHostAliases)
+        {
+            if (IPAddress.TryParse(ipStr, out var address) && !string.IsNullOrWhiteSpace(hostName))
+            {
+                aliases[address] = hostName.Trim();
+            }
+        }
+
+        return aliases;
     }
 
     private void EnsureWorkerStarted()
@@ -143,6 +158,12 @@ public sealed class CachedHostNameResolver(
     {
         ArgumentNullException.ThrowIfNull(address);
 
+        if (_customAliases.TryGetValue(address, out var alias))
+        {
+            entry = new DnsCacheEntry { HostName = alias, Source = CustomSource, ResolvedAtUtc = _timeProvider.GetUtcNow() };
+            return true;
+        }
+
         if (_cache.TryGetValue(address, out var cached))
         {
             entry = cached;
@@ -151,7 +172,7 @@ public sealed class CachedHostNameResolver(
 
         if (IsFastTrackAddress(address, out var fastHost))
         {
-            var source = IPAddress.IsLoopback(address) ? "Local" : "Excluded";
+            var source = IPAddress.IsLoopback(address) ? "Local" : ExcludedSource;
             entry = new DnsCacheEntry { HostName = fastHost, Source = source };
             return true;
         }
@@ -225,9 +246,9 @@ public sealed class CachedHostNameResolver(
 
     private bool IsFastTrackAddress(IPAddress address, out string hostName)
     {
-        if (_cache.TryGetValue(address, out var customEntry) && string.Equals(customEntry.Source, "Custom", StringComparison.OrdinalIgnoreCase))
+        if (_customAliases.TryGetValue(address, out var alias))
         {
-            hostName = customEntry.HostName;
+            hostName = alias;
             return true;
         }
 
@@ -246,12 +267,6 @@ public sealed class CachedHostNameResolver(
         if (_exclusionEvaluator.ShouldExclude(address))
         {
             hostName = string.Empty;
-            _cache.TryAdd(address, new DnsCacheEntry
-            {
-                HostName = string.Empty,
-                Source = "Excluded",
-                ResolvedAtUtc = DateTimeOffset.UtcNow
-            });
             return true;
         }
 
