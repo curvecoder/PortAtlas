@@ -223,6 +223,29 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
     }
 
     [Fact]
+    public async Task EnrichFilesAsync_WhenNdjsonLinesLackTheHostNameOrHoldOtherJsonTypes_ResolvesTheAddressesWithoutAName()
+    {
+        // Arrange
+        var auditPath = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.ndjson");
+        await File.WriteAllLinesAsync(auditPath,
+        [
+            """{"remoteIp":"192.168.1.40","remotePort":443}""",
+            """{"remoteIp":"192.168.1.41","remoteHostName":7}""",
+            """[ "192.168.1.42" ]""",
+            """{"remoteIp":"192.168.1.43","remoteHostName":null}"""
+        ]);
+        var resolver = new ScriptedIpResolver();
+        var enricher = new OfflineAuditEnricher(offlineResolver: resolver);
+
+        // Act
+        var act = () => enricher.EnrichFilesAsync([auditPath], [], Options());
+
+        // Assert
+        await act.Should().NotThrowAsync();
+        resolver.ResolvedAddresses.Should().BeEquivalentTo(["192.168.1.40", "192.168.1.43"]);
+    }
+
+    [Fact]
     public async Task EnrichFilesAsync_WhenNoServerAnswersForANamedAddress_KeepsItsEntry()
     {
         // Arrange

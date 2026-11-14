@@ -237,26 +237,31 @@ public sealed class OfflineAuditEnricher(
                 try
                 {
                     using var doc = JsonDocument.Parse(line);
-                    if (doc.RootElement.TryGetProperty("remoteIp", out var ipProp))
+                    var root = doc.RootElement;
+                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("remoteIp", out var ipProp))
                     {
-                        var ip = ipProp.GetString();
-                        if (string.IsNullOrWhiteSpace(ip))
-                        {
-                            continue;
-                        }
+                        continue;
+                    }
 
-                        doc.RootElement.TryGetProperty("remoteHostName", out var hostProp);
-                        var host = hostProp.GetString();
+                    // ToString, unlike GetString, accepts a value of any JSON type (a JSON null gives an empty string),
+                    // so the scan reads each line as the enrichment pass does with JsonNode. A value that is not an
+                    // address is dropped by the IPAddress.TryParse of the resolution loop.
+                    var ip = ipProp.ToString();
+                    if (string.IsNullOrWhiteSpace(ip))
+                    {
+                        continue;
+                    }
 
-                        if (ShouldResolve(ip, host, knownCache, forceResolve))
-                        {
-                            result.Add(ip);
-                        }
+                    var host = root.TryGetProperty("remoteHostName", out var hostProp) ? hostProp.ToString() : null;
+                    if (ShouldResolve(ip, host, knownCache, forceResolve))
+                    {
+                        result.Add(ip);
                     }
                 }
                 catch (JsonException)
                 {
-                    // Skipped malformed JSON line
+                    // A line cut short by an abrupt stop of the audit must not block the scan of the rest of the log:
+                    // its address is not resolved, and the enrichment pass leaves the line as it is.
                 }
             }
         }
