@@ -245,6 +245,29 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         resolver.ResolvedAddresses.Should().BeEquivalentTo(["192.168.1.40", "192.168.1.43"]);
     }
 
+    [Theory]
+    [InlineData(';')]
+    [InlineData('\t')]
+    [InlineData('|')]
+    public async Task EnrichFilesAsync_WhenTheCsvUsesAnotherSeparator_ResolvesAndNamesTheRemoteAddress(char separator)
+    {
+        // Arrange
+        var auditPath = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");
+        var row = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,SRV-01,Linux,192.168.1.2,Tcp,Outbound,Established,192.168.1.2,50000,192.168.1.50,443,,1234,curl,/usr/bin/curl,curl,,root";
+        await File.WriteAllLinesAsync(auditPath, [AuditHeader.Replace(',', separator), row.Replace(',', separator)]);
+        var resolver = new ScriptedIpResolver { ["192.168.1.50"] = Resolved("proxmox.home.arpa") };
+        var options = Options();
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([auditPath], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("192.168.1.50");
+        report.TotalRecordsUpdated.Should().Be(1);
+        var enrichedLines = await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Which);
+        enrichedLines[1].Split(separator)[13].Should().Be("proxmox.home.arpa");
+    }
+
     [Fact]
     public async Task EnrichFilesAsync_WhenCancelledDuringTheLookups_SavesTheAddressesResolvedSoFar()
     {

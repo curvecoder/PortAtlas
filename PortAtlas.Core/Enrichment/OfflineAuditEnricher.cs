@@ -19,6 +19,10 @@ public sealed class OfflineAuditEnricher(
     IOfflineIpResolver? offlineResolver = null,
     Action<string>? logger = null)
 {
+    // The audit's default CsvDelimiter. The separator of each log is read from its first line, which may come from
+    // another machine's configuration, so this one is kept only on a tie or when the first line gives no separator.
+    private const char AuditCsvDefaultDelimiter = ',';
+
     private static readonly JsonSerializerOptions CompactJsonOptions = new()
     {
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
@@ -291,11 +295,7 @@ public sealed class OfflineAuditEnricher(
         }
         else
         {
-            if (await ReadCsvDelimiterAsync(filePath, cancellationToken).ConfigureAwait(false) is not { } delimiter)
-            {
-                return [];
-            }
-
+            var delimiter = await AuditCsvDelimiterDetector.DetectAsync(filePath, AuditCsvDefaultDelimiter, cancellationToken).ConfigureAwait(false);
             using var reader = new StreamReader(filePath);
             var (remoteIpIdx, remoteHostIdx) = (-1, -1);
             var isHeader = true;
@@ -449,11 +449,7 @@ public sealed class OfflineAuditEnricher(
         EnrichmentTally tally,
         CancellationToken cancellationToken)
     {
-        if (await ReadCsvDelimiterAsync(inputPath, cancellationToken).ConfigureAwait(false) is not { } delimiter)
-        {
-            return;
-        }
-
+        var delimiter = await AuditCsvDelimiterDetector.DetectAsync(inputPath, AuditCsvDefaultDelimiter, cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(inputPath);
         var (remoteIpIdx, remoteHostIdx) = (-1, -1);
         var isHeader = true;
@@ -566,13 +562,6 @@ public sealed class OfflineAuditEnricher(
     // A record is written back from its fields, not from its text, since a quoted field may span several lines.
     private static string JoinCsvRecord(IEnumerable<string> fields, char delimiter)
         => string.Join(delimiter, fields.Select(field => PersistentDelimitedFileWriter.EscapeField(field, delimiter)));
-
-    private static async Task<char?> ReadCsvDelimiterAsync(string path, CancellationToken cancellationToken)
-    {
-        using var reader = new StreamReader(path);
-        var headerLine = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-        return headerLine is null ? null : headerLine.Contains(';') ? ';' : ',';
-    }
 
     private static bool ShouldUpdateHost(
         string ip,
