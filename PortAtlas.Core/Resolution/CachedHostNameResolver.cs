@@ -533,7 +533,8 @@ public sealed class CachedHostNameResolver(
         {
             try
             {
-                await _backgroundWorker.WaitAsync(QueueShutdownWaitLimit, _timeProvider).ConfigureAwait(false);
+                // Not _cts.Token: it is already cancelled here and would end the wait at once.
+                await _backgroundWorker.WaitAsync(QueueShutdownWaitLimit, _timeProvider, CancellationToken.None).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
