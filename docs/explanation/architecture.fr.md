@@ -59,10 +59,10 @@ Le programme est réparti entre l'application et quatre frameworks publiés en p
 
 | Paquet | Rôle dans PortAtlas |
 | :--- | :--- |
-| SocketForge 1.1.0 | Tables de sockets sous Windows et Linux |
-| ProcessForge 1.1.1 | Informations et compte des processus, cibles des lanceurs, exclusion de processus |
-| FileForge.Core 1.3.0 | Lecture des enregistrements RFC 4180, et remplacement d'un fichier seulement une fois sa nouvelle version complète (journaux d'audit, configuration, profils, cache DNS) |
-| TopologyForge 1.9.0 | Graphe topologique, filtres, carte HTML et export Draw.io |
+| SocketForge 1.1.1 | Tables de sockets sous Windows et Linux |
+| ProcessForge 1.1.2 | Informations et compte des processus, cibles des lanceurs, exclusion de processus |
+| FileForge.Core 1.4.1 | Lecture des enregistrements RFC 4180, et remplacement d'un fichier seulement une fois sa nouvelle version complète (journaux d'audit, configuration, profils, cache DNS) |
+| TopologyForge 1.13.0 | Graphe topologique, filtres, carte HTML et export Draw.io |
 
 L'application (`PortAtlas.Core`, `PortAtlas`) contient ce qui est propre à l'audit : le cycle de balayage, la déduplication, la résolution de noms, la ligne de commande, le tableau de bord et les exports.
 

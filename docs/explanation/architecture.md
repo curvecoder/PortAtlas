@@ -59,10 +59,10 @@ The program is split between the application and four frameworks published as Nu
 
 | Package | Role in PortAtlas |
 | :--- | :--- |
-| SocketForge 1.1.0 | Socket tables on Windows and Linux |
-| ProcessForge 1.1.1 | Process details and account, launcher targets, process exclusion |
-| FileForge.Core 1.3.0 | Reading of RFC 4180 records, and replacement of a file only once its new version is complete (audit logs, configuration, profiles, DNS cache) |
-| TopologyForge 1.9.0 | Topology graph, filters, HTML map and Draw.io export |
+| SocketForge 1.1.1 | Socket tables on Windows and Linux |
+| ProcessForge 1.1.2 | Process details and account, launcher targets, process exclusion |
+| FileForge.Core 1.4.1 | Reading of RFC 4180 records, and replacement of a file only once its new version is complete (audit logs, configuration, profiles, DNS cache) |
+| TopologyForge 1.13.0 | Topology graph, filters, HTML map and Draw.io export |
 
 The application (`PortAtlas.Core`, `PortAtlas`) holds what is specific to the audit: the scan cycle, deduplication, name resolution, the command line, the dashboard and the exports.
 
