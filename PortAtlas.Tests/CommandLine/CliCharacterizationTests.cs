@@ -262,14 +262,14 @@ public sealed class CliCharacterizationTests : IDisposable
         var configuration = AuditCommandConfiguration.Build(
             new AppConfiguration(),
             "audit", "--interval", "30", "--columns", "Protocol,RemoteIp", "--no-dns",
-            "--exclude-remote-ips", "192.0.2.0/24,198.51.100.7", "--reload-history", "25", "--html", "live.html");
+            "--exclude-remote-ips", "192.0.2.0/24,198.51.100.7", "--rewrite-interval", "25", "--html", "live.html");
 
         // Assert
         configuration.ScanIntervalSeconds.Should().Be(30);
         configuration.CsvColumns.Should().Equal("Protocol", "RemoteIp");
         configuration.ResolveRemoteHostNames.Should().BeFalse();
         configuration.ExcludedRemoteIps.Should().Equal("192.0.2.0/24", "198.51.100.7");
-        configuration.ReloadHistoryLimit.Should().Be(25);
+        configuration.LogRewriteIntervalMinutes.Should().Be(25);
         configuration.OutputHtmlMapPath.Should().Be("live.html");
     }
 
@@ -457,6 +457,94 @@ public sealed class CliCharacterizationTests : IDisposable
         exitCode.Should().Be(1);
         capturedError.ToString().Should().Contain(option).And.Contain($"'{value}'");
         File.Exists(output).Should().BeFalse();
+    }
+
+    // These audits stop before the first scan: the log is read, and written once, before the audit loop starts.
+    [Fact]
+    public async Task Main_WhenTheAuditLogToResumeHasAnUnreadableValue_ReturnsExitCodeOneNamingTheLine()
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "unreadable_value_audit.csv");
+        await File.WriteAllLinesAsync(log, [ResumableHeader, ResumableRow.Replace(",Tcp,", ",Sctp,", StringComparison.Ordinal)]);
+
+        // Act
+        var (exitCode, output) = await RunAuditAsync(log);
+
+        // Assert
+        exitCode.Should().Be(1);
+        output.Should().Contain("Audit log error").And.Contain("line 2").And.Contain("'Sctp'");
+    }
+
+    [Fact]
+    public async Task Main_WhenARewriteLeftTheCompleteLogInPending_StartsFromIt()
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "interrupted_audit.csv");
+        await File.WriteAllLinesAsync($"{log}.pending", [ResumableHeader, ResumableRow.Replace(",Tcp,", ",Sctp,", StringComparison.Ordinal)]);
+
+        // Act
+        var (exitCode, output) = await RunAuditAsync(log);
+
+        // Assert
+        exitCode.Should().Be(1);
+        output.Should().Contain("'Sctp'");
+        File.Exists(log).Should().BeTrue();
+        File.Exists($"{log}.pending").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Main_WhenTheAuditLogIsHeldOpenAtStart_ReturnsExitCodeOneNamingTheLog()
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "held_audit.csv");
+        await File.WriteAllLinesAsync(log, [ResumableHeader, ResumableRow]);
+        using var holder = new FileStream(log, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+
+        // Act
+        var (exitCode, output) = await RunAuditAsync(log);
+
+        // Assert
+        exitCode.Should().Be(1);
+        output.Should().Contain("Audit log error").And.Contain(Path.GetFileName(log));
+    }
+
+    [Fact]
+    public async Task Main_WhenTheColumnsLeaveOutTheFlowKey_ReturnsExitCodeOneNamingTheMissingColumns()
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "reduced_columns_audit.csv");
+
+        // Act
+        var (exitCode, output) = await RunAuditAsync(log, "--columns", "Protocol,RemoteIp,RemotePort");
+
+        // Assert
+        exitCode.Should().Be(1);
+        output.Should().Contain("Column configuration error").And.Contain("FirstSeenUtc").And.Contain("LocalPort");
+        File.Exists(log).Should().BeFalse();
+    }
+
+    private const string ResumableHeader =
+        "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable";
+
+    private const string ResumableRow =
+        "2026-11-01T08:00:00.0000000Z,2026-11-02T08:00:00.0000000Z,3,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,";
+
+    private async Task<(int ExitCode, string Output)> RunAuditAsync(string log, params string[] options)
+    {
+        var consoleOut = Console.Out;
+        using var capturedOut = new StringWriter();
+        Console.SetOut(capturedOut);
+        try
+        {
+            var audit = Program.Main(["audit", "--output", log, "--no-tui", "--no-dns", "--no-rdap", "--config", _emptyConfigPath, .. options]);
+            var finished = await Task.WhenAny(audit, Task.Delay(TimeSpan.FromSeconds(20)));
+            finished.Should().BeSameAs(audit, "the audit must stop before its first scan");
+            return (await audit, capturedOut.ToString());
+        }
+        finally
+        {
+            Console.SetOut(consoleOut);
+        }
     }
 
     // A command line spanning lines is one record; a quote never closed leaves the end of the log unreadable.

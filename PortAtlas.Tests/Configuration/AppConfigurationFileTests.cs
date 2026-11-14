@@ -330,9 +330,7 @@ public sealed class AppConfigurationFileTests : IDisposable
     }
 
     public static TheoryData<string> KeysThatCannotBeNull() =>
-        new(typeof(AppConfiguration).GetProperties()
-            .Select(property => property.Name)
-            .Where(name => name != nameof(AppConfiguration.ReloadHistoryLimit)));
+        new(typeof(AppConfiguration).GetProperties().Select(property => property.Name));
 
     [Theory]
     [MemberData(nameof(KeysThatCannotBeNull))]
@@ -394,16 +392,17 @@ public sealed class AppConfigurationFileTests : IDisposable
     }
 
     [Fact]
-    public void Load_WhenReloadHistoryLimitIsNull_ReloadsTheWholeHistory()
+    public void Load_WhenTheFileStillHoldsReloadHistoryLimit_ThrowsNamingTheKey()
     {
         // Arrange
         var path = WriteConfiguration("""{ "ReloadHistoryLimit": null }""");
 
         // Act
-        var loaded = AppConfigurationFile.Load(path);
+        var act = () => AppConfigurationFile.Load(path);
 
         // Assert
-        loaded.Configuration.ReloadHistoryLimit.Should().BeNull();
+        act.Should().Throw<ConfigurationFileException>()
+            .Which.Message.Should().Contain("\"ReloadHistoryLimit\" is not a configuration key");
     }
 
     [Fact]
@@ -432,7 +431,7 @@ public sealed class AppConfigurationFileTests : IDisposable
 
         // Assert
         loaded.Configuration.ExcludedPids.Should().Equal(0, 4);
-        loaded.Configuration.ReloadHistoryLimit.Should().BeNull();
+        loaded.Configuration.LogRewriteIntervalMinutes.Should().Be(5);
     }
 
     [Fact]

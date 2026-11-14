@@ -33,11 +33,11 @@ Toutes les `ScanIntervalSeconds` secondes, `FlowAuditEngine` :
 1. lit les sockets par SocketForge et le processus de chaque socket par ProcessForge, qui trouve aussi l'application lancée par un lanceur comme `java -jar`, `python` ou `powershell` ;
 2. écarte les sockets retenus par les filtres d'enregistrement (`NetworkFlowFilter` pour les ports, les adresses et le trafic de bouclage, `ProcessExclusionFilter` pour les processus) ;
 3. transmet le reste à `ConnectionDeduplicationRegister`, qui met à jour ou crée une entrée par flux ;
-4. écrit les entrées modifiées dans le journal CSV, et dans le journal NDJSON s'il est activé.
+4. toutes les `LogRewriteIntervalMinutes` minutes, réécrit tout le journal CSV à partir du registre, et le journal NDJSON s'il est activé.
 
 ## Pourquoi dédupliquer les flux
 
-Un client ouvre un nouveau port local à chaque connexion. Journaliser chaque connexion produirait une ligne par port et par balayage. Le registre identifie un flux sans le port client (voir les [formats de sortie](../reference/output-formats.fr.md#journal-daudit-csv)) : un service utilisé des milliers de fois garde une seule ligne, avec une date de première observation, une date de dernière observation et un compteur. Relire le journal CSV au démarrage conserve ces valeurs d'un redémarrage à l'autre.
+Un client ouvre un nouveau port local à chaque connexion. Journaliser chaque connexion produirait une ligne par port et par balayage. Le registre identifie un flux sans le port client (voir les [formats de sortie](../reference/output-formats.fr.md#journal-daudit-csv)) : un service utilisé des milliers de fois garde une seule ligne, avec une date de première observation, une date de dernière observation et un compteur. Le journal est réécrit à partir du registre au lieu d'être complété, pour que sa ligne porte les dernières valeurs ; relire tout le journal au démarrage les conserve d'un redémarrage à l'autre.
 
 ## Résolution de noms
 
@@ -61,7 +61,7 @@ Le programme est réparti entre l'application et quatre frameworks publiés en p
 | :--- | :--- |
 | SocketForge 1.1.0 | Tables de sockets sous Windows et Linux |
 | ProcessForge 1.1.1 | Informations et compte des processus, cibles des lanceurs, exclusion de processus |
-| FileForge.Core 1.1.0 | Écriture CSV et NDJSON qui laisse les fichiers lisibles par d'autres programmes pendant l'audit |
+| FileForge.Core 1.3.0 | Lecture des enregistrements RFC 4180, et remplacement d'un fichier seulement une fois sa nouvelle version complète (journaux d'audit, configuration, profils, cache DNS) |
 | TopologyForge 1.9.0 | Graphe topologique, filtres, carte HTML et export Draw.io |
 
 L'application (`PortAtlas.Core`, `PortAtlas`) contient ce qui est propre à l'audit : le cycle de balayage, la déduplication, la résolution de noms, la ligne de commande, le tableau de bord et les exports.

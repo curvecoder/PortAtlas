@@ -33,11 +33,11 @@ Every `ScanIntervalSeconds` seconds, `FlowAuditEngine`:
 1. reads the sockets through SocketForge and the process of each socket through ProcessForge, which also finds the application started by a launcher such as `java -jar`, `python` or `powershell`;
 2. drops the sockets matched by the recording filters (`NetworkFlowFilter` for ports, addresses and loopback traffic, `ProcessExclusionFilter` for processes);
 3. hands the rest to `ConnectionDeduplicationRegister`, which updates or creates one entry per flow;
-4. writes the changed entries to the CSV log, and to the NDJSON log when enabled.
+4. every `LogRewriteIntervalMinutes` minutes, rewrites the whole CSV log from the register, and the NDJSON log when enabled.
 
 ## Why flows are deduplicated
 
-A client opens a new local port for each connection. Logging every connection would produce one line per port and per scan. The register identifies a flow without the client port (see [output formats](../reference/output-formats.md#csv-audit-log)), so that a service used thousands of times keeps one line with a first-seen date, a last-seen date and an observation count. Reloading the existing CSV log at startup keeps those values across restarts.
+A client opens a new local port for each connection. Logging every connection would produce one line per port and per scan. The register identifies a flow without the client port (see [output formats](../reference/output-formats.md#csv-audit-log)), so that a service used thousands of times keeps one line with a first-seen date, a last-seen date and an observation count. The log is rewritten from the register rather than appended to, so that its line carries the latest values; reading the whole log at startup keeps them across restarts.
 
 ## Name resolution
 
@@ -61,7 +61,7 @@ The program is split between the application and four frameworks published as Nu
 | :--- | :--- |
 | SocketForge 1.1.0 | Socket tables on Windows and Linux |
 | ProcessForge 1.1.1 | Process details and account, launcher targets, process exclusion |
-| FileForge.Core 1.1.0 | CSV and NDJSON writers that keep the files readable by other programs while the audit runs |
+| FileForge.Core 1.3.0 | Reading of RFC 4180 records, and replacement of a file only once its new version is complete (audit logs, configuration, profiles, DNS cache) |
 | TopologyForge 1.9.0 | Topology graph, filters, HTML map and Draw.io export |
 
 The application (`PortAtlas.Core`, `PortAtlas`) holds what is specific to the audit: the scan cycle, deduplication, name resolution, the command line, the dashboard and the exports.

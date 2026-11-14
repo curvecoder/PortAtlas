@@ -42,10 +42,15 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// </summary>
     internal static readonly IReadOnlyList<string> HeaderMarkerColumns = [nameof(AuditCsvColumn.ServerName), nameof(AuditCsvColumn.LocalPort)];
 
-    // A resumed flow missing one of these columns would take default values (TCP, outbound, port 0, current time)
-    // and match no observed flow, so it would be logged again on every restart. The local address is left out:
-    // it only enters the key of a flow of unknown direction, which no socket scanner reports.
-    private static readonly IReadOnlyList<string> ResumeRequiredColumns =
+    /// <summary>
+    /// Columns an audit log must hold to be resumed: the parts of the flow key and the first-seen date.
+    /// </summary>
+    /// <remarks>
+    /// A resumed flow missing one of these columns would take default values (TCP, outbound, port 0, current time)
+    /// and match no observed flow. The local address is left out: it only enters the key of a flow of unknown
+    /// direction, which no socket scanner reports.
+    /// </remarks>
+    public static IReadOnlyList<string> ResumeRequiredColumns { get; } =
     [
         nameof(AuditCsvColumn.FirstSeenUtc),
         nameof(AuditCsvColumn.Protocol),
@@ -57,8 +62,25 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         nameof(AuditCsvColumn.TargetExecutable)
     ];
 
-    private const string ResumeWorkaround =
-        "Write to a new log with --output, or turn the reload off with --reload-history 0.";
+    private const string ResumeWorkaround = "Write to a new log with --output.";
+
+    private const string UnreadableLineWorkaround = "Correct or remove the line, or write to a new log with --output.";
+
+    // A value read into a default (TCP, port 0, the current time) would be written back by the next rewrite of the
+    // log, which would lose what the line held: such a line stops the resume instead. A blank optional value is
+    // the one an earlier version wrote or a reduced column set left out, and keeps its default.
+    private static readonly IReadOnlyList<ResumeValueRule> ResumeValueRules =
+    [
+        new(nameof(AuditCsvColumn.FirstSeenUtc), IsRequired: true, value => TryParseTimestamp(value, out _)),
+        new(nameof(AuditCsvColumn.LastSeenUtc), IsRequired: false, value => TryParseTimestamp(value, out _)),
+        new(nameof(AuditCsvColumn.ObservationCount), IsRequired: false, IsObservationCount),
+        new(nameof(AuditCsvColumn.Protocol), IsRequired: true, IsDefinedName<SocketTransportProtocol>),
+        new(nameof(AuditCsvColumn.Direction), IsRequired: true, IsDefinedName<SocketFlowDirection>),
+        new(nameof(AuditCsvColumn.LocalIp), IsRequired: false, value => IPAddress.TryParse(value, out _)),
+        new(nameof(AuditCsvColumn.LocalPort), IsRequired: true, IsPort),
+        new(nameof(AuditCsvColumn.RemoteIp), IsRequired: true, value => IPAddress.TryParse(value, out _)),
+        new(nameof(AuditCsvColumn.RemotePort), IsRequired: true, IsPort)
+    ];
 
     /// <summary>
     /// Tells whether a line is the header of an audit log, that is the line this parser reads the columns by name from.
@@ -113,12 +135,16 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var firstSeen = GetField(row.Fields, table.ColumnMap, nameof(AuditCsvColumn.FirstSeenUtc));
-            if (!TryParseTimestamp(firstSeen, out _))
+            foreach (var rule in ResumeValueRules)
             {
-                throw new InvalidDataException(
-                    $"The audit log '{csvFilePath}' cannot be resumed: line {row.LineNumber} has an unreadable " +
-                    $"FirstSeenUtc value '{firstSeen}'. {ResumeWorkaround}");
+                var value = GetField(row.Fields, table.ColumnMap, rule.Column);
+                var isReadable = string.IsNullOrWhiteSpace(value) ? !rule.IsRequired : rule.IsReadable(value);
+                if (!isReadable)
+                {
+                    throw new InvalidDataException(
+                        $"The audit log '{csvFilePath}' cannot be resumed: line {row.LineNumber} has an unreadable " +
+                        $"{rule.Column} value '{value}'. {UnreadableLineWorkaround}");
+                }
             }
 
             if (ConvertFieldsToAuditEntry(row.Fields, table.ColumnMap) is { } entry)
@@ -167,6 +193,17 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
 
     private static bool TryParseTimestamp(string value, out DateTimeOffset timestamp)
         => DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp);
+
+    private static bool IsObservationCount(string value)
+        => long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var count) && count > 0;
+
+    private static bool IsPort(string value)
+        => int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var port) && port <= IPEndPoint.MaxPort;
+
+    // Enum.TryParse also reads numbers and comma-separated combinations, which no log writes for these columns.
+    private static bool IsDefinedName<TEnum>(string value)
+        where TEnum : struct, Enum
+        => Enum.TryParse<TEnum>(value, ignoreCase: true, out var parsed) && Enum.IsDefined(parsed) && !char.IsAsciiDigit(value.Trim()[0]);
 
     private static async Task<List<DelimitedRecord>> ReadAllRecordsAsync(string path, char delimiter, CancellationToken cancellationToken)
     {
@@ -301,6 +338,8 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
 
         return string.Empty;
     }
+
+    private sealed record ResumeValueRule(string Column, bool IsRequired, Func<string, bool> IsReadable);
 
     private sealed record CsvTable(IReadOnlyList<DelimitedRecord> Rows, Dictionary<string, int> ColumnMap)
     {

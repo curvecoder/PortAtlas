@@ -40,8 +40,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         // Arrange
         var testCsv = Path.Combine(_testDir, "output.csv");
         var csvFormatter = new AuditCsvFormatter(new AuditCsvOptions());
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
-        await csvWriter.InitializeAsync();
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter);
 
         var hostProvider = new LocalServerHostProvider();
         var deduplication = new ConnectionDeduplicationRegister();
@@ -62,8 +61,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             exclusion,
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             TimeSpan.FromSeconds(1));
 
         // Act
@@ -80,8 +78,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         // Arrange
         var testCsv = Path.Combine(_testDir, "excluded.csv");
         var csvFormatter = new AuditCsvFormatter(new AuditCsvOptions());
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
-        await csvWriter.InitializeAsync();
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter);
 
         var hostProvider = new LocalServerHostProvider();
         var deduplication = new ConnectionDeduplicationRegister();
@@ -102,8 +99,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             exclusion,
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             TimeSpan.FromSeconds(1));
 
         // Act
@@ -120,8 +116,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         // Arrange
         var testCsv = Path.Combine(_testDir, "network_filtered.csv");
         var csvFormatter = new AuditCsvFormatter(new AuditCsvOptions());
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
-        await csvWriter.InitializeAsync();
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter);
 
         var hostProvider = new LocalServerHostProvider();
         var deduplication = new ConnectionDeduplicationRegister();
@@ -154,8 +149,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             networkFilter,
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             TimeSpan.FromSeconds(1));
 
         FlowAuditCycleResult? recordedResult = null;
@@ -180,8 +174,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         // Arrange
         var testCsv = Path.Combine(_testDir, "loopback_filtered.csv");
         var csvFormatter = new AuditCsvFormatter(new AuditCsvOptions());
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
-        await csvWriter.InitializeAsync();
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter);
 
         var hostProvider = new LocalServerHostProvider();
         var deduplication = new ConnectionDeduplicationRegister();
@@ -207,8 +200,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             networkFilter,
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             TimeSpan.FromSeconds(1));
 
         // Act
@@ -229,8 +221,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             SelectedColumns = [AuditCsvColumn.RemoteIp, AuditCsvColumn.RemotePort, AuditCsvColumn.RemoteHostName]
         };
         var csvFormatter = new AuditCsvFormatter(options);
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
-        await csvWriter.InitializeAsync();
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter);
 
         var hostProvider = new LocalServerHostProvider();
         var deduplication = new ConnectionDeduplicationRegister();
@@ -256,10 +247,10 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             networkFilter,
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             fakeResolver,
-            TimeSpan.FromSeconds(1));
+            TimeSpan.FromSeconds(1),
+            FlowAuditEngine.DefaultLogRewriteInterval);
 
         FlowAuditCycleResult? cycleResult = null;
         engine.ScanCycleCompleted += (_, e) => cycleResult = e.Result;
@@ -273,24 +264,21 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         cycleResult!.NewlyDiscoveredEntries.Should().HaveCount(1);
         cycleResult.NewlyDiscoveredEntries[0].RemoteHostName.Should().Be("github.com");
 
-        await csvWriter.DisposeAsync();
+        await engine.RewriteLogAsync();
         var lines = await File.ReadAllLinesAsync(testCsv);
         lines.Length.Should().Be(2); // Header + 1 entry
         lines[1].Should().Be("140.82.121.4,443,github.com");
     }
 
     [Fact]
-    public async Task ExecuteScanCycleAsync_WhenNdjsonWriterConfigured_WritesBothCsvAndNdjsonLines()
+    public async Task RewriteLogAsync_WhenAnNdjsonLogIsConfigured_WritesBothCsvAndNdjsonLines()
     {
         // Arrange
         var testCsv = Path.Combine(_testDir, "dual_output.csv");
         var testNdjson = Path.Combine(_testDir, "dual_output.ndjson");
         var csvFormatter = new AuditCsvFormatter(new AuditCsvOptions());
         var ndjsonFormatter = new AuditNdjsonFormatter();
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
-        await using var ndjsonWriter = new FileForge.IO.PersistentDelimitedFileWriter(testNdjson, string.Empty);
-        await csvWriter.InitializeAsync();
-        await ndjsonWriter.InitializeAsync();
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter, testNdjson, ndjsonFormatter);
 
         var hostProvider = new LocalServerHostProvider();
         var deduplication = new ConnectionDeduplicationRegister();
@@ -312,20 +300,17 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             new NetworkFlowFilter(new NetworkFlowFilterOptions()),
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             new PortAtlas.Core.Resolution.NoOpHostNameResolver(),
             TimeSpan.FromSeconds(1),
-            ndjsonWriter,
-            ndjsonFormatter);
+            FlowAuditEngine.DefaultLogRewriteInterval);
 
         // Act
         var count = await engine.ExecuteScanCycleAsync();
 
         // Assert
         count.Should().Be(1);
-        await csvWriter.DisposeAsync();
-        await ndjsonWriter.DisposeAsync();
+        await engine.RewriteLogAsync();
 
         File.Exists(testCsv).Should().BeTrue();
         File.Exists(testNdjson).Should().BeTrue();
@@ -380,14 +365,13 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         var deduplication = new ConnectionDeduplicationRegister();
         deduplication.Hydrate(loggedFlows);
 
-        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
+        var logRewriter = new AuditLogRewriter(testCsv, csvFormatter);
         var engine = new FlowAuditEngine(
             new FakeSocketScanner([]),
             new ProcessExclusionFilter(new ProcessExclusionOptions()),
             deduplication,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             TimeSpan.FromSeconds(1));
 
         using var cts = new CancellationTokenSource();
@@ -404,6 +388,185 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         // Assert
         trackedFlows.Should().Be(2);
         deduplication.GetAllEntries().Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task ExecuteScanCycleAsync_WhenTheRewritePeriodHasElapsed_WritesTheLatestCountAndLastSeenDateOfEachFlow()
+    {
+        // Arrange
+        var (engine, clock, logPath) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        await engine.ExecuteScanCycleAsync();
+        clock.Advance(TimeSpan.FromMinutes(1));
+        await engine.ExecuteScanCycleAsync();
+        clock.Advance(TimeSpan.FromMinutes(4));
+
+        // Act
+        await engine.ExecuteScanCycleAsync();
+
+        // Assert
+        (await ReadLogAsync(logPath)).Should().Equal(
+            "LastSeenUtc,ObservationCount,RemoteIp,RemoteHostName",
+            "2026-11-14T08:05:00.0000000+00:00,3,192.168.1.30,");
+    }
+
+    [Fact]
+    public async Task ExecuteScanCycleAsync_WhenTheRewritePeriodHasNotElapsed_LeavesTheLogAsItIs()
+    {
+        // Arrange
+        var (engine, clock, logPath) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        await engine.RewriteLogAsync();
+        clock.Advance(TimeSpan.FromMinutes(4));
+
+        // Act
+        await engine.ExecuteScanCycleAsync();
+
+        // Assert
+        (await ReadLogAsync(logPath)).Should().Equal("LastSeenUtc,ObservationCount,RemoteIp,RemoteHostName");
+    }
+
+    [Fact]
+    public async Task RewriteLogAsync_WhenANameIsResolvedAfterTheFirstSighting_WritesTheName()
+    {
+        // Arrange
+        var resolver = new LateHostNameResolver();
+        var (engine, _, logPath) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), resolver);
+        await engine.ExecuteScanCycleAsync();
+        resolver.Resolve(IPAddress.Parse("192.168.1.30"), "pbs.home.arpa");
+
+        // Act
+        await engine.RewriteLogAsync();
+
+        // Assert
+        (await ReadLogAsync(logPath)).Should().Equal(
+            "LastSeenUtc,ObservationCount,RemoteIp,RemoteHostName",
+            "2026-11-14T08:00:00.0000000+00:00,1,192.168.1.30,pbs.home.arpa");
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenStopped_WritesTheFlowsObservedSinceTheLastRewrite()
+    {
+        // Arrange
+        var (engine, _, logPath) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        using var cts = new CancellationTokenSource();
+        engine.ScanCycleCompleted += (_, _) => _ = cts.CancelAsync();
+
+        // Act
+        await engine.RunContinuousAuditAsync(cts.Token);
+
+        // Assert
+        (await ReadLogAsync(logPath)).Should().Equal(
+            "LastSeenUtc,ObservationCount,RemoteIp,RemoteHostName",
+            "2026-11-14T08:00:00.0000000+00:00,1,192.168.1.30,");
+    }
+
+    [Fact]
+    public async Task ExecuteScanCycleAsync_WhenTheLogIsHeldOpenAtTheRewrite_KeepsAuditingAndWritesAtTheNextPeriod()
+    {
+        // Arrange
+        var (engine, clock, logPath) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        await engine.RewriteLogAsync();
+        clock.Advance(TimeSpan.FromMinutes(5));
+        using (new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            await engine.ExecuteScanCycleAsync();
+        }
+
+        clock.Advance(TimeSpan.FromMinutes(5));
+
+        // Act
+        await engine.ExecuteScanCycleAsync();
+
+        // Assert
+        (await ReadLogAsync(logPath)).Should().Equal(
+            "LastSeenUtc,ObservationCount,RemoteIp,RemoteHostName",
+            "2026-11-14T08:10:00.0000000+00:00,2,192.168.1.30,");
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenAScanFailsWhileTheLogIsHeldOpen_ReportsTheScanFailure()
+    {
+        // Arrange
+        var (engine, _, logPath) = CreateEngineWithRewritePeriod(new FailingSocketScanner(), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        await engine.RewriteLogAsync();
+        using var holder = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("The socket table cannot be read.");
+    }
+
+    private (FlowAuditEngine Engine, ManualTimeProvider Clock, string LogPath) CreateEngineWithRewritePeriod(
+        ISocketScanner scanner,
+        PortAtlas.Core.Resolution.IHostNameResolver resolver)
+    {
+        var clock = new ManualTimeProvider(new DateTimeOffset(2026, 11, 14, 8, 0, 0, TimeSpan.Zero));
+        var logPath = Path.Combine(_testDir, "rewritten.csv");
+        var formatter = new AuditCsvFormatter(new AuditCsvOptions
+        {
+            SelectedColumns = [AuditCsvColumn.LastSeenUtc, AuditCsvColumn.ObservationCount, AuditCsvColumn.RemoteIp, AuditCsvColumn.RemoteHostName]
+        });
+        var engine = new FlowAuditEngine(
+            scanner,
+            new ProcessExclusionFilter(new ProcessExclusionOptions()),
+            new NetworkFlowFilter(new NetworkFlowFilterOptions()),
+            new ConnectionDeduplicationRegister(),
+            new LocalServerHostProvider(),
+            new AuditLogRewriter(logPath, formatter),
+            resolver,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMinutes(5),
+            clock);
+        return (engine, clock, logPath);
+    }
+
+    private static async Task<string[]> ReadLogAsync(string logPath) =>
+        File.Exists(logPath) ? await File.ReadAllLinesAsync(logPath) : [];
+
+    private static ActiveSocketConnection NasBackupFlow() => new(
+        SocketTransportProtocol.Tcp,
+        SocketFlowDirection.Outbound,
+        new SocketEndpoint(IPAddress.Parse("192.168.1.20"), 51000),
+        new SocketEndpoint(IPAddress.Parse("192.168.1.30"), 8007),
+        "Established",
+        new ProcessMetadata(300, "proxmox-backup-client", "/usr/bin/proxmox-backup-client", "proxmox-backup-client backup", "", "backup"));
+
+    private sealed class ManualTimeProvider(DateTimeOffset start) : TimeProvider
+    {
+        private DateTimeOffset _now = start;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance(TimeSpan delay) => _now += delay;
+    }
+
+    private sealed class FailingSocketScanner : ISocketScanner
+    {
+        public Task<IReadOnlyList<ActiveSocketConnection>> ScanSocketsAsync(CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("The socket table cannot be read.");
+    }
+
+    private sealed class LateHostNameResolver : PortAtlas.Core.Resolution.IHostNameResolver
+    {
+        public event EventHandler<PortAtlas.Core.Resolution.HostNameResolvedEventArgs>? HostNameResolved;
+
+        public bool TryGetCachedHostName(IPAddress address, out string hostName)
+        {
+            hostName = string.Empty;
+            return false;
+        }
+
+        public void QueueResolution(IPAddress address)
+        {
+            // The name arrives later, when the test calls Resolve.
+        }
+
+        public Task<string> ResolveHostNameAsync(IPAddress address, CancellationToken cancellationToken = default)
+            => Task.FromResult(string.Empty);
+
+        public void Resolve(IPAddress address, string hostName)
+            => HostNameResolved?.Invoke(this, new PortAtlas.Core.Resolution.HostNameResolvedEventArgs(address, hostName));
     }
 
     private sealed class FakeHostNameResolver(string resolvedHost) : PortAtlas.Core.Resolution.IHostNameResolver

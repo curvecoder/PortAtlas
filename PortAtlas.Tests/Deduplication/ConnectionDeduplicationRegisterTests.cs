@@ -86,11 +86,10 @@ public sealed class ConnectionDeduplicationRegisterTests
     }
 
     [Fact]
-    public void GetAllEntries_WhenEntriesRegistered_ReturnsNonNullEntriesSnapshot()
+    public void GetAllEntries_WhenEntriesRegistered_ReturnsThem()
     {
         // Arrange
         var register = new ConnectionDeduplicationRegister();
-        register.Hydrate(["hydrated-key-without-entry"]);
 
         var proc = new ProcessMetadata(1234, "curl", @"C:\Windows\System32\curl.exe", "", "", "User1");
         var entry = new NetworkAuditEntry(

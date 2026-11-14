@@ -78,36 +78,24 @@ public sealed class AuditCommandTests
     }
 
     [Fact]
-    public void BuildConfiguration_WhenReloadHistoryAllProvided_SetsNullLimit()
+    public void BuildConfiguration_WhenRewriteIntervalProvided_OverridesTheFileValue()
     {
         // Act
         var updated = AuditCommandConfiguration.Build(
-            new AppConfiguration { ReloadHistoryLimit = 50 }, "audit", "--reload-history", "all");
+            new AppConfiguration { LogRewriteIntervalMinutes = 5 }, "audit", "--rewrite-interval", "15");
 
         // Assert
-        updated.ReloadHistoryLimit.Should().BeNull();
+        updated.LogRewriteIntervalMinutes.Should().Be(15);
     }
 
     [Fact]
-    public void BuildConfiguration_WhenReloadHistoryZeroProvided_SetsZeroLimit()
+    public void BuildConfiguration_WhenRewriteIntervalIsNotGiven_KeepsTheFileValue()
     {
         // Act
-        var updated = AuditCommandConfiguration.Build(
-            new AppConfiguration { ReloadHistoryLimit = null }, "audit", "--reload-history", "0");
+        var updated = AuditCommandConfiguration.Build(new AppConfiguration { LogRewriteIntervalMinutes = 30 }, "audit");
 
         // Assert
-        updated.ReloadHistoryLimit.Should().Be(0);
-    }
-
-    [Fact]
-    public void BuildConfiguration_WhenReloadHistoryPositiveIntegerProvided_SetsExplicitLimit()
-    {
-        // Act
-        var updated = AuditCommandConfiguration.Build(
-            new AppConfiguration { ReloadHistoryLimit = null }, "audit", "--reload-history", "250");
-
-        // Assert
-        updated.ReloadHistoryLimit.Should().Be(250);
+        updated.LogRewriteIntervalMinutes.Should().Be(30);
     }
 
     [Fact]

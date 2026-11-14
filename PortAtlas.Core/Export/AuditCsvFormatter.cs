@@ -73,7 +73,9 @@ public sealed class AuditCsvFormatter(AuditCsvOptions options)
         var values = new string[_options.SelectedColumns.Count];
         for (var i = 0; i < _options.SelectedColumns.Count; i++)
         {
-            values[i] = PersistentDelimitedFileWriter.EscapeField(ExtractFieldValue(_options.SelectedColumns[i], entry), _options.Delimiter);
+            // A field on several lines would make the log unreadable line by line (map, spreadsheet filters); the
+            // command line is the field that holds line breaks in practice.
+            values[i] = PersistentDelimitedFileWriter.EscapeField(ExtractFieldValue(_options.SelectedColumns[i], entry).ReplaceLineEndings(" "), _options.Delimiter);
         }
 
         return string.Join(_options.Delimiter, values);

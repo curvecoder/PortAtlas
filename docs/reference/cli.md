@@ -119,7 +119,7 @@ PortAtlas audit [options]
 | `--ndjson` | `<path>` | `OutputNdjsonPath` | none | NDJSON log written alongside the CSV log |
 | `--interval` | seconds, at least 1 | `ScanIntervalSeconds` | `5` | Time between two scans |
 | `--columns` | column names | `CsvColumns` | all 20 | Ordered CSV columns ([list](output-formats.md#csv-audit-log)) |
-| `--reload-history` | `all` or a number | `ReloadHistoryLimit` | `all` | Flows reloaded from the existing CSV log at startup; `0` disables the reload |
+| `--rewrite-interval` | minutes, at least 1 | `LogRewriteIntervalMinutes` | `5` | Time between two rewrites of the logs, which are also written at start and stop ([details](output-formats.md#csv-audit-log)) |
 | `--no-tui` | none | `EnableDashboard` | dashboard on | Run without the terminal dashboard |
 | `--no-dns` | none | `ResolveRemoteHostNames` | DNS on | No name resolution at all: no reverse DNS, no RDAP, no alias |
 | `--no-rdap` | none | `ResolveIpOwners` | RDAP on | No RDAP query to Internet registries; reverse DNS stays active |
@@ -134,7 +134,7 @@ Families read: flow filters and map rendering. When `--html` (or `OutputHtmlMapP
 
 The dashboard is not shown when the input or the output of the process is redirected, even without `--no-tui`.
 
-An invalid column name in `--columns` or `CsvColumns` stops the command with `Column configuration error: …` and exit code 1.
+An invalid column name in `--columns` or `CsvColumns`, or a list without `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath` and `TargetExecutable` (the log is read back at the next start, see [output formats](output-formats.md#csv-audit-log)), stops the command with `Column configuration error: …` and exit code 1.
 
 ## map
 
@@ -245,7 +245,7 @@ PortAtlas config init [<path>]
 | `-o`, `--output` | ✔ | | ✔ | ✔ | | | |
 | Flow filters | ✔ | ✔ | ✔ | | | | |
 | Map rendering, `--html`, `--drawio` | ✔ | ✔ | | | | | |
-| `--ndjson`, `--interval`, `--columns`, `--reload-history` | ✔ | | | | | | |
+| `--ndjson`, `--interval`, `--columns`, `--rewrite-interval` | ✔ | | | | | | |
 | `--no-tui`, `--no-dns`, `--no-rdap` | ✔ | | | | | | |
 | `--dns-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
@@ -260,4 +260,4 @@ PortAtlas config init [<path>]
 | Code | Meaning |
 | :--- | :--- |
 | `0` | Success, or help printed |
-| `1` | Invalid command line, no audit log found, invalid CSV column name, a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |
+| `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |

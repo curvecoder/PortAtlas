@@ -9,24 +9,7 @@ namespace PortAtlas.Core.Deduplication;
 /// </summary>
 public sealed class ConnectionDeduplicationRegister
 {
-    private readonly ConcurrentDictionary<FlowIdentityKey, NetworkAuditEntry?> _activeFlows = new();
-
-    /// <summary>
-    /// Hydrates the register with pre-existing flow keys (e.g. reloaded from disk on startup).
-    /// </summary>
-    /// <param name="existingKeys">Collection of pre-existing textual logical flow keys.</param>
-    public void Hydrate(IEnumerable<string> existingKeys)
-    {
-        ArgumentNullException.ThrowIfNull(existingKeys);
-
-        foreach (var key in existingKeys)
-        {
-            if (!string.IsNullOrWhiteSpace(key))
-            {
-                _activeFlows.TryAdd(new FlowIdentityKey(key), null);
-            }
-        }
-    }
+    private readonly ConcurrentDictionary<FlowIdentityKey, NetworkAuditEntry> _activeFlows = new();
 
     /// <summary>
     /// Hydrates the register with pre-existing audit entries reloaded from disk.
@@ -49,11 +32,6 @@ public sealed class ConnectionDeduplicationRegister
                 _ => entry,
                 (_, existing) =>
                 {
-                    if (existing is null)
-                    {
-                        return entry;
-                    }
-
                     var firstSeen = existing.FirstSeenUtc < entry.FirstSeenUtc ? existing.FirstSeenUtc : entry.FirstSeenUtc;
                     var lastSeen = existing.LastSeenUtc > entry.LastSeenUtc ? existing.LastSeenUtc : entry.LastSeenUtc;
                     var obsCount = Math.Max(existing.ObservationCount, entry.ObservationCount);
@@ -91,13 +69,7 @@ public sealed class ConnectionDeduplicationRegister
                 return candidate;
             },
             updateValueFactory: (_, existing) =>
-            {
-                if (existing is null)
-                {
-                    return candidate;
-                }
-
-                return existing with
+                existing with
                 {
                     LastSeenUtc = candidate.LastSeenUtc,
                     ObservationCount = existing.ObservationCount + 1,
@@ -108,22 +80,10 @@ public sealed class ConnectionDeduplicationRegister
                     RemoteHostName = string.IsNullOrWhiteSpace(existing.RemoteHostName)
                         ? candidate.RemoteHostName
                         : existing.RemoteHostName
-                };
-            });
+                });
 
-        registered = result ?? candidate;
+        registered = result;
         return isNew;
-    }
-
-    /// <summary>
-    /// Updates an existing registered audit entry (e.g. after reverse DNS enrichment).
-    /// </summary>
-    /// <param name="updated">Enriched audit entry to store.</param>
-    public void UpdateRegisteredEntry(NetworkAuditEntry updated)
-    {
-        ArgumentNullException.ThrowIfNull(updated);
-        var key = FlowIdentityKey.FromEntry(updated);
-        _activeFlows[key] = updated;
     }
 
     /// <summary>
@@ -138,7 +98,7 @@ public sealed class ConnectionDeduplicationRegister
 
         foreach (var (key, entry) in _activeFlows)
         {
-            if (entry is not null && entry.Socket.RemoteEndpoint.Address.Equals(remoteAddress))
+            if (entry.Socket.RemoteEndpoint.Address.Equals(remoteAddress))
             {
                 NameFlow(key, remoteAddress, resolvedHostName);
             }
@@ -150,7 +110,6 @@ public sealed class ConnectionDeduplicationRegister
     private void NameFlow(FlowIdentityKey key, IPAddress remoteAddress, string resolvedHostName)
     {
         while (_activeFlows.TryGetValue(key, out var entry)
-            && entry is not null
             && entry.Socket.RemoteEndpoint.Address.Equals(remoteAddress)
             && string.IsNullOrWhiteSpace(entry.RemoteHostName))
         {
@@ -165,19 +124,7 @@ public sealed class ConnectionDeduplicationRegister
     /// Returns a point-in-time snapshot of all active audit entries stored in memory.
     /// </summary>
     /// <returns>Read-only list of audit entries.</returns>
-    public IReadOnlyList<NetworkAuditEntry> GetAllEntries()
-    {
-        var list = new List<NetworkAuditEntry>(_activeFlows.Count);
-        foreach (var (_, entry) in _activeFlows)
-        {
-            if (entry is not null)
-            {
-                list.Add(entry);
-            }
-        }
-
-        return list;
-    }
+    public IReadOnlyList<NetworkAuditEntry> GetAllEntries() => [.. _activeFlows.Values];
 
     /// <summary>
     /// Total count of unique flows recorded.

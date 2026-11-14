@@ -11,6 +11,12 @@ public sealed record AppConfiguration
     public int ScanIntervalSeconds { get; init; } = 5;
 
     /// <summary>
+    /// Minutes between two rewrites of the audit logs from the flows held in memory (default: 5); the logs are also
+    /// written when the audit starts and when it stops.
+    /// </summary>
+    public int LogRewriteIntervalMinutes { get; init; } = 5;
+
+    /// <summary>
     /// Output CSV file path.
     /// </summary>
     public string OutputCsvPath { get; init; } = "netflow_audit.csv";
@@ -241,10 +247,4 @@ public sealed record AppConfiguration
     /// User-defined static IP-to-hostname mappings taking precedence over DNS reverse PTR records.
     /// </summary>
     public Dictionary<string, string> CustomHostAliases { get; init; } = new(StringComparer.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Maximum number of recent historical flow records to reload from the output CSV on startup
-    /// (null or negative to reload all records, 0 to disable history reloading).
-    /// </summary>
-    public int? ReloadHistoryLimit { get; init; } = null;
 }

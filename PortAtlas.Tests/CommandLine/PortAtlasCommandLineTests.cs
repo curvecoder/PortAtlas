@@ -106,8 +106,8 @@ public sealed class PortAtlasCommandLineTests
 
     [Theory]
     [InlineData("audit", "--interval", "0")]
-    [InlineData("audit", "--reload-history", "-1")]
-    [InlineData("audit", "--reload-history", "some")]
+    [InlineData("audit", "--rewrite-interval", "0")]
+    [InlineData("audit", "--reload-history", "all")]
     [InlineData("export", "rules", "--min-observations", "0")]
     [InlineData("export", "rules", "--active-within-days", "0")]
     [InlineData("resolve", "--rdap-delay-ms", "-5")]

@@ -88,7 +88,7 @@ internal static class ConfigurationKeyValidator
     };
 
     // Read from the type itself, so that a setting added to AppConfiguration is accepted without a second list to
-    // keep in step, and a nullable one (ReloadHistoryLimit today) keeps accepting null.
+    // keep in step, and a nullable one keeps accepting null.
     private static FrozenDictionary<string, KeyRule> ReadKeysOfAppConfiguration()
     {
         var nullability = new NullabilityInfoContext();

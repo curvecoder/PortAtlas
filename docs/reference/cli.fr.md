@@ -119,7 +119,7 @@ PortAtlas audit [options]
 | `--ndjson` | `<path>` | `OutputNdjsonPath` | aucun | Journal NDJSON écrit en plus du CSV |
 | `--interval` | secondes, au moins 1 | `ScanIntervalSeconds` | `5` | Délai entre deux balayages |
 | `--columns` | noms de colonnes | `CsvColumns` | les 20 | Colonnes CSV, dans l'ordre ([liste](output-formats.fr.md#journal-daudit-csv)) |
-| `--reload-history` | `all` ou un nombre | `ReloadHistoryLimit` | `all` | Flux rechargés depuis le journal CSV existant au démarrage ; `0` désactive le rechargement |
+| `--rewrite-interval` | minutes, au moins 1 | `LogRewriteIntervalMinutes` | `5` | Temps entre deux réécritures des journaux, écrits aussi au démarrage et à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)) |
 | `--no-tui` | aucune | `EnableDashboard` | tableau de bord actif | Tourner sans le tableau de bord |
 | `--no-dns` | aucune | `ResolveRemoteHostNames` | DNS actif | Aucune résolution de nom : ni DNS inverse, ni RDAP, ni alias |
 | `--no-rdap` | aucune | `ResolveIpOwners` | RDAP actif | Aucune requête RDAP vers les registres Internet ; le DNS inverse reste actif |
@@ -134,7 +134,7 @@ Familles lues : filtres de flux et rendu de la carte. Quand `--html` (ou `Output
 
 Le tableau de bord n'est pas affiché quand l'entrée ou la sortie du processus est redirigée, même sans `--no-tui`.
 
-Un nom de colonne invalide dans `--columns` ou `CsvColumns` arrête la commande avec `Column configuration error: …` et le code de sortie 1.
+Un nom de colonne invalide dans `--columns` ou `CsvColumns`, ou une liste sans `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath` et `TargetExecutable` (le journal est relu au démarrage suivant, voir les [formats de sortie](output-formats.fr.md#journal-daudit-csv)), arrête la commande avec `Column configuration error: …` et le code de sortie 1.
 
 ## map
 
@@ -245,7 +245,7 @@ PortAtlas config init [<path>]
 | `-o`, `--output` | ✔ | | ✔ | ✔ | | | |
 | Filtres de flux | ✔ | ✔ | ✔ | | | | |
 | Rendu de la carte, `--html`, `--drawio` | ✔ | ✔ | | | | | |
-| `--ndjson`, `--interval`, `--columns`, `--reload-history` | ✔ | | | | | | |
+| `--ndjson`, `--interval`, `--columns`, `--rewrite-interval` | ✔ | | | | | | |
 | `--no-tui`, `--no-dns`, `--no-rdap` | ✔ | | | | | | |
 | `--dns-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
@@ -260,4 +260,4 @@ PortAtlas config init [<path>]
 | Code | Signification |
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
-| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide, port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
+| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |

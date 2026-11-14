@@ -13,11 +13,11 @@ Paths accept the [file name tokens](cli.md#file-name-tokens) `{ServerName}`, `{H
 | Key | Type | Default | Effect | Option |
 | :--- | :--- | :--- | :--- | :--- |
 | `ScanIntervalSeconds` | integer | `5` | Seconds between two scans | `--interval` |
+| `LogRewriteIntervalMinutes` | integer | `5` | Minutes between two rewrites of the audit logs, which are also written at start and stop | `--rewrite-interval` |
 | `OutputCsvPath` | path | `netflow_audit.csv` | CSV audit log; default input of the other commands | `-o` (`audit`) |
 | `OutputNdjsonPath` | path | `""` | NDJSON log written alongside the CSV log; empty for none | `--ndjson` |
 | `CsvColumns` | list of names | `[]` | Ordered CSV columns; empty for the 20 columns | `--columns` |
 | `CsvDelimiter` | string | `","` | CSV field separator (first character used) | none |
-| `ReloadHistoryLimit` | integer or `null` | `null` | Flows reloaded from the CSV log at startup; `null` for all, `0` for none | `--reload-history` |
 | `EnableDashboard` | boolean | `true` | Terminal dashboard | `--no-tui` |
 | `MaskServerName` | string | `""` | Server name shown by the dashboard | `--mask-server` |
 | `MaskLocalIp` | string | `""` | Local address shown by the dashboard | `--mask-ip` |

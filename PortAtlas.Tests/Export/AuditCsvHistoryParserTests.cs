@@ -255,6 +255,53 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*line 3*yesterday*");
     }
 
+    [Theory]
+    [InlineData("Protocol", "Sctp")]
+    [InlineData("Protocol", "7")]
+    [InlineData("Direction", "Sideways")]
+    [InlineData("LocalIp", "nas")]
+    [InlineData("LocalPort", "")]
+    [InlineData("LocalPort", "70000")]
+    [InlineData("RemoteIp", "pbs")]
+    [InlineData("RemotePort", "-1")]
+    [InlineData("LastSeenUtc", "tomorrow")]
+    [InlineData("ObservationCount", "many")]
+    [InlineData("ObservationCount", "0")]
+    public async Task ParseLogForResumeAsync_WhenAValueIsUnreadable_ThrowsNamingTheLineAndTheColumn(string column, string value)
+    {
+        // Arrange
+        string[] columns = ["FirstSeenUtc", "LastSeenUtc", "ObservationCount", "ServerName", "Protocol", "Direction", "LocalIp", "LocalPort", "RemoteIp", "RemotePort", "ExecutablePath", "TargetExecutable"];
+        string[] readable = ["2026-11-01T08:00:00.0000000Z", "2026-11-02T08:00:00.0000000Z", "3", "proxmox", "Tcp", "Outbound", "192.168.1.20", "51000", "192.168.1.30", "8007", "/usr/bin/proxmox-backup-client", ""];
+        var unreadable = (string[])readable.Clone();
+        unreadable[Array.IndexOf(columns, column)] = value;
+        var csvPath = Path.Combine(_tempDirectory, "unreadable_value.csv");
+        await File.WriteAllLinesAsync(csvPath, [string.Join(',', columns), string.Join(',', readable), string.Join(',', unreadable)]);
+
+        // Act
+        var act = () => new AuditCsvHistoryParser().ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidDataException>().WithMessage($"*line 3*{column}*'{value}'*");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenOptionalValuesAreBlank_ReturnsTheFlow()
+    {
+        // Arrange
+        var csvPath = Path.Combine(_tempDirectory, "blank_optional_values.csv");
+        await File.WriteAllLinesAsync(csvPath,
+        [
+            "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalIp,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable",
+            "2026-11-01T08:00:00.0000000Z,,,proxmox,Tcp,Outbound,,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,"
+        ]);
+
+        // Act
+        var entries = await new AuditCsvHistoryParser().ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().ContainSingle().Which.ObservationCount.Should().Be(1);
+    }
+
     [Fact]
     public async Task ParseLogForResumeAsync_WhenReducedColumnsKeepTheFlowKey_ReturnsTheFlows()
     {

@@ -13,11 +13,11 @@ Les chemins acceptent les [jetons de nom de fichier](cli.fr.md#jetons-de-nom-de-
 | Clé | Type | Défaut | Effet | Option |
 | :--- | :--- | :--- | :--- | :--- |
 | `ScanIntervalSeconds` | entier | `5` | Secondes entre deux balayages | `--interval` |
+| `LogRewriteIntervalMinutes` | entier | `5` | Minutes entre deux réécritures des journaux d'audit, écrits aussi au démarrage et à l'arrêt | `--rewrite-interval` |
 | `OutputCsvPath` | chemin | `netflow_audit.csv` | Journal d'audit CSV ; entrée par défaut des autres commandes | `-o` (`audit`) |
 | `OutputNdjsonPath` | chemin | `""` | Journal NDJSON écrit en plus du CSV ; vide pour aucun | `--ndjson` |
 | `CsvColumns` | liste de noms | `[]` | Colonnes CSV, dans l'ordre ; vide pour les 20 colonnes | `--columns` |
 | `CsvDelimiter` | chaîne | `","` | Séparateur des champs CSV (premier caractère utilisé) | aucune |
-| `ReloadHistoryLimit` | entier ou `null` | `null` | Flux rechargés depuis le journal CSV au démarrage ; `null` pour tous, `0` pour aucun | `--reload-history` |
 | `EnableDashboard` | booléen | `true` | Tableau de bord du terminal | `--no-tui` |
 | `MaskServerName` | chaîne | `""` | Nom de serveur affiché par le tableau de bord | `--mask-server` |
 | `MaskLocalIp` | chaîne | `""` | Adresse locale affichée par le tableau de bord | `--mask-ip` |

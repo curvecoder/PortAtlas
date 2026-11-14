@@ -4,7 +4,7 @@
 
 ## Journal d'audit CSV
 
-Écrit par `audit` (`-o`, `OutputCsvPath`). Les champs suivent les règles de guillemets de la RFC 4180 ; le séparateur est `CsvDelimiter` (`,` par défaut). Un enregistrement par flux dédupliqué ; un champ entre guillemets (une ligne de commande, par exemple) peut contenir des retours à la ligne : un enregistrement peut alors s'étendre sur plusieurs lignes : `audit`, `export` et `resolve` le lisent entier, `map` lit encore le journal ligne à ligne. Un guillemet jamais refermé avant la fin du journal arrête `audit`, `export` et `resolve` avec le code 1 et un message qui nomme le journal et la ligne où le guillemet s'ouvre. Un flux est identifié par son protocole, son sens, son application (`TargetExecutable`, ou `ExecutablePath` en l'absence de cible) et :
+Écrit par `audit` (`-o`, `OutputCsvPath`). Les champs suivent les règles de guillemets de la RFC 4180 ; le séparateur est `CsvDelimiter` (`,` par défaut). Un enregistrement par flux dédupliqué. `audit` écrit chaque retour à la ligne d'un champ (une ligne de commande, par exemple) comme une espace : les journaux qu'il écrit ont une ligne par flux. Un journal écrit par une version précédente peut contenir un champ entre guillemets avec des retours à la ligne : un enregistrement peut alors s'étendre sur plusieurs lignes : `audit`, `export` et `resolve` le lisent entier, `map` lit encore le journal ligne à ligne. Un guillemet jamais refermé avant la fin du journal arrête `audit`, `export` et `resolve` avec le code 1 et un message qui nomme le journal et la ligne où le guillemet s'ouvre. Un flux est identifié par son protocole, son sens, son application (`TargetExecutable`, ou `ExecutablePath` en l'absence de cible) et :
 
 | Sens | Identifié aussi par | Ignoré |
 | :--- | :--- | :--- |
@@ -41,7 +41,16 @@ Les connexions répétées vers un même service mettent donc à jour une seule 
 
 Les processus d'identifiant 0 ou inférieur affichent `SYSTEM`.
 
-Au démarrage, `audit` relit le journal CSV existant (`--reload-history`, `ReloadHistoryLimit`) pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre. Un journal sans l'une des colonnes qui identifient un flux (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) ou sans `FirstSeenUtc`, ou dont une ligne relue a une valeur `FirstSeenUtc` illisible, arrête `audit` avec une erreur qui nomme les colonnes ou la ligne, et le code de sortie 1 : ses flux ne correspondraient à aucun flux observé et seraient tous réécrits. Écrire dans un nouveau journal avec `--output`, ou désactiver le rechargement avec `--reload-history 0`.
+`audit` garde les flux en mémoire et réécrit tout le journal à partir d'eux, une ligne par flux avec son dernier compteur, sa date de dernière observation et son nom : au démarrage, toutes les `--rewrite-interval` minutes (`LogRewriteIntervalMinutes`, 5 par défaut) et à l'arrêt. Le journal NDJSON (`--ndjson`) est réécrit aux mêmes moments, à partir des mêmes flux. Un arrêt brutal (coupure de courant, processus tué) perd donc au plus les observations de la dernière période. Le journal est écrit avec les colonnes de l'exécution en cours : une colonne retirée de `--columns` depuis l'exécution précédente disparaît de tout le journal.
+
+Chaque réécriture écrit `<journal>.tmp`, le renomme `<journal>.pending` une fois complet, puis remplace le journal : un programme qui lit le journal obtient l'ancienne version ou la nouvelle, jamais un mélange des deux. Windows refuse le remplacement tant qu'un autre programme tient le journal ouvert : l'audit continue, `<journal>.pending` reste, et la période suivante réessaie. Quand la réécriture échoue à l'arrêt, `audit` se termine avec le code 1 et un message qui nomme le journal. Au démarrage, un `<journal>.pending` laissé par une réécriture interrompue remplace le journal et un `<journal>.tmp` est supprimé ; un journal qui ne peut pas être remplacé au démarrage arrête `audit` avec le code 1 et un message qui le nomme.
+
+Au démarrage, `audit` relit tout le journal CSV existant, pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre. Le journal est ensuite réécrit à partir de ce qui a été lu : un journal qui ne peut pas être lu en entier arrête `audit` avec une erreur qui nomme les colonnes ou la ligne, et le code de sortie 1 :
+
+- un journal sans l'une des colonnes qui identifient un flux (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) ou sans `FirstSeenUtc` : ses flux ne correspondraient à aucun flux observé ;
+- une ligne dont `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp` ou `RemotePort` est vide ou illisible, ou dont `LastSeenUtc`, `ObservationCount` ou `LocalIp` est illisible : la réécriture remplacerait la valeur par une valeur par défaut.
+
+Corriger ou supprimer la ligne, ou écrire dans un nouveau journal avec `--output`.
 
 ## NDJSON
 

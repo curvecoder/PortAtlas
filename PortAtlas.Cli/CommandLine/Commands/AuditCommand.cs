@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Globalization;
 using System.Net;
 using PortAtlas.Cli.Audit;
 using PortAtlas.Cli.CommandLine.OptionSets;
@@ -12,7 +11,6 @@ namespace PortAtlas.Cli.CommandLine.Commands;
 /// </summary>
 public sealed class AuditCommand : Command
 {
-    private const string AllHistory = "all";
     private const string ObfuscatedServerName = "HOMELAB-01";
 
     // Display-only placeholder shown instead of the real local address in screenshots; it never reaches the network code.
@@ -22,7 +20,7 @@ public sealed class AuditCommand : Command
     private readonly Option<string?> _ndjson = OptionFactory.CreatePath("--ndjson", "NDJSON (JSON Lines) stream written alongside the CSV log. Tokens are expanded as for --output.");
     private readonly Option<int?> _interval = OptionFactory.CreateInteger("--interval", "seconds", "Seconds between two socket scans. Default: 5.", minimum: 1);
     private readonly Option<string[]> _columns = OptionFactory.CreateList("--columns", "names", "Ordered CSV columns to write. Default: all 20 columns.");
-    private readonly Option<string?> _reloadHistory = new("--reload-history") { Description = "Flows reloaded from the existing CSV log at startup: all, or a number (0 disables the reload). Default: all.", HelpName = "all|count" };
+    private readonly Option<int?> _rewriteInterval = OptionFactory.CreateInteger("--rewrite-interval", "minutes", "Minutes between two rewrites of the audit logs, which are also written at start and stop. Default: 5.", minimum: 1);
     private readonly Option<bool> _noTui = new("--no-tui") { Description = "Run without the terminal dashboard (Windows service, systemd unit)." };
     private readonly Option<bool> _noDns = new("--no-dns") { Description = "Do not resolve remote addresses with reverse DNS." };
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
@@ -44,20 +42,12 @@ public sealed class AuditCommand : Command
         : base("audit", "Scan TCP/UDP sockets continuously and record deduplicated flows.")
     {
         _configFile = configFile;
-        _reloadHistory.Validators.Add(result =>
-        {
-            var value = result.GetValueOrDefault<string?>();
-            if (value is not null && !TryParseReloadHistory(value, out _))
-            {
-                result.AddError("--reload-history accepts 'all' or a number greater than or equal to 0.");
-            }
-        });
 
         Options.Add(_output);
         Options.Add(_ndjson);
         Options.Add(_interval);
         Options.Add(_columns);
-        Options.Add(_reloadHistory);
+        Options.Add(_rewriteInterval);
         Options.Add(_noTui);
         Options.Add(_noDns);
         Options.Add(_noRdap);
@@ -92,12 +82,6 @@ public sealed class AuditCommand : Command
 
         var config = _rendering.Apply(parseResult, _filters.Apply(parseResult, fileConfiguration));
 
-        var reloadHistoryLimit = config.ReloadHistoryLimit;
-        if (parseResult.GetValue(_reloadHistory) is { } reloadHistory && TryParseReloadHistory(reloadHistory, out var parsedLimit))
-        {
-            reloadHistoryLimit = parsedLimit;
-        }
-
         var obfuscate = parseResult.GetValue(_obfuscate);
         var maskServer = parseResult.GetValue(_maskServer) ?? (obfuscate ? ObfuscatedServerName : config.MaskServerName);
         var maskIp = parseResult.GetValue(_maskIp) ?? (obfuscate ? ObfuscatedLocalIp : config.MaskLocalIp);
@@ -108,7 +92,7 @@ public sealed class AuditCommand : Command
             OutputNdjsonPath = parseResult.GetValue(_ndjson) ?? config.OutputNdjsonPath,
             ScanIntervalSeconds = parseResult.GetValue(_interval) ?? config.ScanIntervalSeconds,
             CsvColumns = OptionFactory.ReadList(parseResult, _columns, config.CsvColumns),
-            ReloadHistoryLimit = reloadHistoryLimit,
+            LogRewriteIntervalMinutes = parseResult.GetValue(_rewriteInterval) ?? config.LogRewriteIntervalMinutes,
             EnableDashboard = config.EnableDashboard && !parseResult.GetValue(_noTui),
             ResolveRemoteHostNames = config.ResolveRemoteHostNames && !parseResult.GetValue(_noDns),
             ResolveIpOwners = config.ResolveIpOwners && !parseResult.GetValue(_noRdap),
@@ -118,24 +102,6 @@ public sealed class AuditCommand : Command
             MaskServerName = maskServer,
             MaskLocalIp = maskIp
         };
-    }
-
-    private static bool TryParseReloadHistory(string value, out int? limit)
-    {
-        if (value.Equals(AllHistory, StringComparison.OrdinalIgnoreCase))
-        {
-            limit = null;
-            return true;
-        }
-
-        if (int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var count))
-        {
-            limit = count;
-            return true;
-        }
-
-        limit = null;
-        return false;
     }
 
     private static Dictionary<string, string> MergeAliases(Dictionary<string, string> configured, IEnumerable<string> pairs)

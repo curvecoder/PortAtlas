@@ -4,7 +4,7 @@
 
 ## CSV audit log
 
-Written by `audit` (`-o`, `OutputCsvPath`). Fields follow RFC 4180 quoting; the separator is `CsvDelimiter` (`,` by default). One record per deduplicated flow; a quoted field (a command line, for instance) may hold line breaks, so a record can span several lines: `audit`, `export` and `resolve` read it whole, `map` still reads the log line by line. A quote never closed before the end of the log stops `audit`, `export` and `resolve` with code 1 and a message naming the log and the line where the quote opens. A flow is identified by its protocol, its direction, its application (`TargetExecutable`, or `ExecutablePath` when there is no target) and:
+Written by `audit` (`-o`, `OutputCsvPath`). Fields follow RFC 4180 quoting; the separator is `CsvDelimiter` (`,` by default). One record per deduplicated flow. `audit` writes each line break of a field (a command line, for instance) as a space, so the logs it writes have one line per flow; a log written by an earlier version may hold a quoted field with line breaks, so a record can span several lines: `audit`, `export` and `resolve` read it whole, `map` still reads the log line by line. A quote never closed before the end of the log stops `audit`, `export` and `resolve` with code 1 and a message naming the log and the line where the quote opens. A flow is identified by its protocol, its direction, its application (`TargetExecutable`, or `ExecutablePath` when there is no target) and:
 
 | Direction | Also identified by | Ignored |
 | :--- | :--- | :--- |
@@ -41,7 +41,16 @@ Repeated connections to the same service therefore update one line instead of ad
 
 Processes with identifier 0 or below show `SYSTEM`.
 
-At startup, `audit` reads the existing CSV log (`--reload-history`, `ReloadHistoryLimit`) so that counts and first-seen dates continue across restarts. A log without one of the columns that identify a flow (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) or without `FirstSeenUtc`, or with a read line whose `FirstSeenUtc` cannot be read, stops `audit` with an error naming the columns or the line, and exit code 1: its flows would match none of the observed ones and would all be logged again. Write to a new log with `--output`, or turn the reload off with `--reload-history 0`.
+`audit` keeps the flows in memory and rewrites the whole log from them, one line per flow with its latest count, last-seen date and name: when it starts, every `--rewrite-interval` minutes (`LogRewriteIntervalMinutes`, 5 by default) and when it stops. The NDJSON log (`--ndjson`) is rewritten at the same times, from the same flows. An abrupt stop (power loss, killed process) therefore loses at most the observations of the last period. The log is written with the columns of the current run: a column left out of `--columns` since the previous run disappears from the whole log.
+
+Each rewrite writes `<log>.tmp`, renames it `<log>.pending` once complete, then replaces the log: a program reading the log gets the earlier version or the new one, never a mix of both. Windows refuses the replacement while another program holds the log open: the audit goes on, `<log>.pending` stays, and the next period tries again. When the rewrite fails at stop, `audit` ends with code 1 and a message naming the log. At start, a `<log>.pending` left by an interrupted rewrite replaces the log and a `<log>.tmp` is deleted; a log that cannot be replaced at start stops `audit` with code 1 and a message naming it.
+
+At startup, `audit` reads the whole existing CSV log, so that counts and first-seen dates continue across restarts. The log is then rewritten from what was read, so a log that cannot be read whole stops `audit` with an error naming the columns or the line, and exit code 1:
+
+- a log without one of the columns that identify a flow (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) or without `FirstSeenUtc`: its flows would match none of the observed ones;
+- a line whose `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp` or `RemotePort` is empty or unreadable, or whose `LastSeenUtc`, `ObservationCount` or `LocalIp` is unreadable: the rewrite would replace the value with a default.
+
+Correct or remove the line, or write to a new log with `--output`.
 
 ## NDJSON
 

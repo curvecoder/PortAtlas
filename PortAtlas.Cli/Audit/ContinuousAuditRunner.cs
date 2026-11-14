@@ -48,31 +48,49 @@ public static class ContinuousAuditRunner
             return 1;
         }
 
+        // The log is read back at the next start to continue its flows, which needs these columns: a log without
+        // them could never be resumed.
+        var missingColumns = AuditCsvHistoryParser.ResumeRequiredColumns
+            .Where(required => !selectedColumns.Any(column => column.ToString().Equals(required, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        if (missingColumns.Count > 0)
+        {
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine($"Column configuration error: the audit log must keep the {string.Join(", ", missingColumns)} column(s), which identify a flow when the log is read back at the next start.");
+            Console.ResetColor();
+            return 1;
+        }
+
         var useDashboard = config.EnableDashboard && !Console.IsInputRedirected && !Console.IsOutputRedirected;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        IReadOnlyList<NetworkAuditEntry> parsedEntries = [];
-        if (config.ReloadHistoryLimit != 0 && File.Exists(config.OutputCsvPath))
+        IReadOnlyList<NetworkAuditEntry> parsedEntries;
+        try
         {
-            try
+            // A rewrite interrupted between its renames left the complete new log in <log>.pending: it replaces the
+            // log before the log is read, and an incomplete <log>.tmp is dropped.
+            AtomicFileWriter.RecoverInterruptedWrite(config.OutputCsvPath);
+            if (!string.IsNullOrWhiteSpace(config.OutputNdjsonPath))
             {
-                parsedEntries = await new AuditCsvHistoryParser().ParseLogForResumeAsync(
-                    config.OutputCsvPath,
-                    config.ReloadHistoryLimit,
-                    delimiter,
-                    cts.Token).ConfigureAwait(false);
+                AtomicFileWriter.RecoverInterruptedWrite(config.OutputNdjsonPath);
             }
-            catch (Exception ex) when (ex is InvalidDataException or AuditLogFormatException)
-            {
-                // Resuming such a log would log every flow it holds again: the audit does not start. The log is
-                // read before any writer, resolver or dashboard exists, so nothing is left open and the message
-                // stays on screen.
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine($"Audit log error: {ex.Message}");
-                Console.ResetColor();
-                return 1;
-            }
+
+            // The whole log is read: it is rewritten from the flows held in memory, so a flow left out here would
+            // disappear from it.
+            parsedEntries = await new AuditCsvHistoryParser().ParseLogForResumeAsync(
+                config.OutputCsvPath,
+                maxRows: null,
+                delimiter,
+                cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or AuditLogFormatException or IOException or UnauthorizedAccessException)
+        {
+            // Resuming such a log would drop the flows it holds at the first rewrite: the audit does not start. The
+            // log is read before any resolver or dashboard exists, so nothing is left open and the message stays on
+            // screen.
+            WriteAuditLogError(ex);
+            return 1;
         }
 
         var hostProvider = new LocalServerHostProvider();
@@ -142,8 +160,6 @@ public static class ContinuousAuditRunner
         };
         var csvFormatter = new AuditCsvFormatter(csvOptions);
 
-        await using var csvWriter = new PersistentDelimitedFileWriter(config.OutputCsvPath, csvFormatter.BuildHeaderLine());
-
         var exclusionEvaluator = new DnsAddressExclusionEvaluator(config.DnsExcludedNetworks);
         var dnsCacheStore = new PersistentDnsCacheStore(config.DnsCacheFilePath);
 
@@ -155,14 +171,9 @@ public static class ContinuousAuditRunner
             ? new CachedHostNameResolver(TimeSpan.FromMilliseconds(config.DnsResolutionTimeoutMs), exclusionEvaluator, dnsCacheStore, orgResolver, config.CustomHostAliases)
             : new NoOpHostNameResolver();
 
-        PersistentDelimitedFileWriter? ndjsonWriter = null;
-        AuditNdjsonFormatter? ndjsonFormatter = null;
-
-        if (!string.IsNullOrWhiteSpace(config.OutputNdjsonPath))
-        {
-            ndjsonFormatter = new AuditNdjsonFormatter();
-            ndjsonWriter = new PersistentDelimitedFileWriter(config.OutputNdjsonPath, string.Empty);
-        }
+        var logRewriter = string.IsNullOrWhiteSpace(config.OutputNdjsonPath)
+            ? new AuditLogRewriter(config.OutputCsvPath, csvFormatter)
+            : new AuditLogRewriter(config.OutputCsvPath, csvFormatter, config.OutputNdjsonPath, new AuditNdjsonFormatter());
 
         var engine = new FlowAuditEngine(
             socketScanner,
@@ -170,12 +181,10 @@ public static class ContinuousAuditRunner
             networkFlowFilter,
             deduplicationRegister,
             hostProvider,
-            csvWriter,
-            csvFormatter,
+            logRewriter,
             hostNameResolver,
             TimeSpan.FromSeconds(config.ScanIntervalSeconds),
-            ndjsonWriter,
-            ndjsonFormatter);
+            TimeSpan.FromMinutes(config.LogRewriteIntervalMinutes));
 
         var exclusionConfigurator = new FlowExclusionConfigurator(config, configPath, networkFlowFilter, exclusionFilter);
 
@@ -183,6 +192,23 @@ public static class ContinuousAuditRunner
         // its name was known would stay unnamed on the dashboard: the names are taken from the cache here.
         var historicalEntries = new ReloadedFlowNameResolver(hostNameResolver).ResolveFromCache(parsedEntries);
         deduplicationRegister.Hydrate(historicalEntries);
+
+        try
+        {
+            // Written once at start so that a log that cannot be replaced (held open, read-only folder) stops the
+            // audit now, with the message on screen, rather than at the first rewrite behind the dashboard.
+            await engine.RewriteLogAsync(cts.Token).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (hostNameResolver is IAsyncDisposable startupResolver)
+            {
+                await startupResolver.DisposeAsync().ConfigureAwait(false);
+            }
+
+            WriteAuditLogError(ex);
+            return 1;
+        }
 
         FlowAuditDashboardRenderer? dashboard = null;
         if (useDashboard)
@@ -387,6 +413,7 @@ public static class ContinuousAuditRunner
             }, cts.Token);
         }
 
+        var exitCode = 0;
         try
         {
             await auditTask.ConfigureAwait(false);
@@ -399,18 +426,30 @@ public static class ContinuousAuditRunner
                 Console.WriteLine("Graceful shutdown of network flow audit.");
             }
         }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The logs are written a last time when the audit stops; when that fails, the operator must know that
+            // the observations since the last rewrite are not on disk.
+            dashboard?.RestoreCursor();
+            WriteAuditLogError(ex);
+            exitCode = 1;
+        }
         finally
         {
             dashboard?.RestoreCursor();
-            if (ndjsonWriter is not null)
-            {
-                await ndjsonWriter.DisposeAsync().ConfigureAwait(false);
-            }
             if (hostNameResolver is IAsyncDisposable asyncResolver)
             {
                 await asyncResolver.DisposeAsync().ConfigureAwait(false);
             }
         }
-        return 0;
+
+        return exitCode;
+    }
+
+    private static void WriteAuditLogError(Exception ex)
+    {
+        Console.ForegroundColor = ConsoleColor.Red;
+        Console.WriteLine($"Audit log error: {ex.Message}");
+        Console.ResetColor();
     }
 }

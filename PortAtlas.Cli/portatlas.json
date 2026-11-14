@@ -1,5 +1,6 @@
 {
   "ScanIntervalSeconds": 5,
+  "LogRewriteIntervalMinutes": 5,
   "OutputCsvPath": "netflow_audit.csv",
   "OutputNdjsonPath": "",
   "OutputHtmlMapPath": "",
@@ -77,6 +78,5 @@
   "EnableDashboard": true,
   "MaskServerName": "",
   "MaskLocalIp": "",
-  "CustomHostAliases": {},
-  "ReloadHistoryLimit": null
+  "CustomHostAliases": {}
 }
