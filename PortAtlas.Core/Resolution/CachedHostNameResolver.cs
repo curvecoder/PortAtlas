@@ -35,6 +35,10 @@ public sealed class CachedHostNameResolver(
     /// </summary>
     public static readonly TimeSpan RdapUnavailableRetryDelay = TimeSpan.FromMinutes(15);
 
+    // A reverse DNS call already handed to the OS does not stop on cancellation: disposal waits for the queued
+    // resolutions only this long, so that the end of an audit is not held by a DNS server that does not answer.
+    internal static readonly TimeSpan QueueShutdownWaitLimit = TimeSpan.FromSeconds(2);
+
     private const string CustomSource = "Custom";
     private const string ExcludedSource = "Excluded";
 
@@ -402,6 +406,9 @@ public sealed class CachedHostNameResolver(
 
     private async Task ProcessQueueAsync(CancellationToken cancellationToken)
     {
+        // Resolutions started by this loop; only the loop touches the list. DisposeAsync awaits this method, so it
+        // disposes the semaphore only once every resolution has released it.
+        var inFlight = new List<Task>();
         try
         {
             while (await _channel.Reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
@@ -423,7 +430,8 @@ public sealed class CachedHostNameResolver(
 
                     await _concurrencySemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                    _ = Task.Run(async () =>
+                    inFlight.RemoveAll(task => task.IsCompleted);
+                    inFlight.Add(Task.Run(async () =>
                     {
                         try
                         {
@@ -448,13 +456,21 @@ public sealed class CachedHostNameResolver(
                         {
                             _concurrencySemaphore.Release();
                         }
-                    }, cancellationToken);
+                    }, cancellationToken));
                 }
             }
         }
         catch (OperationCanceledException)
         {
             // Cooperative queue termination
+        }
+        finally
+        {
+            // Waits for completion without rethrowing: a resolution reports its outcome through the cache and
+            // HostNameResolved, never to the code disposing the resolver, and a cancelled one ends with an
+            // OperationCanceledException that is expected here. A failure of a resolution or of a HostNameResolved
+            // subscriber is not reported to the disposer either, as before these tasks were awaited.
+            await Task.WhenAll(inFlight).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
         }
     }
 
@@ -489,7 +505,10 @@ public sealed class CachedHostNameResolver(
         _channel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();
-        _concurrencySemaphore.Dispose();
+
+        // Resolutions started by the queue may still be running and would release a disposed semaphore: it is left to
+        // the garbage collector here, which is safe since its wait handle is never created. DisposeAsync waits for them
+        // and disposes it.
 
         if (_cacheStore is not null)
         {
@@ -509,20 +528,31 @@ public sealed class CachedHostNameResolver(
         _channel.Writer.TryComplete();
         await _cts.CancelAsync().ConfigureAwait(false);
 
+        var resolutionsFinished = true;
         if (_backgroundWorker is not null)
         {
             try
             {
-                await _backgroundWorker.ConfigureAwait(false);
+                await _backgroundWorker.WaitAsync(QueueShutdownWaitLimit, _timeProvider).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
                 // Tolerated on service shutdown
             }
+            catch (TimeoutException)
+            {
+                // A resolution blocked in the OS outlived the wait: it may still write the cache or raise
+                // HostNameResolved after this call returns, and it releases the semaphore, which is therefore left to
+                // the garbage collector as in Dispose.
+                resolutionsFinished = false;
+            }
         }
 
         _cts.Dispose();
-        _concurrencySemaphore.Dispose();
+        if (resolutionsFinished)
+        {
+            _concurrencySemaphore.Dispose();
+        }
 
         if (_cacheStore is not null)
         {
