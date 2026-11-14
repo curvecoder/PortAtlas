@@ -146,6 +146,26 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
     }
 
     [Fact]
+    public async Task QueueResolution_WhenResolutionThrows_ClearsTheQueuedFlagSoTheAddressCanBeQueuedAgain()
+    {
+        // Arrange
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.NotFound());
+        var owners = new ScriptedOwnerResolver(call => call == 1
+            ? OwnerAnswer.Throws()
+            : OwnerAnswer.Found(new IpOwnerMetadata("Example Networks", null, null, null)));
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners);
+
+        // Act
+        resolver.QueueResolution(Server);
+        await WaitUntilAsync(() => owners.Calls == 1 && !resolver.IsQueued(Server));
+        resolver.QueueResolution(Server);
+        await WaitUntilAsync(() => owners.Calls == 2);
+
+        // Assert
+        owners.Calls.Should().Be(2);
+    }
+
+    [Fact]
     public async Task QueueResolution_WhenOwnerLookupUnavailable_WaitsTheRdapDelayBeforeAskingAgain()
     {
         // Arrange
@@ -270,13 +290,16 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
         }
     }
 
-    private sealed record OwnerAnswer(IpOwnerMetadata? Metadata, bool IsUnavailable, bool Hangs)
+    private sealed record OwnerAnswer(IpOwnerMetadata? Metadata, bool IsUnavailable, bool Hangs, bool Fails = false)
     {
         public static OwnerAnswer Found(IpOwnerMetadata metadata) => new(metadata, IsUnavailable: false, Hangs: false);
 
         public static OwnerAnswer Unavailable() => new(null, IsUnavailable: true, Hangs: false);
 
         public static OwnerAnswer Never() => new(null, IsUnavailable: false, Hangs: true);
+
+        // An exception the resolver does not expect, such as one thrown by a defect in the RDAP parser.
+        public static OwnerAnswer Throws() => new(null, IsUnavailable: false, Hangs: false, Fails: true);
     }
 
     private sealed class ScriptedOwnerResolver(Func<int, OwnerAnswer> script) : IIpOrganizationResolver
@@ -299,6 +322,11 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
             if (answer.IsUnavailable)
             {
                 throw new IpOwnerLookupUnavailableException("RDAP registry did not answer.");
+            }
+
+            if (answer.Fails)
+            {
+                throw new InvalidOperationException("Unexpected failure in the owner lookup.");
             }
 
             return answer.Metadata;

@@ -153,4 +153,33 @@ public sealed class RdapResponseParserTests
         // Assert
         result.Should().BeNull();
     }
+
+    [Theory]
+    [InlineData("""{ "entities": [ { "roles": [ "registrant" ], "vcardArray": [ "vcard", [ [ 42, {}, "text", "Wrong" ], [ "fn", {}, "text", "Example Networks" ] ] ] } ] }""")]
+    [InlineData("""{ "entities": [ { "roles": [ "registrant" ], "vcardArray": [ "vcard", [ [ "org", {}, "text", [ "Example Holding", "Division" ] ], [ "fn", {}, "text", "Example Networks" ] ] ] } ] }""")]
+    [InlineData("""{ "entities": [ { "roles": [ "registrant" ], "vcardArray": [ "vcard", [ [ "fn", {}, "text", 7 ], [ "org", {}, "text", "Example Networks" ] ] ] } ] }""")]
+    [InlineData("""{ "entities": [ { "roles": [ "registrant" ], "vcardArray": [ "vcard", [ [ "org", {}, "text", "Example Networks" ], [ "org", {}, "text", [ "Example Holding" ] ], [ "fn", {}, "text", "Wrong" ] ] ] } ] }""")]
+    [InlineData("""{ "entities": [ { "roles": [ 3, "registrant" ], "vcardArray": [ "vcard", [ [ "fn", {}, "text", "Example Networks" ] ] ] } ] }""")]
+    [InlineData("""{ "entities": [ "not an entity", { "roles": [ "registrant" ], "vcardArray": [ "vcard", [ [ "fn", {}, "text", "Example Networks" ] ] ] } ] }""")]
+    public void ExtractOrganization_WhenVcardHoldsUnexpectedValueTypes_SkipsThemAndReturnsTheTextName(string json)
+    {
+        // Act
+        var act = () => RdapResponseParser.ExtractOrganization(json);
+
+        // Assert
+        act.Should().NotThrow().Which.Should().Be("Example Networks");
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("42")]
+    [InlineData("\"text\"")]
+    public void ExtractOwnerDetails_WhenRootIsNotAnObject_ReturnsNull(string json)
+    {
+        // Act
+        var act = () => RdapResponseParser.ExtractOwnerDetails(json);
+
+        // Assert
+        act.Should().NotThrow().Which.Should().BeNull();
+    }
 }

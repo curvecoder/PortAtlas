@@ -427,8 +427,17 @@ public sealed class CachedHostNameResolver(
                     {
                         try
                         {
-                            var resolved = await ResolveAndCacheAsync(address, cancellationToken).ConfigureAwait(false);
-                            _queuedAddresses.TryRemove(address, out _);
+                            string resolved;
+                            try
+                            {
+                                resolved = await ResolveAndCacheAsync(address, cancellationToken).ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                // Cleared even when the resolution throws: a flag left set would make QueueResolution
+                                // ignore this address for the rest of the run.
+                                _queuedAddresses.TryRemove(address, out _);
+                            }
 
                             if (!string.IsNullOrWhiteSpace(resolved))
                             {

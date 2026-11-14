@@ -35,6 +35,11 @@ public static class RdapResponseParser
         {
             using var doc = JsonDocument.Parse(jsonContent);
             var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                // Valid JSON that is not an RDAP object (an error page body, a bare value) holds no owner.
+                return null;
+            }
 
             var organization = ExtractOrganizationFromRoot(root);
 
@@ -73,7 +78,8 @@ public static class RdapResponseParser
         }
         catch (JsonException)
         {
-            // Tolerated on truncated or malformed network responses
+            // A body truncated by the network or not in JSON carries no usable owner: the caller gets null, as for a
+            // response without owner fields.
         }
 
         return null;
@@ -113,14 +119,21 @@ public static class RdapResponseParser
 
     private static string? FindOrganizationInEntities(JsonElement entities, string? targetRole)
     {
+        // Registries do not all follow RFC 7483 to the letter: an element of an unexpected JSON type is skipped rather
+        // than read, because JsonElement accessors throw InvalidOperationException on a type mismatch.
         foreach (var entity in entities.EnumerateArray())
         {
+            if (entity.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
             var roleMatches = targetRole is null;
             if (targetRole is not null && entity.TryGetProperty("roles", out var roles) && roles.ValueKind == JsonValueKind.Array)
             {
                 foreach (var role in roles.EnumerateArray())
                 {
-                    if (role.ValueEquals(targetRole))
+                    if (role.ValueKind == JsonValueKind.String && role.ValueEquals(targetRole))
                     {
                         roleMatches = true;
                         break;
@@ -148,14 +161,15 @@ public static class RdapResponseParser
                     {
                         if (prop.ValueKind == JsonValueKind.Array && prop.GetArrayLength() >= 4)
                         {
-                            var propName = prop[0].GetString();
+                            // A structured "org" value is a JSON array (RFC 7095): it is skipped and "fn" is used instead.
+                            var propName = ReadTextOrNull(prop[0]);
                             if (string.Equals(propName, "org", StringComparison.OrdinalIgnoreCase))
                             {
-                                candidateOrg = prop[3].GetString();
+                                candidateOrg = ReadTextOrNull(prop[3]) ?? candidateOrg;
                             }
                             else if (string.Equals(propName, "fn", StringComparison.OrdinalIgnoreCase))
                             {
-                                candidateFn = prop[3].GetString();
+                                candidateFn = ReadTextOrNull(prop[3]) ?? candidateFn;
                             }
                         }
                     }
@@ -181,6 +195,9 @@ public static class RdapResponseParser
 
         return null;
     }
+
+    private static string? ReadTextOrNull(JsonElement element) =>
+        element.ValueKind == JsonValueKind.String ? element.GetString() : null;
 
     private static string SanitizeName(string raw)
     {
