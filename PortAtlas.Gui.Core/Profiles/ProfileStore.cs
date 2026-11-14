@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FileForge.IO;
 
 namespace PortAtlas.Gui.Core.Profiles;
 
@@ -18,23 +19,14 @@ public sealed class ProfileStore(IProfileDirectoryProvider directoryProvider)
     /// <param name="cancellationToken">Token that cancels the write.</param>
     /// <returns>A task that ends when the profile is stored.</returns>
     /// <exception cref="ArgumentNullException">When <paramref name="document"/> is null.</exception>
-    public async Task SaveAsync(ProfileName name, ProfileDocument document, CancellationToken cancellationToken = default)
+    public Task SaveAsync(ProfileName name, ProfileDocument document, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var directory = directoryProvider.GetProfileDirectory();
-        Directory.CreateDirectory(directory);
-
-        var target = PathOf(directory, name);
-        // A crash during the write must leave the previous profile intact, hence the temporary file and the rename.
-        var temporary = $"{target}.tmp";
-        var stream = File.Create(temporary);
-        await using (stream.ConfigureAwait(false))
-        {
-            await JsonSerializer.SerializeAsync(stream, document, SerializerOptions, cancellationToken).ConfigureAwait(false);
-        }
-
-        File.Move(temporary, target, overwrite: true);
+        return AtomicFileWriter.WriteAsync(
+            PathOf(directoryProvider.GetProfileDirectory(), name),
+            (stream, token) => JsonSerializer.SerializeAsync(stream, document, SerializerOptions, token),
+            cancellationToken);
     }
 
     /// <summary>

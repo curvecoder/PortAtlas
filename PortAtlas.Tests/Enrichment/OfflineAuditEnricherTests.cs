@@ -215,6 +215,27 @@ public sealed class OfflineAuditEnricherTests : IDisposable
     }
 
     [Fact]
+    public async Task EnrichFilesAsync_WhenTheLogEnrichedInPlaceIsASymbolicLink_WritesThroughTheLink()
+    {
+        // Arrange
+        var linked = Path.Combine(Directory.CreateDirectory(Path.Combine(_tempDirectory, "linked")).FullName, "audit.csv");
+        await File.WriteAllTextAsync(linked, "FirstSeenUtc,RemoteIp,RemoteHostName\r\n2026-11-01T08:00:00Z,192.168.1.30,\r\n");
+        var csvPath = Path.Combine(_tempDirectory, "audit.csv");
+        File.CreateSymbolicLink(csvPath, linked);
+        var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+        };
+        var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
+
+        // Act
+        await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
+
+        // Assert
+        (await File.ReadAllTextAsync(linked)).Should().Contain("pbs.home.arpa");
+    }
+
+    [Fact]
     public async Task EnrichFilesAsync_WhenNdjsonFileProvided_EnrichesRemoteHostName()
     {
         // Arrange

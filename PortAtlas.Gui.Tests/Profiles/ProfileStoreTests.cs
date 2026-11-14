@@ -23,6 +23,21 @@ public sealed class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Save_WhenProfileFileIsASymbolicLink_WritesThroughTheLink()
+    {
+        // Arrange
+        var linked = Path.Combine(Directory.CreateDirectory(Path.Combine(_directory, "linked")).FullName, "homelab.json");
+        await File.WriteAllTextAsync(linked, "{}");
+        File.CreateSymbolicLink(Path.Combine(_directory, "homelab.json"), linked);
+
+        // Act
+        await _store.SaveAsync(new ProfileName("homelab"), DocumentWithLayout("grid"), CancellationToken.None);
+
+        // Assert
+        (await File.ReadAllTextAsync(linked)).Should().Contain("grid");
+    }
+
+    [Fact]
     public async Task Save_WhenProfileExists_ReplacesItWithoutLeavingTemporaryFile()
     {
         // Arrange

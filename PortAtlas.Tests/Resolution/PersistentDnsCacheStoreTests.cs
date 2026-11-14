@@ -1,3 +1,4 @@
+using System.Text;
 using AwesomeAssertions;
 using PortAtlas.Core.Resolution;
 using Xunit;
@@ -23,6 +24,56 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
 
         return Task.CompletedTask;
     }
+
+    [Fact]
+    public async Task SaveAsync_WhenAReaderIsHalfwayThroughTheFile_ReplacesItWithoutChangingWhatTheReaderGets()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDir, "dns_cache.json");
+        var original = Encoding.UTF8.GetBytes("""{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""");
+        await File.WriteAllBytesAsync(filePath, original);
+        var store = new PersistentDnsCacheStore(filePath);
+        await using var reader = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize: 1);
+        var firstHalf = new byte[original.Length / 2];
+        reader.ReadExactly(firstHalf);
+
+        // Act
+        await store.SaveAsync(TwoEntryCache());
+        using var rest = new MemoryStream();
+        await reader.CopyToAsync(rest);
+
+        // Assert
+        firstHalf.Concat(rest.ToArray()).Should().Equal(original);
+        store.Load().Keys.Should().BeEquivalentTo("192.168.1.10", "192.168.1.20");
+    }
+
+    [Fact]
+    public void Save_WhenAReaderIsHalfwayThroughTheFile_ReplacesItWithoutChangingWhatTheReaderGets()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDir, "dns_cache.json");
+        var original = Encoding.UTF8.GetBytes("""{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""");
+        File.WriteAllBytes(filePath, original);
+        var store = new PersistentDnsCacheStore(filePath);
+        using var reader = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, bufferSize: 1);
+        var firstHalf = new byte[original.Length / 2];
+        reader.ReadExactly(firstHalf);
+
+        // Act
+        store.Save(TwoEntryCache());
+        using var rest = new MemoryStream();
+        reader.CopyTo(rest);
+
+        // Assert
+        firstHalf.Concat(rest.ToArray()).Should().Equal(original);
+        store.Load().Keys.Should().BeEquivalentTo("192.168.1.10", "192.168.1.20");
+    }
+
+    private static Dictionary<string, DnsCacheEntry> TwoEntryCache() => new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["192.168.1.10"] = new() { HostName = "nas.home.arpa", Source = "DNS" },
+        ["192.168.1.20"] = new() { HostName = "pve.home.arpa", Source = "DNS" }
+    };
 
     [Fact]
     public void Load_WhenFileDoesNotExist_ReturnsEmptyDictionary()

@@ -35,6 +35,21 @@ public sealed class UserPreferencesStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Update_WhenThePreferencesFileIsASymbolicLink_WritesThroughTheLink()
+    {
+        // Arrange
+        var linked = Path.Combine(Directory.CreateDirectory(Path.Combine(_root, "linked")).FullName, "preferences.json");
+        await File.WriteAllTextAsync(linked, "{}");
+        File.CreateSymbolicLink(Path.Combine(_root, "preferences.json"), linked);
+
+        // Act
+        await _store.UpdateAsync(p => p with { LastProfile = "homelab" });
+
+        // Assert
+        (await File.ReadAllTextAsync(linked)).Should().Contain("homelab");
+    }
+
+    [Fact]
     public void Load_WhenFileIsNotJson_ReturnsTheDefaults()
     {
         // Arrange

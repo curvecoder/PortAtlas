@@ -1,4 +1,5 @@
 using System.Text.Json;
+using FileForge.IO;
 
 namespace PortAtlas.Core.Resolution;
 
@@ -90,17 +91,12 @@ public sealed class PersistentDnsCacheStore(string filePath)
 
         try
         {
-            var directory = Path.GetDirectoryName(_filePath);
-            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            await File.WriteAllTextAsync(_filePath, json, cancellationToken).ConfigureAwait(false);
+            await AtomicFileWriter.WriteAllTextAsync(_filePath, json, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
         catch (IOException)
         {
-            // Tolerated when the file is temporarily locked by another process
+            // A file held open by another process must not stop the run: the cache on disk keeps its previous
+            // version, and the next save writes every entry again.
         }
     }
 
@@ -141,17 +137,11 @@ public sealed class PersistentDnsCacheStore(string filePath)
 
         try
         {
-            var directory = Path.GetDirectoryName(_filePath);
-            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            File.WriteAllText(_filePath, json);
+            AtomicFileWriter.WriteAllText(_filePath, json);
         }
         catch (IOException)
         {
-            // Tolerated on transient access conflict
+            // Same tolerance as SaveAsync: the cache on disk keeps its previous version.
         }
     }
 

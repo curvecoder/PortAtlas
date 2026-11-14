@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FileForge.IO;
 
 namespace PortAtlas.Gui.Core.Profiles;
 
@@ -45,21 +46,15 @@ public sealed class UserPreferencesStore(IProfileDirectoryProvider directoryProv
     /// <param name="change">Produces the new preferences from the current ones.</param>
     /// <param name="cancellationToken">Token that cancels the write.</param>
     /// <returns>A task that ends when the preferences are stored.</returns>
-    public async Task UpdateAsync(Func<UserPreferences, UserPreferences> change, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(Func<UserPreferences, UserPreferences> change, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(change);
 
-        var path = PreferencesPath();
-        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? throw new InvalidOperationException("The preferences path has no directory."));
-
-        var temporary = $"{path}.tmp";
-        var stream = File.Create(temporary);
-        await using (stream.ConfigureAwait(false))
-        {
-            await JsonSerializer.SerializeAsync(stream, change(Load()), SerializerOptions, cancellationToken).ConfigureAwait(false);
-        }
-
-        File.Move(temporary, path, overwrite: true);
+        var preferences = change(Load());
+        return AtomicFileWriter.WriteAsync(
+            PreferencesPath(),
+            (stream, token) => JsonSerializer.SerializeAsync(stream, preferences, SerializerOptions, token),
+            cancellationToken);
     }
 
     // The profile directory only lists *.json files as profiles, so the preferences live one level above it.

@@ -356,94 +356,104 @@ public sealed class OfflineAuditEnricher(
         CancellationToken cancellationToken)
     {
         var outputPath = options.InPlace ? inputPath : ComputeEnrichedOutputPath(inputPath);
-        var tempOutputPath = outputPath + ".tmp_" + Guid.NewGuid().ToString("N");
-
         var isNdjson = inputPath.EndsWith(".ndjson", StringComparison.OrdinalIgnoreCase) ||
                        inputPath.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase);
+        var tally = new EnrichmentTally();
 
-        var scanned = 0;
-        var updated = 0;
-        var enrichedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await AtomicFileWriter.WriteAsync(
+            outputPath,
+            async (stream, token) =>
+            {
+                // The stream stays open: the writer flushes it to disk and closes it once the content is written.
+                var writer = new StreamWriter(stream, leaveOpen: true);
+                await using (writer.ConfigureAwait(false))
+                {
+                    var write = isNdjson
+                        ? WriteEnrichedNdjsonAsync(inputPath, writer, cache, options.ForceResolve, tally, token)
+                        : WriteEnrichedCsvAsync(inputPath, writer, cache, options.ForceResolve, tally, token);
+                    await write.ConfigureAwait(false);
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
 
-        try
+        return (tally.Scanned, tally.Updated, outputPath, [.. tally.EnrichedIps]);
+    }
+
+    private static async Task WriteEnrichedNdjsonAsync(
+        string inputPath,
+        StreamWriter writer,
+        IReadOnlyDictionary<string, DnsCacheEntry> cache,
+        bool forceResolve,
+        EnrichmentTally tally,
+        CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(inputPath);
+        string? line;
+        while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
         {
-            if (isNdjson)
+            if (string.IsNullOrWhiteSpace(line))
             {
-                using var reader = new StreamReader(inputPath);
-                await using var writer = new StreamWriter(tempOutputPath, append: false);
-
-                string? line;
-                while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
-                {
-                    if (string.IsNullOrWhiteSpace(line))
-                    {
-                        continue;
-                    }
-
-                    scanned++;
-                    var (modifiedLine, wasUpdated, ip) = EnrichNdjsonLine(line, cache, options.ForceResolve);
-                    if (wasUpdated)
-                    {
-                        updated++;
-                        if (!string.IsNullOrWhiteSpace(ip))
-                        {
-                            enrichedIps.Add(ip);
-                        }
-                    }
-
-                    await writer.WriteLineAsync(modifiedLine.AsMemory(), cancellationToken).ConfigureAwait(false);
-                }
-            }
-            else
-            {
-                await using var writer = new StreamWriter(tempOutputPath, append: false);
-
-                if (await ReadCsvDelimiterAsync(inputPath, cancellationToken).ConfigureAwait(false) is { } delimiter)
-                {
-                    using var reader = new StreamReader(inputPath);
-                    var (remoteIpIdx, remoteHostIdx) = (-1, -1);
-                    var isHeader = true;
-                    await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, inputPath, delimiter, cancellationToken).ConfigureAwait(false))
-                    {
-                        if (isHeader)
-                        {
-                            (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(record.Fields);
-                            await writer.WriteLineAsync(JoinCsvRecord(record.Fields, delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
-                            isHeader = false;
-                            continue;
-                        }
-
-                        scanned++;
-                        var (modifiedLine, wasUpdated, ip) = EnrichCsvRecord(record.Fields, delimiter, remoteIpIdx, remoteHostIdx, cache, options.ForceResolve);
-                        if (wasUpdated)
-                        {
-                            updated++;
-                            if (!string.IsNullOrWhiteSpace(ip))
-                            {
-                                enrichedIps.Add(ip);
-                            }
-                        }
-
-                        await writer.WriteLineAsync(modifiedLine.AsMemory(), cancellationToken).ConfigureAwait(false);
-                    }
-                }
+                continue;
             }
 
-            File.Move(tempOutputPath, outputPath, overwrite: true);
-            return (scanned, updated, outputPath, enrichedIps.ToList());
+            var (modifiedLine, wasUpdated, ip) = EnrichNdjsonLine(line, cache, forceResolve);
+            tally.Count(wasUpdated, ip);
+            await writer.WriteLineAsync(modifiedLine.AsMemory(), cancellationToken).ConfigureAwait(false);
         }
-        finally
+    }
+
+    private static async Task WriteEnrichedCsvAsync(
+        string inputPath,
+        StreamWriter writer,
+        IReadOnlyDictionary<string, DnsCacheEntry> cache,
+        bool forceResolve,
+        EnrichmentTally tally,
+        CancellationToken cancellationToken)
+    {
+        if (await ReadCsvDelimiterAsync(inputPath, cancellationToken).ConfigureAwait(false) is not { } delimiter)
         {
-            if (File.Exists(tempOutputPath))
+            return;
+        }
+
+        using var reader = new StreamReader(inputPath);
+        var (remoteIpIdx, remoteHostIdx) = (-1, -1);
+        var isHeader = true;
+        await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, inputPath, delimiter, cancellationToken).ConfigureAwait(false))
+        {
+            if (isHeader)
             {
-                try
-                {
-                    File.Delete(tempOutputPath);
-                }
-                catch (IOException)
-                {
-                    // Tolerated in cleanup
-                }
+                (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(record.Fields);
+                await writer.WriteLineAsync(JoinCsvRecord(record.Fields, delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+                isHeader = false;
+                continue;
+            }
+
+            var (modifiedLine, wasUpdated, ip) = EnrichCsvRecord(record.Fields, delimiter, remoteIpIdx, remoteHostIdx, cache, forceResolve);
+            tally.Count(wasUpdated, ip);
+            await writer.WriteLineAsync(modifiedLine.AsMemory(), cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private sealed class EnrichmentTally
+    {
+        public int Scanned { get; private set; }
+
+        public int Updated { get; private set; }
+
+        public HashSet<string> EnrichedIps { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        public void Count(bool wasUpdated, string? ip)
+        {
+            Scanned++;
+            if (!wasUpdated)
+            {
+                return;
+            }
+
+            Updated++;
+            if (!string.IsNullOrWhiteSpace(ip))
+            {
+                EnrichedIps.Add(ip);
             }
         }
     }
