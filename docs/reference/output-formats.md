@@ -23,7 +23,7 @@ Repeated connections to the same service therefore update one line instead of ad
 | `ObservationCount` | Metrics | Number of scans in which the flow was seen |
 | `ServerName` | Server | Name of the audited machine |
 | `ServerOsVersion` | Server | Operating system description of the audited machine |
-| `ServerPrimaryIp` | Server | Primary IP address of the audited machine |
+| `ServerPrimaryIp` | Server | Primary IP address of the audited machine: the first IPv4 address of an active interface that has a gateway, otherwise of any active interface, otherwise `127.0.0.1`; the interfaces are read again every minute |
 | `Protocol` | Network | `Tcp` or `Udp` |
 | `Direction` | Network | `Listening`, `Inbound` or `Outbound` |
 | `TcpState` | Network | TCP state (`Established`, `Listen`, `TimeWait`, `CloseWait`…) |

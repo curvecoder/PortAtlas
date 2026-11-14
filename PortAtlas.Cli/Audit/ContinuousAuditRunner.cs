@@ -192,11 +192,11 @@ public static class ContinuousAuditRunner
                 config.OutputCsvPath,
                 networkFlowFilter,
                 exclusionFilter,
-                hostProvider.GetLocalIpAddresses(),
+                hostProvider,
                 config.MaskServerName,
                 config.MaskLocalIp);
             dashboard.ClearScreen();
-            engine.ScanCycleCompleted += (_, e) => dashboard.Render(e.Result, host);
+            engine.ScanCycleCompleted += (_, e) => dashboard.Render(e.Result, hostProvider.GetCurrentHostMetadata());
             hostNameResolver.HostNameResolved += (_, e) => dashboard.UpdateRemoteHostName(e.Address, e.HostName);
             if (historicalEntries.Count > 0)
             {

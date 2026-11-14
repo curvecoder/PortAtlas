@@ -23,7 +23,7 @@ Les connexions répétées vers un même service mettent donc à jour une seule 
 | `ObservationCount` | Mesure | Nombre de balayages où le flux a été vu |
 | `ServerName` | Serveur | Nom de la machine auditée |
 | `ServerOsVersion` | Serveur | Description du système de la machine auditée |
-| `ServerPrimaryIp` | Serveur | Adresse IP principale de la machine auditée |
+| `ServerPrimaryIp` | Serveur | Adresse IP principale de la machine auditée : la première adresse IPv4 d'une interface active qui a une passerelle, sinon de n'importe quelle interface active, sinon `127.0.0.1` ; les interfaces sont relues toutes les minutes |
 | `Protocol` | Réseau | `Tcp` ou `Udp` |
 | `Direction` | Réseau | `Listening`, `Inbound` ou `Outbound` |
 | `TcpState` | Réseau | État TCP (`Established`, `Listen`, `TimeWait`, `CloseWait`…) |

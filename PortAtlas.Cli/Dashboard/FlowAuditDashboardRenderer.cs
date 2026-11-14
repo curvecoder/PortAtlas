@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Core.Filtering;
 using PortAtlas.Core.Models;
+using PortAtlas.Core.Providers;
 using ProcessForge.Filtering;
 using SocketForge.Models;
 
@@ -35,6 +36,8 @@ public sealed partial class FlowAuditDashboardRenderer
     private const int DefaultFallbackHeight = 30;
     private const int UnlimitedDiscoveriesCapacity = 50_000;
 
+    private static readonly IReadOnlySet<IPAddress> NoLocalHostAddresses = new HashSet<IPAddress>();
+
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
     private readonly List<NetworkAuditEntry> _recentDiscoveries = [];
     private readonly object _syncLock = new();
@@ -42,7 +45,7 @@ public sealed partial class FlowAuditDashboardRenderer
     private readonly string _outputCsvPath;
     private readonly INetworkFlowFilter? _networkFlowFilter;
     private readonly ProcessExclusionFilter? _processExclusionFilter;
-    private readonly IReadOnlySet<IPAddress>? _localHostAddresses;
+    private readonly IServerHostProvider? _hostProvider;
     private readonly string? _maskServerName;
     private readonly string? _maskLocalIp;
 
@@ -84,6 +87,8 @@ public sealed partial class FlowAuditDashboardRenderer
     /// Indicates whether the active sockets snapshot view is currently displayed instead of the audit log discoveries.
     /// </summary>
     public bool IsActiveSocketsView => IsFilterBypassed;
+
+    private IReadOnlySet<IPAddress> LocalHostAddresses => _hostProvider?.GetLocalIpAddresses() ?? NoLocalHostAddresses;
 
     /// <summary>
     /// Toggles the view mode between Audit Log (discoveries history) and Active Sockets (real-time snapshot).
@@ -200,13 +205,13 @@ public sealed partial class FlowAuditDashboardRenderer
     /// <param name="outputCsvPath">Output CSV file path.</param>
     /// <param name="networkFlowFilter">Optional network flow filter.</param>
     /// <param name="processExclusionFilter">Optional process exclusion filter.</param>
-    /// <param name="localHostAddresses">Optional set of local host IP addresses.</param>
+    /// <param name="hostProvider">Optional provider of the local host addresses, read again as they change.</param>
     public FlowAuditDashboardRenderer(
         int scanIntervalSeconds,
         string outputCsvPath,
         INetworkFlowFilter? networkFlowFilter,
         ProcessExclusionFilter? processExclusionFilter = null,
-        IReadOnlySet<IPAddress>? localHostAddresses = null,
+        IServerHostProvider? hostProvider = null,
         string? maskServerName = null,
         string? maskLocalIp = null)
     {
@@ -214,7 +219,7 @@ public sealed partial class FlowAuditDashboardRenderer
         _outputCsvPath = outputCsvPath;
         _networkFlowFilter = networkFlowFilter;
         _processExclusionFilter = processExclusionFilter;
-        _localHostAddresses = localHostAddresses;
+        _hostProvider = hostProvider;
         _maskServerName = string.IsNullOrWhiteSpace(maskServerName) ? null : maskServerName.Trim();
         _maskLocalIp = string.IsNullOrWhiteSpace(maskLocalIp) ? null : maskLocalIp.Trim();
 
@@ -879,6 +884,7 @@ public sealed partial class FlowAuditDashboardRenderer
         var inboundCount = 0;
 
         var processCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var localHostAddresses = LocalHostAddresses;
 
         foreach (var s in result.ActiveSockets)
         {
@@ -889,7 +895,7 @@ public sealed partial class FlowAuditDashboardRenderer
                     continue;
                 }
 
-                if (_networkFlowFilter is not null && _networkFlowFilter.ShouldExclude(s, _localHostAddresses ?? new HashSet<IPAddress>()))
+                if (_networkFlowFilter is not null && _networkFlowFilter.ShouldExclude(s, localHostAddresses))
                 {
                     continue;
                 }
@@ -1277,7 +1283,7 @@ public sealed partial class FlowAuditDashboardRenderer
             return true;
         }
 
-        if (_networkFlowFilter is not null && _networkFlowFilter.ShouldExclude(entry.Socket, _localHostAddresses ?? new HashSet<IPAddress>()))
+        if (_networkFlowFilter is not null && _networkFlowFilter.ShouldExclude(entry.Socket, LocalHostAddresses))
         {
             return true;
         }

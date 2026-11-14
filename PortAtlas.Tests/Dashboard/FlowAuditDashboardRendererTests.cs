@@ -977,7 +977,7 @@ public sealed class FlowAuditDashboardRendererTests
             outputCsvPath: "test.csv",
             networkFlowFilter: null,
             processExclusionFilter: null,
-            localHostAddresses: null,
+            hostProvider: null,
             maskServerName: "MASKED-SRV",
             maskLocalIp: "10.99.88.77");
 
@@ -1021,7 +1021,7 @@ public sealed class FlowAuditDashboardRendererTests
             outputCsvPath: "test.csv",
             networkFlowFilter: null,
             processExclusionFilter: exclusionFilter,
-            localHostAddresses: null);
+            hostProvider: null);
 
         var result = new FlowAuditCycleResult(
             TimestampUtc: DateTimeOffset.UtcNow,
