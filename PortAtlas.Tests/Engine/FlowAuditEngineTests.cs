@@ -339,6 +339,73 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         entry!.Socket.RemoteEndpoint.Port.Should().Be(443);
     }
 
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenTheLogAlreadyHoldsReloadedFlows_TracksEachFlowOnce()
+    {
+        // Arrange
+        var testCsv = Path.Combine(_testDir, "reloaded.csv");
+        var csvFormatter = new AuditCsvFormatter(new AuditCsvOptions());
+        var hostProvider = new LocalServerHostProvider();
+        var host = hostProvider.GetCurrentHostMetadata();
+        var seenUtc = new DateTimeOffset(2026, 11, 1, 8, 0, 0, TimeSpan.Zero);
+        var process = new ProcessMetadata(300, "pveproxy", "/usr/bin/pveproxy", "pveproxy", "", "www-data");
+        NetworkAuditEntry[] loggedFlows =
+        [
+            new(seenUtc, seenUtc, 1, host, new ActiveSocketConnection(
+                SocketTransportProtocol.Tcp,
+                SocketFlowDirection.Outbound,
+                new SocketEndpoint(IPAddress.Parse("192.168.1.20"), 51000),
+                new SocketEndpoint(IPAddress.Parse("192.168.1.2"), 53),
+                "Established",
+                process)),
+            new(seenUtc, seenUtc, 1, host, new ActiveSocketConnection(
+                SocketTransportProtocol.Tcp,
+                SocketFlowDirection.Outbound,
+                new SocketEndpoint(IPAddress.Parse("192.168.1.20"), 51001),
+                new SocketEndpoint(IPAddress.Parse("192.168.1.30"), 8007),
+                "Established",
+                process))
+        ];
+
+        await using (var seedWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine()))
+        {
+            await seedWriter.InitializeAsync();
+            foreach (var flow in loggedFlows)
+            {
+                await seedWriter.AppendLineAsync(csvFormatter.FormatEntry(flow));
+            }
+        }
+
+        // The audit command reloads the parsed history into the register before starting the engine.
+        var deduplication = new ConnectionDeduplicationRegister();
+        deduplication.Hydrate(loggedFlows);
+
+        await using var csvWriter = new FileForge.IO.PersistentDelimitedFileWriter(testCsv, csvFormatter.BuildHeaderLine());
+        var engine = new FlowAuditEngine(
+            new FakeSocketScanner([]),
+            new ProcessExclusionFilter(new ProcessExclusionOptions()),
+            deduplication,
+            hostProvider,
+            csvWriter,
+            csvFormatter,
+            TimeSpan.FromSeconds(1));
+
+        using var cts = new CancellationTokenSource();
+        var trackedFlows = -1;
+        engine.ScanCycleCompleted += (_, e) =>
+        {
+            trackedFlows = e.Result.TotalUniqueFlowsTracked;
+            _ = cts.CancelAsync();
+        };
+
+        // Act
+        await engine.RunContinuousAuditAsync(cts.Token);
+
+        // Assert
+        trackedFlows.Should().Be(2);
+        deduplication.GetAllEntries().Should().HaveCount(2);
+    }
+
     private sealed class FakeHostNameResolver(string resolvedHost) : PortAtlas.Core.Resolution.IHostNameResolver
     {
         public event EventHandler<PortAtlas.Core.Resolution.HostNameResolvedEventArgs>? HostNameResolved;

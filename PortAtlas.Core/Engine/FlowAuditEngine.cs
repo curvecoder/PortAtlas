@@ -106,9 +106,6 @@ public sealed class FlowAuditEngine(
             await ndjsonWriter.InitializeAsync(cancellationToken).ConfigureAwait(false);
         }
 
-        var existingSignatures = await csvWriter.ReadExistingLinesAsync(cancellationToken).ConfigureAwait(false);
-        deduplicationRegister.Hydrate(existingSignatures);
-
         using var timer = new PeriodicTimer(scanInterval);
 
         await ExecuteScanCycleAsync(cancellationToken).ConfigureAwait(false);
