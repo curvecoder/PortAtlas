@@ -202,6 +202,47 @@ public sealed class ConnectionDeduplicationRegisterTests
         registered.RemoteHostName.Should().Be("backup.home.arpa");
     }
 
+    [Fact]
+    public void UpdateRemoteHostName_WhenFlowsAreObservedMeanwhile_KeepsEveryObservationAndNamesEveryFlow()
+    {
+        // Arrange
+        const int Rounds = 100;
+        const int FlowCount = 200;
+        const int ObservationsPerFlow = 5;
+        var backupServer = IPAddress.Parse("192.168.1.30");
+        var unnamedFlow = CreateBackupFlow(new DateTimeOffset(2026, 11, 14, 9, 0, 0, TimeSpan.Zero), string.Empty);
+        var flows = Enumerable.Range(0, FlowCount)
+            .Select(index => unnamedFlow with
+            {
+                Socket = unnamedFlow.Socket with { RemoteEndpoint = new SocketEndpoint(backupServer, 10000 + index) }
+            })
+            .ToList();
+        var registers = new List<ConnectionDeduplicationRegister>(Rounds);
+
+        // Act
+        for (var round = 0; round < Rounds; round++)
+        {
+            var register = new ConnectionDeduplicationRegister();
+            register.Hydrate(flows);
+            Parallel.Invoke(
+                () =>
+                {
+                    for (var observation = 0; observation < ObservationsPerFlow; observation++)
+                    {
+                        flows.ForEach(flow => register.TryRegisterOrUpdate(flow, out _));
+                    }
+                },
+                () => register.UpdateRemoteHostName(backupServer, "pbs.home.arpa"));
+            registers.Add(register);
+        }
+
+        // Assert
+        var entries = registers.SelectMany(register => register.GetAllEntries()).ToList();
+        entries.Should().HaveCount(Rounds * FlowCount);
+        entries.Should().OnlyContain(entry => entry.ObservationCount == 1 + ObservationsPerFlow);
+        entries.Should().OnlyContain(entry => entry.RemoteHostName == "pbs.home.arpa");
+    }
+
     private static NetworkAuditEntry CreateBackupFlow(DateTimeOffset seenUtc, string remoteHostName) =>
         new(
             seenUtc,

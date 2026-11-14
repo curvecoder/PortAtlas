@@ -138,9 +138,25 @@ public sealed class ConnectionDeduplicationRegister
 
         foreach (var (key, entry) in _activeFlows)
         {
-            if (entry is not null && entry.Socket.RemoteEndpoint.Address.Equals(remoteAddress) && string.IsNullOrWhiteSpace(entry.RemoteHostName))
+            if (entry is not null && entry.Socket.RemoteEndpoint.Address.Equals(remoteAddress))
             {
-                _activeFlows[key] = entry with { RemoteHostName = resolvedHostName };
+                NameFlow(key, remoteAddress, resolvedHostName);
+            }
+        }
+    }
+
+    // The scan loop updates the same flows while names arrive from the resolver: the name is written only over
+    // the value it was computed from, and computed again from the newer value when an observation got in between.
+    private void NameFlow(FlowIdentityKey key, IPAddress remoteAddress, string resolvedHostName)
+    {
+        while (_activeFlows.TryGetValue(key, out var entry)
+            && entry is not null
+            && entry.Socket.RemoteEndpoint.Address.Equals(remoteAddress)
+            && string.IsNullOrWhiteSpace(entry.RemoteHostName))
+        {
+            if (_activeFlows.TryUpdate(key, entry with { RemoteHostName = resolvedHostName }, entry))
+            {
+                return;
             }
         }
     }
