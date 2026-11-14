@@ -195,4 +195,133 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         entry.Socket.Process.CommandLine.Should().Be("runner --arg \"quoted,value\" --flag");
         entry.Socket.Process.UserName.Should().Be("DOMAIN\\User, Special");
     }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenFlowKeyColumnsAreMissing_ThrowsNamingTheMissingColumns()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "reduced_columns.csv");
+        var csvContent = """
+            FirstSeenUtc,LastSeenUtc,ServerName,LocalPort,RemoteIp,ProcessName,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,2026-11-01T08:05:00.0000000Z,proxmox,51000,192.168.1.30,proxmox-backup-client,/usr/bin/proxmox-backup-client,
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var act = () => parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidDataException>()
+            .WithMessage("*reduced_columns.csv*Protocol, Direction, RemotePort*");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenTheFirstSeenColumnIsMissing_ThrowsNamingIt()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "no_first_seen.csv");
+        var csvContent = """
+            LastSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
+            2026-11-01T08:05:00.0000000Z,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var act = () => parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*FirstSeenUtc*");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenAFirstSeenDateIsUnreadable_ThrowsNamingTheLine()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "unreadable_date.csv");
+        var csvContent = """
+            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,
+            yesterday,proxmox,Udp,Outbound,51001,192.168.1.2,53,/usr/bin/pveproxy,
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var act = () => parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*line 3*yesterday*");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenReducedColumnsKeepTheFlowKey_ReturnsTheFlows()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "key_columns.csv");
+        var csvContent = """
+            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,proxmox,Udp,Outbound,51001,192.168.1.2,53,/usr/bin/pveproxy,
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        var entry = entries.Should().ContainSingle().Subject;
+        entry.Socket.Protocol.Should().Be(SocketTransportProtocol.Udp);
+        entry.FirstSeenUtc.Should().Be(new DateTimeOffset(2026, 11, 1, 8, 0, 0, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenTheLogDoesNotExist_ReturnsEmptyList()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "not_written_yet.csv");
+
+        // Act
+        var entries = await parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ParseHistoryAsync_WhenFlowKeyColumnsAreMissing_StillReadsTheLog()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "reduced_for_export.csv");
+        var csvContent = """
+            FirstSeenUtc,ServerName,RemoteIp,ProcessName
+            2026-11-01T08:00:00.0000000Z,proxmox,192.168.1.30,proxmox-backup-client
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseHistoryAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().ContainSingle().Which.Socket.RemoteEndpoint.Address.Should().Be(IPAddress.Parse("192.168.1.30"));
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenTheLogHasNoHeader_ReadsItByPosition()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "positional.csv");
+        var csvContent = "2026-11-01T08:00:00.0000000Z,2026-11-01T08:05:00.0000000Z,3,proxmox,Debian 12,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,51000,192.168.1.30,8007,pbs.home.arpa,300,proxmox-backup-client,/usr/bin/proxmox-backup-client,,,root\n";
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().ContainSingle().Which.RemoteHostName.Should().Be("pbs.home.arpa");
+    }
 }

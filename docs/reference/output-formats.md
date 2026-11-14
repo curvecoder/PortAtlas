@@ -41,7 +41,7 @@ Repeated connections to the same service therefore update one line instead of ad
 
 Processes with identifier 0 or below show `SYSTEM`.
 
-At startup, `audit` reads the existing CSV log (`--reload-history`, `ReloadHistoryLimit`) so that counts and first-seen dates continue across restarts.
+At startup, `audit` reads the existing CSV log (`--reload-history`, `ReloadHistoryLimit`) so that counts and first-seen dates continue across restarts. A log without one of the columns that identify a flow (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) or without `FirstSeenUtc`, or with a read line whose `FirstSeenUtc` cannot be read, stops `audit` with an error naming the columns or the line, and exit code 1: its flows would match none of the observed ones and would all be logged again. Write to a new log with `--output`, or turn the reload off with `--reload-history 0`.
 
 ## NDJSON
 

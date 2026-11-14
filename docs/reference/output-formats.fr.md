@@ -41,7 +41,7 @@ Les connexions répétées vers un même service mettent donc à jour une seule 
 
 Les processus d'identifiant 0 ou inférieur affichent `SYSTEM`.
 
-Au démarrage, `audit` relit le journal CSV existant (`--reload-history`, `ReloadHistoryLimit`) pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre.
+Au démarrage, `audit` relit le journal CSV existant (`--reload-history`, `ReloadHistoryLimit`) pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre. Un journal sans l'une des colonnes qui identifient un flux (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) ou sans `FirstSeenUtc`, ou dont une ligne relue a une valeur `FirstSeenUtc` illisible, arrête `audit` avec une erreur qui nomme les colonnes ou la ligne, et le code de sortie 1 : ses flux ne correspondraient à aucun flux observé et seraient tous réécrits. Écrire dans un nouveau journal avec `--output`, ou désactiver le rechargement avec `--reload-history 0`.
 
 ## NDJSON
 

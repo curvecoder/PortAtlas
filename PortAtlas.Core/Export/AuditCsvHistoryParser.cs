@@ -41,6 +41,24 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// </summary>
     internal static readonly IReadOnlyList<string> HeaderMarkerColumns = [nameof(AuditCsvColumn.ServerName), nameof(AuditCsvColumn.LocalPort)];
 
+    // A resumed flow missing one of these columns would take default values (TCP, outbound, port 0, current time)
+    // and match no observed flow, so it would be logged again on every restart. The local address is left out:
+    // it only enters the key of a flow of unknown direction, which no socket scanner reports.
+    private static readonly IReadOnlyList<string> ResumeRequiredColumns =
+    [
+        nameof(AuditCsvColumn.FirstSeenUtc),
+        nameof(AuditCsvColumn.Protocol),
+        nameof(AuditCsvColumn.Direction),
+        nameof(AuditCsvColumn.LocalPort),
+        nameof(AuditCsvColumn.RemoteIp),
+        nameof(AuditCsvColumn.RemotePort),
+        nameof(AuditCsvColumn.ExecutablePath),
+        nameof(AuditCsvColumn.TargetExecutable)
+    ];
+
+    private const string ResumeWorkaround =
+        "Write to a new log with --output, or turn the reload off with --reload-history 0.";
+
     /// <summary>
     /// Tells whether a line is the header of an audit log, that is the line this parser reads the columns by name from.
     /// </summary>
@@ -57,71 +75,13 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         char delimiter = ',',
         CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(csvFilePath);
+        var table = await ReadTableAsync(csvFilePath, maxRows, delimiter, cancellationToken).ConfigureAwait(false);
 
-        if (maxRows.HasValue && maxRows.Value == 0)
-        {
-            return [];
-        }
-
-        if (!File.Exists(csvFilePath))
-        {
-            return [];
-        }
-
-        var lines = await ReadAllLinesAsync(csvFilePath, cancellationToken).ConfigureAwait(false);
-        if (lines.Count == 0)
-        {
-            return [];
-        }
-
-        var firstLine = lines[0];
-        if (string.IsNullOrWhiteSpace(firstLine))
-        {
-            return [];
-        }
-
-        var firstLineFields = SplitCsvLine(firstLine, delimiter);
-        var columnMap = BuildColumnIndexMap(firstLineFields);
-        var isHeaderPresent = HeaderMarkerColumns.Any(columnMap.ContainsKey);
-
-        int dataStartIndex;
-        if (isHeaderPresent)
-        {
-            dataStartIndex = 1;
-        }
-        else
-        {
-            columnMap = StandardPositionalColumnMap;
-            dataStartIndex = 0;
-        }
-
-        var dataLineCount = lines.Count - dataStartIndex;
-        if (dataLineCount <= 0)
-        {
-            return [];
-        }
-
-        var startIndex = dataStartIndex;
-        if (maxRows.HasValue && maxRows.Value > 0 && maxRows.Value < dataLineCount)
-        {
-            startIndex = lines.Count - maxRows.Value;
-        }
-
-        var results = new List<NetworkAuditEntry>(dataLineCount);
-
-        for (var i = startIndex; i < lines.Count; i++)
+        var results = new List<NetworkAuditEntry>();
+        foreach (var row in table.EnumerateRows())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var rawLine = lines[i];
-            if (string.IsNullOrWhiteSpace(rawLine))
-            {
-                continue;
-            }
-
-            var fields = SplitCsvLine(rawLine, delimiter);
-            var entry = ConvertFieldsToAuditEntry(fields, columnMap);
-            if (entry is not null)
+            if (ConvertFieldsToAuditEntry(row.Fields, table.ColumnMap) is { } entry)
             {
                 results.Add(entry);
             }
@@ -129,6 +89,83 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
 
         return results;
     }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<NetworkAuditEntry>> ParseLogForResumeAsync(
+        string csvFilePath,
+        int? maxRows = null,
+        char delimiter = ',',
+        CancellationToken cancellationToken = default)
+    {
+        var table = await ReadTableAsync(csvFilePath, maxRows, delimiter, cancellationToken).ConfigureAwait(false);
+
+        var missingColumns = ResumeRequiredColumns.Where(column => !table.ColumnMap.ContainsKey(column)).ToList();
+        if (missingColumns.Count > 0)
+        {
+            throw new InvalidDataException(
+                $"The audit log '{csvFilePath}' cannot be resumed: it has no {string.Join(", ", missingColumns)} column, " +
+                $"so the flows it holds would match none of the observed ones. {ResumeWorkaround}");
+        }
+
+        var results = new List<NetworkAuditEntry>();
+        foreach (var row in table.EnumerateRows())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var firstSeen = GetField(row.Fields, table.ColumnMap, nameof(AuditCsvColumn.FirstSeenUtc));
+            if (!TryParseTimestamp(firstSeen, out _))
+            {
+                throw new InvalidDataException(
+                    $"The audit log '{csvFilePath}' cannot be resumed: line {row.LineNumber} has an unreadable " +
+                    $"FirstSeenUtc value '{firstSeen}'. {ResumeWorkaround}");
+            }
+
+            if (ConvertFieldsToAuditEntry(row.Fields, table.ColumnMap) is { } entry)
+            {
+                results.Add(entry);
+            }
+        }
+
+        return results;
+    }
+
+    private static async Task<CsvTable> ReadTableAsync(
+        string csvFilePath,
+        int? maxRows,
+        char delimiter,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(csvFilePath);
+
+        if (maxRows == 0 || !File.Exists(csvFilePath))
+        {
+            return CsvTable.Empty;
+        }
+
+        var lines = await ReadAllLinesAsync(csvFilePath, cancellationToken).ConfigureAwait(false);
+        if (lines.Count == 0 || string.IsNullOrWhiteSpace(lines[0]))
+        {
+            return CsvTable.Empty;
+        }
+
+        var columnMap = BuildColumnIndexMap(SplitCsvLine(lines[0], delimiter));
+        var isHeaderPresent = HeaderMarkerColumns.Any(columnMap.ContainsKey);
+        if (!isHeaderPresent)
+        {
+            columnMap = StandardPositionalColumnMap;
+        }
+
+        var dataStartIndex = isHeaderPresent ? 1 : 0;
+        var dataLineCount = lines.Count - dataStartIndex;
+        var firstRowIndex = maxRows > 0 && maxRows.Value < dataLineCount
+            ? lines.Count - maxRows.Value
+            : dataStartIndex;
+
+        return new CsvTable(lines, columnMap, firstRowIndex, delimiter);
+    }
+
+    private static bool TryParseTimestamp(string value, out DateTimeOffset timestamp)
+        => DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp);
 
     private static async Task<List<string>> ReadAllLinesAsync(string path, CancellationToken cancellationToken)
     {
@@ -189,11 +226,11 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
             return null;
         }
 
-        var firstSeen = DateTimeOffset.TryParse(firstSeenStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedFirst)
+        var firstSeen = TryParseTimestamp(firstSeenStr, out var parsedFirst)
             ? parsedFirst
             : DateTimeOffset.UtcNow;
 
-        var lastSeen = DateTimeOffset.TryParse(lastSeenStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedLast)
+        var lastSeen = TryParseTimestamp(lastSeenStr, out var parsedLast)
             ? parsedLast
             : firstSeen;
 
@@ -311,4 +348,22 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         result.Add(current.ToString());
         return result;
     }
+
+    private sealed record CsvTable(IReadOnlyList<string> Lines, Dictionary<string, int> ColumnMap, int FirstRowIndex, char Delimiter)
+    {
+        public static CsvTable Empty { get; } = new([], StandardPositionalColumnMap, 0, ',');
+
+        public IEnumerable<CsvRow> EnumerateRows()
+        {
+            for (var i = FirstRowIndex; i < Lines.Count; i++)
+            {
+                if (!string.IsNullOrWhiteSpace(Lines[i]))
+                {
+                    yield return new CsvRow(i + 1, SplitCsvLine(Lines[i], Delimiter));
+                }
+            }
+        }
+    }
+
+    private readonly record struct CsvRow(int LineNumber, List<string> Fields);
 }

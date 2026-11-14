@@ -5,6 +5,7 @@ using PortAtlas.Core.Deduplication;
 using PortAtlas.Core.Engine;
 using PortAtlas.Core.Export;
 using PortAtlas.Core.Filtering;
+using PortAtlas.Core.Models;
 using PortAtlas.Core.Providers;
 using PortAtlas.Core.Resolution;
 using ProcessForge.Filtering;
@@ -50,6 +51,29 @@ public static class ContinuousAuditRunner
         var useDashboard = config.EnableDashboard && !Console.IsInputRedirected && !Console.IsOutputRedirected;
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        IReadOnlyList<NetworkAuditEntry> parsedEntries = [];
+        if (config.ReloadHistoryLimit != 0 && File.Exists(config.OutputCsvPath))
+        {
+            try
+            {
+                parsedEntries = await new AuditCsvHistoryParser().ParseLogForResumeAsync(
+                    config.OutputCsvPath,
+                    config.ReloadHistoryLimit,
+                    delimiter,
+                    cts.Token).ConfigureAwait(false);
+            }
+            catch (InvalidDataException ex)
+            {
+                // Resuming such a log would log every flow it holds again: the audit does not start. The log is
+                // read before any writer, resolver or dashboard exists, so nothing is left open and the message
+                // stays on screen.
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"Audit log error: {ex.Message}");
+                Console.ResetColor();
+                return 1;
+            }
+        }
 
         var hostProvider = new LocalServerHostProvider();
         var host = hostProvider.GetCurrentHostMetadata();
@@ -155,6 +179,11 @@ public static class ContinuousAuditRunner
 
         var exclusionConfigurator = new FlowExclusionConfigurator(config, configPath, networkFlowFilter, exclusionFilter);
 
+        // A name already in the DNS cache raises no resolution event during the audit, so a flow logged before
+        // its name was known would stay unnamed on the dashboard: the names are taken from the cache here.
+        var historicalEntries = new ReloadedFlowNameResolver(hostNameResolver).ResolveFromCache(parsedEntries);
+        deduplicationRegister.Hydrate(historicalEntries);
+
         FlowAuditDashboardRenderer? dashboard = null;
         if (useDashboard)
         {
@@ -169,6 +198,10 @@ public static class ContinuousAuditRunner
             dashboard.ClearScreen();
             engine.ScanCycleCompleted += (_, e) => dashboard.Render(e.Result, host);
             hostNameResolver.HostNameResolved += (_, e) => dashboard.UpdateRemoteHostName(e.Address, e.HostName);
+            if (historicalEntries.Count > 0)
+            {
+                dashboard.HydrateDiscoveries(historicalEntries);
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(config.OutputHtmlMapPath))
@@ -218,26 +251,6 @@ public static class ContinuousAuditRunner
             e.Cancel = true;
             _ = cts.CancelAsync();
         };
-
-        if (config.ReloadHistoryLimit != 0 && File.Exists(config.OutputCsvPath))
-        {
-            var historyParser = new AuditCsvHistoryParser();
-            var parsedEntries = await historyParser.ParseHistoryAsync(
-                config.OutputCsvPath,
-                config.ReloadHistoryLimit,
-                delimiter,
-                cts.Token).ConfigureAwait(false);
-
-            // A name already in the DNS cache raises no resolution event during the audit, so a flow logged before
-            // its name was known would stay unnamed on the dashboard: the names are taken from the cache here.
-            var historicalEntries = new ReloadedFlowNameResolver(hostNameResolver).ResolveFromCache(parsedEntries);
-
-            if (historicalEntries.Count > 0)
-            {
-                deduplicationRegister.Hydrate(historicalEntries);
-                dashboard?.HydrateDiscoveries(historicalEntries);
-            }
-        }
 
         var auditTask = engine.RunContinuousAuditAsync(cts.Token);
 
