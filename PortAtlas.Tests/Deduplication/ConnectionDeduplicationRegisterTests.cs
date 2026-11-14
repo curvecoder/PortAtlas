@@ -167,4 +167,53 @@ public sealed class ConnectionDeduplicationRegisterTests
         registered.ObservationCount.Should().Be(8);
         registered.RemoteHostName.Should().Be("api.internal");
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void TryRegisterOrUpdate_WhenReloadedFlowHasNoNameAndCandidateHasOne_KeepsTheCandidateName(string reloadedName)
+    {
+        // Arrange
+        var register = new ConnectionDeduplicationRegister();
+        var reloaded = CreateBackupFlow(new DateTimeOffset(2026, 11, 1, 8, 0, 0, TimeSpan.Zero), reloadedName);
+        register.Hydrate([reloaded]);
+        var candidate = CreateBackupFlow(new DateTimeOffset(2026, 11, 14, 9, 0, 0, TimeSpan.Zero), "pbs.home.arpa");
+
+        // Act
+        register.TryRegisterOrUpdate(candidate, out var registered);
+
+        // Assert
+        registered.RemoteHostName.Should().Be("pbs.home.arpa");
+        register.GetAllEntries().Should().ContainSingle().Which.RemoteHostName.Should().Be("pbs.home.arpa");
+    }
+
+    [Fact]
+    public void TryRegisterOrUpdate_WhenReloadedFlowAlreadyHasAName_KeepsTheReloadedName()
+    {
+        // Arrange
+        var register = new ConnectionDeduplicationRegister();
+        register.Hydrate([CreateBackupFlow(new DateTimeOffset(2026, 11, 1, 8, 0, 0, TimeSpan.Zero), "backup.home.arpa")]);
+        var candidate = CreateBackupFlow(new DateTimeOffset(2026, 11, 14, 9, 0, 0, TimeSpan.Zero), "pbs.home.arpa");
+
+        // Act
+        register.TryRegisterOrUpdate(candidate, out var registered);
+
+        // Assert
+        registered.RemoteHostName.Should().Be("backup.home.arpa");
+    }
+
+    private static NetworkAuditEntry CreateBackupFlow(DateTimeOffset seenUtc, string remoteHostName) =>
+        new(
+            seenUtc,
+            seenUtc,
+            1,
+            DummyServer,
+            new ActiveSocketConnection(
+                SocketTransportProtocol.Tcp,
+                SocketFlowDirection.Outbound,
+                new SocketEndpoint(IPAddress.Parse("192.168.1.10"), 50200),
+                new SocketEndpoint(IPAddress.Parse("192.168.1.30"), 8007),
+                "Established",
+                new ProcessMetadata(2100, "proxmox-backup-client", "/usr/bin/proxmox-backup-client", "", "", "root")),
+            remoteHostName);
 }

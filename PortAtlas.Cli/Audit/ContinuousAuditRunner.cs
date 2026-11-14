@@ -222,11 +222,15 @@ public static class ContinuousAuditRunner
         if (config.ReloadHistoryLimit != 0 && File.Exists(config.OutputCsvPath))
         {
             var historyParser = new AuditCsvHistoryParser();
-            var historicalEntries = await historyParser.ParseHistoryAsync(
+            var parsedEntries = await historyParser.ParseHistoryAsync(
                 config.OutputCsvPath,
                 config.ReloadHistoryLimit,
                 delimiter,
                 cts.Token).ConfigureAwait(false);
+
+            // A name already in the DNS cache raises no resolution event during the audit, so a flow logged before
+            // its name was known would stay unnamed on the dashboard: the names are taken from the cache here.
+            var historicalEntries = new ReloadedFlowNameResolver(hostNameResolver).ResolveFromCache(parsedEntries);
 
             if (historicalEntries.Count > 0)
             {

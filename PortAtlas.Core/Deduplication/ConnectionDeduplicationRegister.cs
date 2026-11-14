@@ -101,7 +101,13 @@ public sealed class ConnectionDeduplicationRegister
                 {
                     LastSeenUtc = candidate.LastSeenUtc,
                     ObservationCount = existing.ObservationCount + 1,
-                    Socket = existing.Socket with { State = candidate.Socket.State }
+                    Socket = existing.Socket with { State = candidate.Socket.State },
+
+                    // A flow reloaded from a log written before its name was resolved has no name, and the resolver
+                    // is not asked again because its cache already answers: the candidate carries that cached name.
+                    RemoteHostName = string.IsNullOrWhiteSpace(existing.RemoteHostName)
+                        ? candidate.RemoteHostName
+                        : existing.RemoteHostName
                 };
             });
 
