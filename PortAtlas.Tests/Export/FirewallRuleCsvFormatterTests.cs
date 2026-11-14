@@ -26,7 +26,7 @@ public sealed class FirewallRuleCsvFormatterTests
         var formatter = new FirewallRuleCsvFormatter();
         var rule = new FirewallRuleItem
         {
-            RuleId = "FLUX-001",
+            RuleId = "RULE-001",
             Direction = "Outbound",
             SourceIp = "10.0.0.10",
             SourceHost = "SRV-APP-01",
@@ -50,6 +50,6 @@ public sealed class FirewallRuleCsvFormatterTests
         // Assert
         row.Should().Contain("\"db,oracle\"\"prod\"");
         row.Should().Contain("\"DOMAIN\\service,oracle\"");
-        row.Should().StartWith("FLUX-001,Outbound,10.0.0.10,SRV-APP-01,10.20.1.5,");
+        row.Should().StartWith("RULE-001,Outbound,10.0.0.10,SRV-APP-01,10.20.1.5,");
     }
 }

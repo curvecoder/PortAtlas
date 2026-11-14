@@ -16,7 +16,7 @@ public sealed class AuditInputSelectionCliTests : IDisposable
     private const string LogRow = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,nas,Linux,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,50000,192.168.1.30,5432,,1234,psql,/usr/bin/psql,psql -h db,,backup";
     private const string EnrichedRow = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,nas,Linux,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,50000,192.168.1.30,5432,db.home.arpa,1234,psql,/usr/bin/psql,psql -h db,,backup";
     private const string NdjsonRow = "{\"firstSeenUtc\":\"2026-10-24T07:00:00+00:00\",\"lastSeenUtc\":\"2026-10-24T07:05:00+00:00\",\"observationCount\":10,\"serverName\":\"nas\",\"serverOsVersion\":\"Linux\",\"serverPrimaryIp\":\"192.168.1.20\",\"protocol\":\"Tcp\",\"direction\":\"Outbound\",\"tcpState\":\"Established\",\"localIp\":\"192.168.1.20\",\"localPort\":50000,\"remoteIp\":\"192.168.1.30\",\"remotePort\":5432,\"remoteHostName\":\"\",\"processId\":1234,\"processName\":\"psql\",\"executablePath\":\"/usr/bin/psql\",\"commandLine\":\"psql -h db\",\"targetExecutable\":\"\",\"userName\":\"backup\"}";
-    private const string MatrixRow = "FLUX-001,Outbound,192.168.1.40,matrix-only-host,192.168.1.30,db.home.arpa,Internal,TCP,5432,PostgreSQL,psql,/usr/bin/psql,backup,10,2026-10-24T07:00:00.0000000+00:00,2026-10-24T07:05:00.0000000+00:00";
+    private const string MatrixRow = "RULE-001,Outbound,192.168.1.40,matrix-only-host,192.168.1.30,db.home.arpa,Internal,TCP,5432,PostgreSQL,psql,/usr/bin/psql,backup,10,2026-10-24T07:00:00.0000000+00:00,2026-10-24T07:05:00.0000000+00:00";
 
     private readonly string _root;
     private readonly string _collected;
@@ -57,7 +57,7 @@ public sealed class AuditInputSelectionCliTests : IDisposable
         // Assert
         var rows = (await File.ReadAllLinesAsync(matrix)).Skip(1).ToList();
         rows.Should().ContainSingle().Which.Should()
-            .StartWith("FLUX-001,Outbound,192.168.1.20,nas,192.168.1.30,db.home.arpa,Internal,TCP,5432,")
+            .StartWith("RULE-001,Outbound,192.168.1.20,nas,192.168.1.30,db.home.arpa,Internal,TCP,5432,")
             .And.Contain(",backup,10,");
         output.Should().Contain(Path.Combine(_collected, "audit_nas.csv")).And.Contain("audit_nas_enriched.csv");
     }
@@ -103,7 +103,7 @@ public sealed class AuditInputSelectionCliTests : IDisposable
 
         // Assert
         var rows = (await File.ReadAllLinesAsync(matrix)).Skip(1).ToList();
-        rows.Should().ContainSingle().Which.Should().StartWith("FLUX-001,Outbound,192.168.1.20,nas,192.168.1.30,");
+        rows.Should().ContainSingle().Which.Should().StartWith("RULE-001,Outbound,192.168.1.20,nas,192.168.1.30,");
         output.Should().Contain(Path.Combine(_collected, "firewall_rules.csv"));
     }
 

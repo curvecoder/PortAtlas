@@ -50,6 +50,6 @@ public sealed class FirewallRuleExportCommandRunnerTests : IDisposable
         File.Exists(targetMatrix).Should().BeTrue();
         var lines = await File.ReadAllLinesAsync(targetMatrix);
         lines.Should().HaveCount(2);
-        lines[1].Should().StartWith("FLUX-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.prod,Internal,TCP,1521,Oracle-TNS,");
+        lines[1].Should().StartWith("RULE-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.prod,Internal,TCP,1521,Oracle-TNS,");
     }
 }

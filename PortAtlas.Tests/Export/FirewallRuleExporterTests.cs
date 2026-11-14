@@ -55,7 +55,7 @@ public sealed class FirewallRuleExporterTests : IDisposable
         var lines = await File.ReadAllLinesAsync(targetMatrixCsv);
         lines.Should().HaveCount(2); // Header + 1 consolidated rule
         lines[0].Should().StartWith("RuleId,Direction,SourceIp,");
-        lines[1].Should().StartWith("FLUX-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.prod,Internal,TCP,1521,Oracle-TNS,tnslsnr,");
+        lines[1].Should().StartWith("RULE-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.prod,Internal,TCP,1521,Oracle-TNS,tnslsnr,");
         lines[1].Should().Contain(",35,"); // Sum of observation count (10 + 25)
         report.PairsCsvPath.Should().BeNull();
     }
@@ -192,5 +192,50 @@ public sealed class FirewallRuleExporterTests : IDisposable
         lines.Should().HaveCount(2);
         lines[0].Should().StartWith("PairId,SourceIp,SourceHost,");
         lines[1].Should().StartWith("PAIR-001,192.168.1.10,desktop,192.168.1.50,nas.home.arpa,2,\"443/TCP, 873/TCP\",35,");
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenTheSameAuditsAreGivenInAnotherOrder_WritesTheSameMatrix()
+    {
+        // Arrange
+        var header = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName";
+        var dnsOverTcp = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,4,proxmox,Linux,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,51000,192.168.1.2,53,pihole.home.arpa,1235,systemd-resolve,/usr/lib/systemd/systemd-resolved,systemd-resolved,,systemd-resolve";
+        var dnsOverUdp = "2026-10-24T07:01:00Z,2026-10-24T07:06:00Z,25,proxmox,Linux,192.168.1.20,Udp,Outbound,UDP,192.168.1.20,51000,192.168.1.2,53,pihole.home.arpa,1235,systemd-resolve,/usr/lib/systemd/systemd-resolved,systemd-resolved,,systemd-resolve";
+        var monday = Path.Combine(_tempDirectory, "proxmox_monday.csv");
+        var tuesday = Path.Combine(_tempDirectory, "proxmox_tuesday.csv");
+        await File.WriteAllLinesAsync(monday, [header, dnsOverUdp]);
+        await File.WriteAllLinesAsync(tuesday, [header, dnsOverTcp]);
+        var inGivenOrder = Path.Combine(_tempDirectory, "matrix_given_order.csv");
+        var inReverseOrder = Path.Combine(_tempDirectory, "matrix_reverse_order.csv");
+        var exporter = new FirewallRuleExporter();
+
+        // Act
+        await exporter.ExportRulesAsync([monday, tuesday], inGivenOrder, new FirewallRuleExportOptions());
+        await exporter.ExportRulesAsync([tuesday, monday], inReverseOrder, new FirewallRuleExportOptions());
+
+        // Assert
+        var givenOrderLines = await File.ReadAllLinesAsync(inGivenOrder);
+        var reverseOrderLines = await File.ReadAllLinesAsync(inReverseOrder);
+        givenOrderLines.Should().HaveCount(3);
+        givenOrderLines[1].Should().StartWith("RULE-001,Outbound,192.168.1.20,proxmox,192.168.1.2,pihole.home.arpa,Internal,TCP,53,");
+        reverseOrderLines.Should().Equal(givenOrderLines);
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenFlowsAreRead_LogsTheConsolidationInEnglish()
+    {
+        // Arrange
+        var auditCsv = Path.Combine(_tempDirectory, "nas.csv");
+        var header = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName";
+        var https = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,nas,Linux,192.168.1.50,Tcp,Outbound,Established,192.168.1.50,50000,192.168.1.10,443,desktop,1234,curl,/usr/bin/curl,curl,,root";
+        await File.WriteAllLinesAsync(auditCsv, [header, https, https]);
+        var messages = new List<string>();
+        var exporter = new FirewallRuleExporter(logger: messages.Add);
+
+        // Act
+        await exporter.ExportRulesAsync([auditCsv], Path.Combine(_tempDirectory, "firewall_matrix.csv"), new FirewallRuleExportOptions());
+
+        // Assert
+        messages.Should().Contain("Consolidating 2 raw flow(s) from 1 file(s)...");
     }
 }

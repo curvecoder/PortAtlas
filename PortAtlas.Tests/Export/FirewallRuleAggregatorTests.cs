@@ -36,7 +36,7 @@ public sealed class FirewallRuleAggregatorTests
         // Assert
         rules.Should().HaveCount(1);
         var rule = rules[0];
-        rule.RuleId.Should().Be("FLUX-001");
+        rule.RuleId.Should().Be("RULE-001");
         rule.Direction.Should().Be("Outbound");
         rule.SourceIp.Should().Be("10.0.0.10");
         rule.SourceHost.Should().Be("SRV-APP-01");
@@ -829,6 +829,42 @@ public sealed class FirewallRuleAggregatorTests
 
         // Assert
         rules.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenRulesDifferOnlyByProtocol_NumbersThemInProtocolOrderWhateverTheInputOrder(bool reversed)
+    {
+        // Arrange
+        var tcp = CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.2", 53, protocol: SocketTransportProtocol.Tcp);
+        var udp = CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.2", 53, protocol: SocketTransportProtocol.Udp);
+        NetworkAuditEntry[] entries = reversed ? [udp, tcp] : [tcp, udp];
+
+        // Act
+        var rules = new FirewallRuleAggregator().Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Select(rule => (rule.RuleId, rule.Protocol)).Should().Equal(("RULE-001", "TCP"), ("RULE-002", "UDP"));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenRulesDifferOnlyByProcess_NumbersThemInOrdinalProcessOrderWhateverTheInputOrder(bool reversed)
+    {
+        // Arrange
+        var nginx = CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.50", 443, processName: "nginx");
+        var caddy = CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.50", 443, processName: "caddy");
+        var upperCaddy = CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.50", 443, processName: "Caddy");
+        NetworkAuditEntry[] entries = reversed ? [upperCaddy, nginx, caddy] : [caddy, nginx, upperCaddy];
+
+        // Act
+        var rules = new FirewallRuleAggregator().Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Select(rule => (rule.RuleId, rule.ProcessName))
+            .Should().Equal(("RULE-001", "Caddy"), ("RULE-002", "caddy"), ("RULE-003", "nginx"));
     }
 
     // The SMB service of nas.home.arpa, bound to 192.168.1.20 unless another address is given.

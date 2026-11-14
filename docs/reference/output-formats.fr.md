@@ -53,11 +53,11 @@ Au démarrage, `audit` relit le journal CSV existant (`--reload-history`, `Reloa
 
 ## Matrice de règles de pare-feu
 
-Écrite par `export rules`. Une ligne par sens, adresse source, adresse de destination, port de destination, protocole et processus, triée par sens, zone, port, destination et source.
+Écrite par `export rules`. Une ligne par sens, adresse source, adresse de destination, port de destination, protocole et processus, triée par sens, zone, port, destination, source, protocole et processus : la numérotation ne dépend pas de l'ordre des journaux donnés à `--input`.
 
 | Colonne | Contenu |
 | :--- | :--- |
-| `RuleId` | `FLUX-001`, `FLUX-002`… dans l'ordre du tri |
+| `RuleId` | `RULE-001`, `RULE-002`… dans l'ordre du tri |
 | `Direction` | `Outbound` ou `Inbound` |
 | `SourceIp` | Adresse du client ; `0.0.0.0` pour une écoute |
 | `SourceHost` | Nom du client : le serveur audité pour un flux sortant, le nom distant pour un flux entrant, `Any` pour une écoute |

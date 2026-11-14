@@ -53,11 +53,11 @@ Written by `audit --ndjson` and by `export ndjson`. One JSON object per line, wi
 
 ## Firewall rule matrix
 
-Written by `export rules`. One row per direction, source address, destination address, destination port, protocol and process, sorted by direction, zone, port, destination and source.
+Written by `export rules`. One row per direction, source address, destination address, destination port, protocol and process, sorted by direction, zone, port, destination, source, protocol and process: the numbering does not depend on the order of the audit logs given to `--input`.
 
 | Column | Content |
 | :--- | :--- |
-| `RuleId` | `FLUX-001`, `FLUX-002`… in sort order |
+| `RuleId` | `RULE-001`, `RULE-002`… in sort order |
 | `Direction` | `Outbound` or `Inbound` |
 | `SourceIp` | Client address; `0.0.0.0` for a listener |
 | `SourceHost` | Client name: the audited server for an outbound flow, the remote name for an inbound flow, `Any` for a listener |

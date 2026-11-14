@@ -73,7 +73,7 @@ public sealed class FirewallRuleExporter(
             }
         }
 
-        _logger?.Invoke($"Consolidation de {allEntries.Count} flux bruts depuis {validFiles.Count} fichier(s)...");
+        _logger?.Invoke($"Consolidating {allEntries.Count} raw flow(s) from {validFiles.Count} file(s)...");
 
         var rules = _aggregator.Aggregate(allEntries, options);
 

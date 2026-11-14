@@ -59,7 +59,7 @@ public sealed class CliCharacterizationTests : IDisposable
 
         // Assert
         var rows = (await File.ReadAllLinesAsync(matrix)).Skip(1).ToList();
-        rows.Should().ContainSingle().Which.Should().StartWith("FLUX-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.example.test,Internal,TCP,1521,Oracle-TNS,");
+        rows.Should().ContainSingle().Which.Should().StartWith("RULE-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.example.test,Internal,TCP,1521,Oracle-TNS,");
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public sealed class CliCharacterizationTests : IDisposable
 
         // Assert
         (await File.ReadAllLinesAsync(matrix)).Skip(1).Should().ContainSingle()
-            .Which.Should().StartWith("FLUX-001,Inbound,0.0.0.0,Any,10.0.0.1,SRV-APP-01,Internal,TCP,8080,");
+            .Which.Should().StartWith("RULE-001,Inbound,0.0.0.0,Any,10.0.0.1,SRV-APP-01,Internal,TCP,8080,");
     }
 
     [Fact]
@@ -120,7 +120,7 @@ public sealed class CliCharacterizationTests : IDisposable
 
         // Assert
         (await File.ReadAllLinesAsync(matrix)).Skip(1).Should().ContainSingle()
-            .Which.Should().StartWith("FLUX-001,Inbound,0.0.0.0,Any,0.0.0.0,SRV-DNS-01,Internal,UDP,53,DNS,");
+            .Which.Should().StartWith("RULE-001,Inbound,0.0.0.0,Any,0.0.0.0,SRV-DNS-01,Internal,UDP,53,DNS,");
     }
 
     [Fact]

@@ -40,7 +40,7 @@ public sealed class FirewallRulePairAggregatorTests
     private static FirewallRuleItem Rule(
         string sourceIp, string sourceHost, string destinationIp, string destinationHost, int port, long observations, string firstSeen, string lastSeen) => new()
         {
-            RuleId = "FLUX-000",
+            RuleId = "RULE-000",
             Direction = "Outbound",
             SourceIp = sourceIp,
             SourceHost = sourceHost,

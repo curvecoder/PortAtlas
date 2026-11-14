@@ -6,7 +6,7 @@ namespace PortAtlas.Core.Export;
 public sealed record FirewallRuleItem
 {
     /// <summary>
-    /// Sequential rule identifier (e.g. "FLUX-001").
+    /// Sequential rule identifier (e.g. "RULE-001").
     /// </summary>
     public string RuleId { get; init; } = string.Empty;
 

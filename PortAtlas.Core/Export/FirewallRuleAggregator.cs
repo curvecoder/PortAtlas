@@ -215,18 +215,21 @@ public sealed class FirewallRuleAggregator
             });
         }
 
-        // Deterministic sorting for firewall rule consistency
+        // The sort covers every field of the group key, so the rule numbers do not depend on the order in which the
+        // audit files were read. The process name is compared case-sensitively, as the key tells "Caddy" from "caddy".
         var sorted = results
-            .OrderBy(r => r.Direction)
-            .ThenBy(r => r.DestinationZone)
+            .OrderBy(r => r.Direction, StringComparer.Ordinal)
+            .ThenBy(r => r.DestinationZone, StringComparer.Ordinal)
             .ThenBy(r => r.DestinationPort)
             .ThenBy(r => r.DestinationIp, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.SourceIp, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.Protocol, StringComparer.Ordinal)
+            .ThenBy(r => r.ProcessName, StringComparer.Ordinal)
             .ToList();
 
         for (var i = 0; i < sorted.Count; i++)
         {
-            sorted[i] = sorted[i] with { RuleId = $"FLUX-{(i + 1):D3}" };
+            sorted[i] = sorted[i] with { RuleId = $"RULE-{(i + 1):D3}" };
         }
 
         return sorted;
