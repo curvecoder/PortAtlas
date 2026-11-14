@@ -63,7 +63,7 @@ public static class ContinuousAuditRunner
                     delimiter,
                     cts.Token).ConfigureAwait(false);
             }
-            catch (InvalidDataException ex)
+            catch (Exception ex) when (ex is InvalidDataException or AuditLogFormatException)
             {
                 // Resuming such a log would log every flow it holds again: the audit does not start. The log is
                 // read before any writer, resolver or dashboard exists, so nothing is left open and the message

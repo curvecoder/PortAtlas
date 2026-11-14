@@ -4,7 +4,7 @@
 
 ## CSV audit log
 
-Written by `audit` (`-o`, `OutputCsvPath`). Fields follow RFC 4180 quoting; the separator is `CsvDelimiter` (`,` by default). One line per deduplicated flow. A flow is identified by its protocol, its direction, its application (`TargetExecutable`, or `ExecutablePath` when there is no target) and:
+Written by `audit` (`-o`, `OutputCsvPath`). Fields follow RFC 4180 quoting; the separator is `CsvDelimiter` (`,` by default). One record per deduplicated flow; a quoted field (a command line, for instance) may hold line breaks, so a record can span several lines: `audit`, `export` and `resolve` read it whole, `map` still reads the log line by line. A quote never closed before the end of the log stops `audit`, `export` and `resolve` with code 1 and a message naming the log and the line where the quote opens. A flow is identified by its protocol, its direction, its application (`TargetExecutable`, or `ExecutablePath` when there is no target) and:
 
 | Direction | Also identified by | Ignored |
 | :--- | :--- | :--- |

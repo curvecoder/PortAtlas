@@ -258,31 +258,29 @@ public sealed class OfflineAuditEnricher(
         }
         else
         {
+            if (await ReadCsvDelimiterAsync(filePath, cancellationToken).ConfigureAwait(false) is not { } delimiter)
+            {
+                return [];
+            }
+
             using var reader = new StreamReader(filePath);
-            var headerLine = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            if (headerLine is null)
+            var (remoteIpIdx, remoteHostIdx) = (-1, -1);
+            var isHeader = true;
+            await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, filePath, delimiter, cancellationToken).ConfigureAwait(false))
             {
-                return [];
-            }
-
-            var delimiter = headerLine.Contains(';') ? ';' : ',';
-            var headers = SplitCsvLine(headerLine, delimiter);
-            var (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(headers);
-
-            if (remoteIpIdx < 0)
-            {
-                return [];
-            }
-
-            string? line;
-            while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
-            {
-                if (string.IsNullOrWhiteSpace(line))
+                var fields = record.Fields;
+                if (isHeader)
                 {
+                    (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(fields);
+                    if (remoteIpIdx < 0)
+                    {
+                        return [];
+                    }
+
+                    isHeader = false;
                     continue;
                 }
 
-                var fields = SplitCsvLine(line, delimiter);
                 if (remoteIpIdx < fields.Count)
                 {
                     var ip = fields[remoteIpIdx];
@@ -398,27 +396,25 @@ public sealed class OfflineAuditEnricher(
             }
             else
             {
-                using var reader = new StreamReader(inputPath);
                 await using var writer = new StreamWriter(tempOutputPath, append: false);
 
-                var headerLine = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-                if (headerLine is not null)
+                if (await ReadCsvDelimiterAsync(inputPath, cancellationToken).ConfigureAwait(false) is { } delimiter)
                 {
-                    await writer.WriteLineAsync(headerLine.AsMemory(), cancellationToken).ConfigureAwait(false);
-                    var delimiter = headerLine.Contains(';') ? ';' : ',';
-                    var headers = SplitCsvLine(headerLine, delimiter);
-                    var (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(headers);
-
-                    string? line;
-                    while ((line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)) is not null)
+                    using var reader = new StreamReader(inputPath);
+                    var (remoteIpIdx, remoteHostIdx) = (-1, -1);
+                    var isHeader = true;
+                    await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, inputPath, delimiter, cancellationToken).ConfigureAwait(false))
                     {
-                        if (string.IsNullOrWhiteSpace(line))
+                        if (isHeader)
                         {
+                            (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(record.Fields);
+                            await writer.WriteLineAsync(JoinCsvRecord(record.Fields, delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+                            isHeader = false;
                             continue;
                         }
 
                         scanned++;
-                        var (modifiedLine, wasUpdated, ip) = EnrichCsvLine(line, delimiter, remoteIpIdx, remoteHostIdx, cache, options.ForceResolve);
+                        var (modifiedLine, wasUpdated, ip) = EnrichCsvRecord(record.Fields, delimiter, remoteIpIdx, remoteHostIdx, cache, options.ForceResolve);
                         if (wasUpdated)
                         {
                             updated++;
@@ -492,23 +488,17 @@ public sealed class OfflineAuditEnricher(
         }
     }
 
-    private static (string ModifiedLine, bool WasUpdated, string? Ip) EnrichCsvLine(
-        string line,
+    private static (string ModifiedLine, bool WasUpdated, string? Ip) EnrichCsvRecord(
+        IReadOnlyList<string> fields,
         char delimiter,
         int remoteIpIdx,
         int remoteHostIdx,
         IReadOnlyDictionary<string, DnsCacheEntry> cache,
         bool forceResolve)
     {
-        if (remoteIpIdx < 0 || remoteHostIdx < 0)
+        if (remoteIpIdx < 0 || remoteHostIdx < 0 || remoteIpIdx >= fields.Count || remoteHostIdx >= fields.Count)
         {
-            return (line, false, null);
-        }
-
-        var fields = SplitCsvLine(line, delimiter);
-        if (remoteIpIdx >= fields.Count || remoteHostIdx >= fields.Count)
-        {
-            return (line, false, null);
+            return (JoinCsvRecord(fields, delimiter), false, null);
         }
 
         var ip = fields[remoteIpIdx];
@@ -516,12 +506,23 @@ public sealed class OfflineAuditEnricher(
 
         if (ShouldUpdateHost(ip, currentHost, cache, forceResolve, out var newHost))
         {
-            fields[remoteHostIdx] = newHost;
-            var escapedFields = fields.Select(f => PersistentDelimitedFileWriter.EscapeField(f, delimiter));
-            return (string.Join(delimiter, escapedFields), true, ip);
+            var updatedFields = fields.ToArray();
+            updatedFields[remoteHostIdx] = newHost;
+            return (JoinCsvRecord(updatedFields, delimiter), true, ip);
         }
 
-        return (line, false, null);
+        return (JoinCsvRecord(fields, delimiter), false, null);
+    }
+
+    // A record is written back from its fields, not from its text, since a quoted field may span several lines.
+    private static string JoinCsvRecord(IEnumerable<string> fields, char delimiter)
+        => string.Join(delimiter, fields.Select(field => PersistentDelimitedFileWriter.EscapeField(field, delimiter)));
+
+    private static async Task<char?> ReadCsvDelimiterAsync(string path, CancellationToken cancellationToken)
+    {
+        using var reader = new StreamReader(path);
+        var headerLine = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+        return headerLine is null ? null : headerLine.Contains(';') ? ';' : ',';
     }
 
     private static bool ShouldUpdateHost(
@@ -600,42 +601,6 @@ public sealed class OfflineAuditEnricher(
         }
 
         return (remoteIpIdx, remoteHostIdx);
-    }
-
-    private static List<string> SplitCsvLine(string line, char delimiter)
-    {
-        var result = new List<string>();
-        var current = new System.Text.StringBuilder();
-        var inQuotes = false;
-
-        for (var i = 0; i < line.Length; i++)
-        {
-            var c = line[i];
-            if (c == '"')
-            {
-                if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
-                {
-                    current.Append('"');
-                    i++;
-                }
-                else
-                {
-                    inQuotes = !inQuotes;
-                }
-            }
-            else if (c == delimiter && !inQuotes)
-            {
-                result.Add(current.ToString());
-                current.Clear();
-            }
-            else
-            {
-                current.Append(c);
-            }
-        }
-
-        result.Add(current.ToString());
-        return result;
     }
 
     private sealed class ResolutionOutcomeCounter

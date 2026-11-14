@@ -167,6 +167,54 @@ public sealed class OfflineAuditEnricherTests : IDisposable
     }
 
     [Fact]
+    public async Task EnrichFilesAsync_WhenACommandLineSpansLines_NamesTheFlowAndKeepsTheRecordWhole()
+    {
+        // Arrange
+        var csvPath = Path.Combine(_tempDirectory, "audit_multiline.csv");
+        var csvContent =
+            "FirstSeenUtc,ServerName,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessName,CommandLine\r\n" +
+            "2026-11-01T08:00:00Z,nas,51000,192.168.1.30,8007,,java,\"java -jar backup.jar\r\n--target 192.168.1.30\"\r\n" +
+            "2026-11-01T08:01:00Z,nas,51001,192.168.1.2,53,,dnsmasq,dnsmasq\r\n";
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+        };
+        var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
+
+        // Act
+        var report = await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
+
+        // Assert
+        report.TotalRecordsScanned.Should().Be(2);
+        var entries = await new AuditCsvHistoryParser().ParseHistoryAsync(csvPath);
+        entries.Select(entry => (entry.RemoteHostName, entry.Socket.Process.CommandLine)).Should().Equal(
+            ("pbs.home.arpa", "java -jar backup.jar\r\n--target 192.168.1.30"),
+            (string.Empty, "dnsmasq"));
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoFlowNeedsAName_RewritesTheLogByteForByte()
+    {
+        // Arrange
+        var csvPath = Path.Combine(_tempDirectory, "audit_unchanged.csv");
+        var csvContent =
+            "FirstSeenUtc,ServerName,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessName,CommandLine\r\n" +
+            "2026-11-01T08:00:00Z,nas,51000,192.168.1.30,8007,pbs.home.arpa,java,\"java -jar backup.jar\r\n--target \"\"pbs\"\", now\"\r\n" +
+            "2026-11-01T08:01:00Z,nas,51001,192.168.1.2,53,,dnsmasq,dnsmasq\r\n";
+        await File.WriteAllTextAsync(csvPath, csvContent);
+        var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
+
+        // Act
+        var report = await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [new Dictionary<string, DnsCacheEntry>()], options);
+
+        // Assert
+        report.TotalRecordsUpdated.Should().Be(0);
+        (await File.ReadAllTextAsync(csvPath)).Should().Be(csvContent);
+    }
+
+    [Fact]
     public async Task EnrichFilesAsync_WhenNdjsonFileProvided_EnrichesRemoteHostName()
     {
         // Arrange

@@ -310,6 +310,63 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
     }
 
     [Fact]
+    public async Task ParseHistoryAsync_WhenACommandLineSpansLines_ReadsEachFlowWhole()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "multiline_command.csv");
+        var csvContent =
+            "FirstSeenUtc,ServerName,LocalPort,RemoteIp,RemotePort,ProcessName,CommandLine\r\n" +
+            "2026-11-01T08:00:00.0000000Z,nas,51000,192.168.1.30,8007,java,\"java -jar backup.jar\r\n--target pbs.home.arpa\"\r\n" +
+            "2026-11-01T08:01:00.0000000Z,nas,51001,192.168.1.2,53,dnsmasq,dnsmasq\r\n";
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseHistoryAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Select(entry => entry.Socket.Process.CommandLine).Should().Equal("java -jar backup.jar\r\n--target pbs.home.arpa", "dnsmasq");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenAnUnreadableDateFollowsAMultilineRecord_NamesTheLineTheRecordStartsOn()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "multiline_then_bad_date.csv");
+        var csvContent =
+            "FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable,CommandLine\r\n" +
+            "2026-11-01T08:00:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/java,,\"java -jar backup.jar\r\n--target pbs.home.arpa\"\r\n" +
+            "yesterday,nas,Udp,Outbound,51001,192.168.1.2,53,/usr/sbin/dnsmasq,,dnsmasq\r\n";
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var act = () => parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*line 4*yesterday*");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenAQuotedFieldIsNeverClosed_ThrowsNamingTheLogAndTheLine()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "unclosed_quote.csv");
+        var csvContent =
+            "FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable,CommandLine\r\n" +
+            "2026-11-01T08:00:00.0000000Z,nas,Udp,Outbound,51001,192.168.1.2,53,/usr/sbin/dnsmasq,,dnsmasq\r\n" +
+            "2026-11-01T08:01:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/java,,\"java -jar backup.jar\r\n";
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var act = () => parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<AuditLogFormatException>().WithMessage("*unclosed_quote.csv*line 3*");
+    }
+
+    [Fact]
     public async Task ParseLogForResumeAsync_WhenTheLogHasNoHeader_ReadsItByPosition()
     {
         // Arrange

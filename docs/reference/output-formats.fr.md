@@ -4,7 +4,7 @@
 
 ## Journal d'audit CSV
 
-Écrit par `audit` (`-o`, `OutputCsvPath`). Les champs suivent les règles de guillemets de la RFC 4180 ; le séparateur est `CsvDelimiter` (`,` par défaut). Une ligne par flux dédupliqué. Un flux est identifié par son protocole, son sens, son application (`TargetExecutable`, ou `ExecutablePath` en l'absence de cible) et :
+Écrit par `audit` (`-o`, `OutputCsvPath`). Les champs suivent les règles de guillemets de la RFC 4180 ; le séparateur est `CsvDelimiter` (`,` par défaut). Un enregistrement par flux dédupliqué ; un champ entre guillemets (une ligne de commande, par exemple) peut contenir des retours à la ligne : un enregistrement peut alors s'étendre sur plusieurs lignes : `audit`, `export` et `resolve` le lisent entier, `map` lit encore le journal ligne à ligne. Un guillemet jamais refermé avant la fin du journal arrête `audit`, `export` et `resolve` avec le code 1 et un message qui nomme le journal et la ligne où le guillemet s'ouvre. Un flux est identifié par son protocole, son sens, son application (`TargetExecutable`, ou `ExecutablePath` en l'absence de cible) et :
 
 | Sens | Identifié aussi par | Ignoré |
 | :--- | :--- | :--- |

@@ -459,6 +459,40 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(output).Should().BeFalse();
     }
 
+    // A command line spanning lines is one record; a quote never closed leaves the end of the log unreadable.
+    [Theory]
+    [InlineData("rules")]
+    [InlineData("resolve")]
+    public async Task Main_WhenAnAuditLogHasAQuoteNeverClosed_ReturnsExitCodeOneNamingTheLogAndTheLine(string command)
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "truncated_audit.csv");
+        await File.WriteAllLinesAsync(log, [Header, OracleRow, PublicRow.Replace(",git fetch,", ",\"git fetch,", StringComparison.Ordinal)]);
+        var output = command == "rules" ? Path.Combine(_directory, "truncated.out") : Path.Combine(_directory, "truncated_audit_enriched.csv");
+        string[] commandArguments = command == "rules"
+            ? ["export", "rules", "-i", log, "-o", output]
+            : ["resolve", "-i", log];
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main([.. commandArguments, "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain("truncated_audit.csv").And.Contain("line 3").And.NotContain(" at ");
+        File.Exists(output).Should().BeFalse();
+    }
+
     [Fact]
     public async Task Main_WhenFlowFilterKeyOfTheConfigurationIsUnreadable_ReturnsExitCodeOneNamingTheKey()
     {

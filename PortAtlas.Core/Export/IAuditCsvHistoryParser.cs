@@ -15,6 +15,7 @@ public interface IAuditCsvHistoryParser
     /// <param name="delimiter">Field delimiter character (default: ',').</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Read-only list of parsed network audit entries.</returns>
+    /// <exception cref="AuditLogFormatException">Thrown when a quoted field is not closed before the end of the log; the message names the log and the line.</exception>
     Task<IReadOnlyList<NetworkAuditEntry>> ParseHistoryAsync(
         string csvFilePath,
         int? maxRows = null,
@@ -33,6 +34,7 @@ public interface IAuditCsvHistoryParser
     /// Thrown when the header has no column for a part of the flow key or for the first-seen date,
     /// or when a read line has an unreadable first-seen date; the message names the columns or the line.
     /// </exception>
+    /// <exception cref="AuditLogFormatException">Thrown when a quoted field is not closed before the end of the log; the message names the log and the line.</exception>
     Task<IReadOnlyList<NetworkAuditEntry>> ParseLogForResumeAsync(
         string csvFilePath,
         int? maxRows = null,

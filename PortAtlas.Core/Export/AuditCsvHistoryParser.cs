@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text;
+using FileForge.IO;
 using PortAtlas.Core.Models;
 using ProcessForge.Models;
 using SocketForge.Models;
@@ -66,7 +67,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// <param name="delimiter">Field separator of the file.</param>
     /// <returns>True when the line names one of <see cref="HeaderMarkerColumns"/>.</returns>
     internal static bool IsHeaderLine(string line, char delimiter)
-        => HeaderMarkerColumns.Any(BuildColumnIndexMap(SplitCsvLine(line, delimiter)).ContainsKey);
+        => HeaderMarkerColumns.Any(BuildColumnIndexMap(AuditCsvRecordReader.SplitHeader(line, delimiter)).ContainsKey);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkAuditEntry>> ParseHistoryAsync(
@@ -78,7 +79,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         var table = await ReadTableAsync(csvFilePath, maxRows, delimiter, cancellationToken).ConfigureAwait(false);
 
         var results = new List<NetworkAuditEntry>();
-        foreach (var row in table.EnumerateRows())
+        foreach (var row in table.Rows)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (ConvertFieldsToAuditEntry(row.Fields, table.ColumnMap) is { } entry)
@@ -108,7 +109,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         }
 
         var results = new List<NetworkAuditEntry>();
-        foreach (var row in table.EnumerateRows())
+        foreach (var row in table.Rows)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -142,13 +143,13 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
             return CsvTable.Empty;
         }
 
-        var lines = await ReadAllLinesAsync(csvFilePath, cancellationToken).ConfigureAwait(false);
-        if (lines.Count == 0 || string.IsNullOrWhiteSpace(lines[0]))
+        var records = await ReadAllRecordsAsync(csvFilePath, delimiter, cancellationToken).ConfigureAwait(false);
+        if (records.Count == 0)
         {
             return CsvTable.Empty;
         }
 
-        var columnMap = BuildColumnIndexMap(SplitCsvLine(lines[0], delimiter));
+        var columnMap = BuildColumnIndexMap(records[0].Fields);
         var isHeaderPresent = HeaderMarkerColumns.Any(columnMap.ContainsKey);
         if (!isHeaderPresent)
         {
@@ -156,29 +157,29 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         }
 
         var dataStartIndex = isHeaderPresent ? 1 : 0;
-        var dataLineCount = lines.Count - dataStartIndex;
-        var firstRowIndex = maxRows > 0 && maxRows.Value < dataLineCount
-            ? lines.Count - maxRows.Value
+        var dataRecordCount = records.Count - dataStartIndex;
+        var firstRowIndex = maxRows > 0 && maxRows.Value < dataRecordCount
+            ? records.Count - maxRows.Value
             : dataStartIndex;
 
-        return new CsvTable(lines, columnMap, firstRowIndex, delimiter);
+        return new CsvTable(records.Skip(firstRowIndex).ToList(), columnMap);
     }
 
     private static bool TryParseTimestamp(string value, out DateTimeOffset timestamp)
         => DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp);
 
-    private static async Task<List<string>> ReadAllLinesAsync(string path, CancellationToken cancellationToken)
+    private static async Task<List<DelimitedRecord>> ReadAllRecordsAsync(string path, char delimiter, CancellationToken cancellationToken)
     {
-        var lines = new List<string>();
+        var records = new List<DelimitedRecord>();
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 4096, useAsync: true);
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
-        while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+        await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, path, delimiter, cancellationToken).ConfigureAwait(false))
         {
-            lines.Add(line);
+            records.Add(record);
         }
 
-        return lines;
+        return records;
     }
 
     private static Dictionary<string, int> BuildColumnIndexMap(IReadOnlyList<string> headers)
@@ -301,69 +302,8 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         return string.Empty;
     }
 
-    private static List<string> SplitCsvLine(string line, char delimiter)
+    private sealed record CsvTable(IReadOnlyList<DelimitedRecord> Rows, Dictionary<string, int> ColumnMap)
     {
-        var result = new List<string>();
-        var current = new StringBuilder();
-        var inQuotes = false;
-
-        for (var i = 0; i < line.Length; i++)
-        {
-            var ch = line[i];
-
-            if (inQuotes)
-            {
-                if (ch == '"')
-                {
-                    if (i + 1 < line.Length && line[i + 1] == '"')
-                    {
-                        current.Append('"');
-                        i++;
-                    }
-                    else
-                    {
-                        inQuotes = false;
-                    }
-                }
-                else
-                {
-                    current.Append(ch);
-                }
-            }
-            else if (ch == '"')
-            {
-                inQuotes = true;
-            }
-            else if (ch == delimiter)
-            {
-                result.Add(current.ToString());
-                current.Clear();
-            }
-            else
-            {
-                current.Append(ch);
-            }
-        }
-
-        result.Add(current.ToString());
-        return result;
+        public static CsvTable Empty { get; } = new([], StandardPositionalColumnMap);
     }
-
-    private sealed record CsvTable(IReadOnlyList<string> Lines, Dictionary<string, int> ColumnMap, int FirstRowIndex, char Delimiter)
-    {
-        public static CsvTable Empty { get; } = new([], StandardPositionalColumnMap, 0, ',');
-
-        public IEnumerable<CsvRow> EnumerateRows()
-        {
-            for (var i = FirstRowIndex; i < Lines.Count; i++)
-            {
-                if (!string.IsNullOrWhiteSpace(Lines[i]))
-                {
-                    yield return new CsvRow(i + 1, SplitCsvLine(Lines[i], Delimiter));
-                }
-            }
-        }
-    }
-
-    private readonly record struct CsvRow(int LineNumber, List<string> Fields);
 }
