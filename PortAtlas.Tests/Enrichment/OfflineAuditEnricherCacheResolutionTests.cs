@@ -205,6 +205,40 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         report.Resolution!.KeptAfterFailure.Should().Be(1);
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoServerAnswersForAnUnknownAddress_LeavesItOutOfTheCache()
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.30");
+        var resolver = new ScriptedIpResolver { ["192.168.1.30"] = null };
+        var options = Options();
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([auditPath], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("192.168.1.30");
+        SavedCache(options).Should().NotContainKey("192.168.1.30", "an unanswered lookup is not a negative result");
+        report.Resolution!.StillUnresolved.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoServerAnswersForANamedAddress_KeepsItsEntry()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver { ["192.168.1.10"] = null };
+        var options = Options(forceResolve: true);
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([], [Cache(("192.168.1.10", "nas.home.arpa"))], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("192.168.1.10");
+        SavedCache(options)["192.168.1.10"].HostName.Should().Be("nas.home.arpa");
+        report.Resolution!.KeptAfterFailure.Should().Be(1);
+    }
+
     private async Task<string> WriteAuditAsync(string remoteIp)
     {
         var path = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");
@@ -232,17 +266,18 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
 
     private sealed class ScriptedIpResolver : IOfflineIpResolver
     {
-        private readonly Dictionary<string, DnsCacheEntry> _answers = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, DnsCacheEntry?> _answers = new(StringComparer.OrdinalIgnoreCase);
         private readonly List<string> _resolvedAddresses = [];
 
         public IReadOnlyList<string> ResolvedAddresses => _resolvedAddresses;
 
-        public DnsCacheEntry this[string ip]
+        // A null answer stands for a lookup that no DNS or RDAP server answered.
+        public DnsCacheEntry? this[string ip]
         {
             set => _answers[ip] = value;
         }
 
-        public Task<DnsCacheEntry> ResolveSingleAsync(IPAddress address, CancellationToken cancellationToken = default)
+        public Task<DnsCacheEntry?> ResolveSingleAsync(IPAddress address, CancellationToken cancellationToken = default)
         {
             var ip = address.ToString();
             _resolvedAddresses.Add(ip);

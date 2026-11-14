@@ -97,7 +97,11 @@ public sealed class OfflineAuditEnricher(
                     var resolvedEntry = await _offlineResolver.ResolveSingleAsync(address, cancellationToken).ConfigureAwait(false);
                     var previousEntry = activeCache.GetValueOrDefault(ipStr);
                     var keptEntry = KeepResolvedName(previousEntry, resolvedEntry);
-                    activeCache[ipStr] = keptEntry;
+                    if (keptEntry is not null)
+                    {
+                        activeCache[ipStr] = keptEntry;
+                    }
+
                     outcomes.Record(previousEntry, resolvedEntry, keptEntry);
                     onlineCount++;
                 }
@@ -335,9 +339,15 @@ public sealed class OfflineAuditEnricher(
 
     // A machine that cannot reach the DNS servers answers with an empty entry, or with the registry owner only: neither
     // may replace a name that another machine resolved earlier (a reverse DNS name outranks the registry owner, as in
-    // DnsCacheConsolidator).
-    private static DnsCacheEntry KeepResolvedName(DnsCacheEntry? existing, DnsCacheEntry resolved)
+    // DnsCacheConsolidator). A lookup that no server answered (null) changes nothing, so an unknown address stays out of
+    // the cache instead of being written as a negative result.
+    private static DnsCacheEntry? KeepResolvedName(DnsCacheEntry? existing, DnsCacheEntry? resolved)
     {
+        if (resolved is null)
+        {
+            return existing;
+        }
+
         if (existing is null || string.IsNullOrWhiteSpace(existing.HostName))
         {
             return resolved;
@@ -621,7 +631,7 @@ public sealed class OfflineAuditEnricher(
         private int _keptAfterFailure;
         private int _stillUnresolved;
 
-        public void Record(DnsCacheEntry? previous, DnsCacheEntry resolved, DnsCacheEntry kept)
+        public void Record(DnsCacheEntry? previous, DnsCacheEntry? resolved, DnsCacheEntry? kept)
         {
             var hadName = previous is not null && !string.IsNullOrWhiteSpace(previous.HostName);
             if (hadName && ReferenceEquals(kept, previous))
@@ -630,7 +640,7 @@ public sealed class OfflineAuditEnricher(
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(resolved.HostName))
+            if (string.IsNullOrWhiteSpace(resolved?.HostName))
             {
                 _stillUnresolved++;
                 return;
