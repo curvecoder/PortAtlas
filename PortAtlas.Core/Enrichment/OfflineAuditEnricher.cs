@@ -248,8 +248,7 @@ public sealed class OfflineAuditEnricher(
         CancellationToken cancellationToken)
     {
         var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var isNdjson = filePath.EndsWith(".ndjson", StringComparison.OrdinalIgnoreCase) ||
-                       filePath.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase);
+        var isNdjson = AuditLogRecognizer.IsNdjsonPath(filePath);
 
         if (isNdjson)
         {
@@ -395,8 +394,7 @@ public sealed class OfflineAuditEnricher(
         CancellationToken cancellationToken)
     {
         var outputPath = options.InPlace ? inputPath : ComputeEnrichedOutputPath(inputPath);
-        var isNdjson = inputPath.EndsWith(".ndjson", StringComparison.OrdinalIgnoreCase) ||
-                       inputPath.EndsWith(".jsonl", StringComparison.OrdinalIgnoreCase);
+        var isNdjson = AuditLogRecognizer.IsNdjsonPath(inputPath);
         var tally = new EnrichmentTally();
 
         await AtomicFileWriter.WriteAsync(
