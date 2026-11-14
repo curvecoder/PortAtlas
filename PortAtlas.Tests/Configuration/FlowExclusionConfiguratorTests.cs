@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
 using PortAtlas.Cli.Configuration;
@@ -23,7 +24,11 @@ public sealed class FlowExclusionConfiguratorTests : IDisposable
     {
         try
         {
-            File.Delete(_tempConfigFile);
+            // A save refused while the file is held open leaves the complete new version beside it.
+            foreach (var path in new[] { _tempConfigFile, $"{_tempConfigFile}.pending", $"{_tempConfigFile}.tmp", $"{_tempConfigFile}.lock" })
+            {
+                File.Delete(path);
+            }
         }
         catch (IOException)
         {
@@ -354,6 +359,57 @@ public sealed class FlowExclusionConfiguratorTests : IDisposable
 
         // Assert
         message.Should().StartWith("Excluded local port 8088").And.Contain("not saved").And.Contain(Path.GetFileName(_tempConfigFile));
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenAReaderIsHalfwayThroughTheFile_LetsItFinishTheVersionItStarted()
+    {
+        // Arrange
+        var original = Encoding.UTF8.GetBytes("""{ "ScanIntervalSeconds": 9, "ExcludedLocalPorts": [ 22 ] }""");
+        File.WriteAllBytes(_tempConfigFile, original);
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+        using var reader = new FileStream(_tempConfigFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 1);
+        var firstHalf = new byte[original.Length / 2];
+        reader.ReadExactly(firstHalf);
+
+        // Act
+        var message = configurator.ExcludeLocalPort(8088);
+        using var rest = new MemoryStream();
+        reader.CopyTo(rest);
+
+        // Assert
+        firstHalf.Concat(rest.ToArray()).Should().Equal(original);
+        message.Should().Contain("not saved");
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenOnlyTheCompleteNewVersionOfTheFileRemains_KeepsItsSettings()
+    {
+        // Arrange
+        File.WriteAllText($"{_tempConfigFile}.pending", """{ "ScanIntervalSeconds": 9 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 9 });
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        ReadConfigurationFile().TryGetProperty("ScanIntervalSeconds", out var interval).Should().BeTrue("the settings held by the complete new version must not be lost");
+        interval.GetInt32().Should().Be(9);
+    }
+
+    [Fact]
+    public void ExcludeLocalPort_WhenTheFileWasEditedAfterASaveWasRefused_KeepsTheEdit()
+    {
+        // Arrange
+        File.WriteAllText($"{_tempConfigFile}.pending", """{ "ScanIntervalSeconds": 9 }""");
+        File.WriteAllText(_tempConfigFile, """{ "ScanIntervalSeconds": 30 }""");
+        var configurator = CreateConfigurator(new AppConfiguration { ScanIntervalSeconds = 30 });
+
+        // Act
+        configurator.ExcludeLocalPort(8088);
+
+        // Assert
+        ReadConfigurationFile().GetProperty("ScanIntervalSeconds").GetInt32().Should().Be(30);
     }
 
     [Fact]

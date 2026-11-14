@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using FileForge.IO;
 
 namespace PortAtlas.Cli.Configuration;
 
@@ -45,11 +46,20 @@ internal sealed class ConfigurationFileExclusionWriter(string filePath)
         AddMissingValues(document, nameof(AppConfiguration.ExcludedRemoteIps), builtIn.ExcludedRemoteIps, exclusions.RemoteIps, StringComparer.OrdinalIgnoreCase, ip => JsonValue.Create(ip));
         AddMissingValues(document, nameof(AppConfiguration.ExcludedExactNames), builtIn.ExcludedExactNames, exclusions.ExactNames, StringComparer.OrdinalIgnoreCase, name => JsonValue.Create(name));
 
-        File.WriteAllText(_filePath, document.ToJsonString(WriteOptions));
+        AtomicFileWriter.WriteAllText(_filePath, document.ToJsonString(WriteOptions));
     }
 
     private JsonObject ReadDocument()
     {
+        if (!File.Exists(_filePath))
+        {
+            // A save interrupted between its renames can leave the file missing and its complete new version in
+            // <file>.pending; starting from an empty document would drop every other setting. When the file exists,
+            // a leftover .pending is older than the file (a refused save, perhaps followed by an edit by hand) and is
+            // simply overwritten by this save, which carries every exclusion of the run again.
+            AtomicFileWriter.RecoverInterruptedWrite(_filePath);
+        }
+
         if (!File.Exists(_filePath))
         {
             return new JsonObject();
