@@ -161,6 +161,32 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Load_WhenSomeEntriesAreBadlyTyped_SkipsThemAndKeepsTheOthers()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDir, "mixed_cache.json");
+        const string mixedJson = """
+        {
+          "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS", "ResolvedAtUtc": "2026-11-01T08:00:00+00:00" },
+          "192.168.1.11": { "HostName": "pihole.home.arpa", "Source": "DNS", "ResolvedAtUtc": "yesterday" },
+          "192.168.1.12": { "HostName": 42, "Source": "DNS" },
+          "192.168.1.13": { "HostName": null, "Source": "DNS" },
+          "192.168.1.14": { "HostName": "pve.home.arpa", "Source": null },
+          "192.168.1.15": { "HostName": "printer.home.arpa", "Source": "DNS", "ResolvedAtUtc": "2026-11-01T08:00:00+00:00" }
+        }
+        """;
+        await File.WriteAllTextAsync(filePath, mixedJson);
+        var store = new PersistentDnsCacheStore(filePath);
+
+        // Act
+        var loaded = store.Load();
+
+        // Assert
+        loaded.Keys.Should().BeEquivalentTo("192.168.1.10", "192.168.1.15");
+        loaded["192.168.1.10"].HostName.Should().Be("nas.home.arpa");
+    }
+
+    [Fact]
     public async Task Load_WhenJsonIsCorrupted_ReturnsEmptyDictionaryWithoutThrowing()
     {
         // Arrange

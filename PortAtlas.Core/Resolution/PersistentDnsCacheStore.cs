@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using FileForge.IO;
 
@@ -53,14 +54,10 @@ public sealed class PersistentDnsCacheStore(string filePath)
                             ResolvedAtUtc = DateTimeOffset.UtcNow
                         };
                     }
-                    else if (prop.Value.ValueKind == JsonValueKind.Object)
+                    else if (prop.Value.ValueKind == JsonValueKind.Object &&
+                             TryReadStructuredEntry(prop.Value, out var entry))
                     {
-                        // Modern structured format with full metadata
-                        var entry = prop.Value.Deserialize<DnsCacheEntry>(JsonOptions);
-                        if (entry is not null)
-                        {
-                            result[ipKey] = entry;
-                        }
+                        result[ipKey] = entry;
                     }
                 }
 
@@ -72,6 +69,30 @@ public sealed class PersistentDnsCacheStore(string filePath)
                 return new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
             }
         }
+    }
+
+    // An entry edited by hand or written by another version can hold a value of the wrong type: only that entry is
+    // dropped, and its address is resolved again, instead of losing the whole cache. A JSON null is accepted by the
+    // deserializer for the non-nullable HostName and Source, so it is rejected here.
+    private static bool TryReadStructuredEntry(JsonElement element, [NotNullWhen(true)] out DnsCacheEntry? entry)
+    {
+        try
+        {
+            var read = element.Deserialize<DnsCacheEntry>(JsonOptions);
+            if (read is { HostName: not null, Source: not null })
+            {
+                entry = read;
+                return true;
+            }
+        }
+        catch (JsonException)
+        {
+            // A mistyped value invalidates only this entry: Load leaves it out and the address is resolved again at
+            // the next lookup.
+        }
+
+        entry = null;
+        return false;
     }
 
     /// <summary>
