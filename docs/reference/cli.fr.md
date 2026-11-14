@@ -216,6 +216,8 @@ Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Quand deux caches donnent 
 
 Les journaux d'audit sont facultatifs. Quand `--cache` est donné sans `-i`, les journaux d'audit sont laissés intacts et seuls les caches sont résolus : les adresses du cache fusionné sont celles à résoudre. Sans `--force-resolve`, seules les entrées sans nom sont résolues ; avec, toutes le sont. Quand des journaux d'audit sont donnés, les adresses à résoudre sont celles des journaux. Le cache désigné par `--output-cache` est toujours fusionné avant d'être écrit, même si `--cache` ne le liste pas : lancer `resolve` depuis plusieurs machines complète donc le cache au lieu de le remplacer.
 
+`Ctrl+C`, et `SIGTERM` sous Linux et macOS, arrêtent les résolutions : les adresses résolues avant l'arrêt sont enregistrées dans le cache nommé par `--output-cache`, les journaux pas encore traités restent tels quels et la commande se termine avec le code de sortie `130`. Une nouvelle exécution reprend à partir de ce cache.
+
 ## lookup
 
 Affiche un diagnostic en six étapes de la résolution d'une adresse : classification, cache local, réglages DNS du système, requête DNS inverse, requête RDAP, entrée de cache résultante.
@@ -261,3 +263,4 @@ PortAtlas config init [<path>]
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
 | `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
+| `130` | `resolve` arrêtée par `Ctrl+C` ou `SIGTERM`, après enregistrement des adresses déjà résolues |

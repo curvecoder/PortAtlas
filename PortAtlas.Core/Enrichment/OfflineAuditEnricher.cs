@@ -79,41 +79,18 @@ public sealed class OfflineAuditEnricher(
         // 3. Online resolution of missing IPs if not isolated
         var onlineCount = 0;
         var outcomes = new ResolutionOutcomeCounter();
-        if (!options.Isolated && distinctUnresolvedIps.Count > 0)
+        try
         {
-            _logger?.Invoke($"Resolving {distinctUnresolvedIps.Count} unknown IP address(es) online...");
-
-            foreach (var ipStr in distinctUnresolvedIps)
+            if (!options.Isolated && distinctUnresolvedIps.Count > 0)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                if (!options.ForceResolve && HasHostName(activeCache, ipStr))
-                {
-                    continue;
-                }
-
-                if (IPAddress.TryParse(ipStr, out var address))
-                {
-                    var resolvedEntry = await _offlineResolver.ResolveSingleAsync(address, cancellationToken).ConfigureAwait(false);
-                    var previousEntry = activeCache.GetValueOrDefault(ipStr);
-                    var keptEntry = KeepResolvedName(previousEntry, resolvedEntry);
-                    if (keptEntry is not null)
-                    {
-                        activeCache[ipStr] = keptEntry;
-                    }
-
-                    outcomes.Record(previousEntry, resolvedEntry, keptEntry);
-                    onlineCount++;
-                }
+                onlineCount = await ResolveUnknownAddressesAsync(distinctUnresolvedIps, activeCache, options.ForceResolve, outcomes, cancellationToken).ConfigureAwait(false);
             }
         }
-
-        // Persist consolidated master cache if an output cache path is specified
-        if (!string.IsNullOrWhiteSpace(options.OutputCachePath))
+        finally
         {
-            var store = new PersistentDnsCacheStore(options.OutputCachePath);
-            await store.SaveAsync(activeCache, cancellationToken).ConfigureAwait(false);
-            _logger?.Invoke($"Consolidated cache successfully saved to: {options.OutputCachePath}");
+            // A run stopped during the lookups (Ctrl+C, or a lookup that fails unexpectedly) keeps the addresses
+            // resolved so far: the cache is saved before the exception goes on, and the next run resumes from it.
+            await SaveOutputCacheAsync(activeCache, options.OutputCachePath).ConfigureAwait(false);
         }
 
         // 4. Enrich audit files
@@ -211,6 +188,53 @@ public sealed class OfflineAuditEnricher(
         }
 
         return await EnrichFilesAsync(auditFiles, loadedCaches, options, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<int> ResolveUnknownAddressesAsync(
+        IReadOnlyCollection<string> addresses,
+        Dictionary<string, DnsCacheEntry> activeCache,
+        bool forceResolve,
+        ResolutionOutcomeCounter outcomes,
+        CancellationToken cancellationToken)
+    {
+        _logger?.Invoke($"Resolving {addresses.Count} unknown IP address(es) online...");
+
+        var onlineCount = 0;
+        foreach (var ipStr in addresses)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if ((!forceResolve && HasHostName(activeCache, ipStr)) || !IPAddress.TryParse(ipStr, out var address))
+            {
+                continue;
+            }
+
+            var resolvedEntry = await _offlineResolver.ResolveSingleAsync(address, cancellationToken).ConfigureAwait(false);
+            var previousEntry = activeCache.GetValueOrDefault(ipStr);
+            var keptEntry = KeepResolvedName(previousEntry, resolvedEntry);
+            if (keptEntry is not null)
+            {
+                activeCache[ipStr] = keptEntry;
+            }
+
+            outcomes.Record(previousEntry, resolvedEntry, keptEntry);
+            onlineCount++;
+        }
+
+        return onlineCount;
+    }
+
+    private async Task SaveOutputCacheAsync(IReadOnlyDictionary<string, DnsCacheEntry> activeCache, string outputCachePath)
+    {
+        if (string.IsNullOrWhiteSpace(outputCachePath))
+        {
+            return;
+        }
+
+        // Not cancellable: this save also runs after a cancellation, whose token is already cancelled.
+        var store = new PersistentDnsCacheStore(outputCachePath);
+        await store.SaveAsync(activeCache, CancellationToken.None).ConfigureAwait(false);
+        _logger?.Invoke($"Consolidated cache successfully saved to: {outputCachePath}");
     }
 
     private static async Task<IReadOnlyList<string>> ExtractIpsRequiringResolutionAsync(

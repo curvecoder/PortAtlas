@@ -1,3 +1,4 @@
+using PortAtlas.Cli.Terminal;
 using PortAtlas.Core.Enrichment;
 using PortAtlas.Core.Resolution;
 
@@ -10,6 +11,9 @@ namespace PortAtlas.Cli.Enrichment;
 /// <param name="dnsResolutionTimeout">Reverse DNS timeout of the default enricher (<c>DnsResolutionTimeoutMs</c>); ignored when <paramref name="enricher"/> is given.</param>
 public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enricher = null, TimeSpan? dnsResolutionTimeout = null)
 {
+    // 128 + SIGINT, the exit code shells report for a command stopped by Ctrl+C.
+    private const int InterruptedExitCode = 130;
+
     private readonly OfflineAuditEnricher _enricher = enricher ?? new OfflineAuditEnricher(
         offlineResolver: new OfflineDnsResolver(
             organizationResolver: new RdapIpOrganizationResolver(),
@@ -24,7 +28,7 @@ public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enriche
     /// <param name="cacheFiles">DNS cache files to merge into the master cache.</param>
     /// <param name="options">Enrichment options, including the master cache path.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>Exit code (0 on success).</returns>
+    /// <returns>Exit code: 0 on success, 130 when stopped by Ctrl+C or SIGTERM (the master cache is saved first).</returns>
     /// <exception cref="ArgumentNullException">When an argument is null.</exception>
     public async Task<int> RunAsync(
         IReadOnlyList<string> auditFiles,
@@ -46,7 +50,23 @@ public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enriche
         Console.WriteLine($"Resolution scope: {(options.ForceResolve ? "Every address, names already known are kept when a lookup fails (--force-resolve)" : "Addresses without a name only")}");
         Console.WriteLine();
 
-        var report = await _enricher.EnrichPathsAsync(auditFiles, cacheFiles, options, cancellationToken).ConfigureAwait(false);
+        using var interruption = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var terminationSignals = new TerminationSignalListener(interruption);
+
+        OfflineAuditEnrichmentReport report;
+        try
+        {
+            report = await _enricher.EnrichPathsAsync(auditFiles, cacheFiles, options, interruption.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (interruption.IsCancellationRequested)
+        {
+            // Ctrl+C or SIGTERM (or a cancellation by the caller, handled the same way) is the documented way to stop a
+            // long resolve: the enricher has already saved the addresses resolved before the stop, so the stop is
+            // reported and ends the command with the usual exit code 130.
+            Console.WriteLine();
+            Console.WriteLine($"Interrupted: the addresses resolved before the stop are saved to {Path.GetFullPath(options.OutputCachePath)}; the audit logs not processed yet are left as they were. Run resolve again to finish.");
+            return InterruptedExitCode;
+        }
 
         if (report.CacheReport.Conflicts.Count > 0)
         {

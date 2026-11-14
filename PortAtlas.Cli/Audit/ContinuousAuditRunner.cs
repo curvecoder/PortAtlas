@@ -1,6 +1,7 @@
 using FileForge.IO;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Cli.Dashboard;
+using PortAtlas.Cli.Terminal;
 using PortAtlas.Core.Deduplication;
 using PortAtlas.Core.Engine;
 using PortAtlas.Core.Export;
@@ -247,36 +248,7 @@ public static class ContinuousAuditRunner
             };
         }
 
-        System.Runtime.InteropServices.PosixSignalRegistration? posixSigInt = null;
-        System.Runtime.InteropServices.PosixSignalRegistration? posixSigTerm = null;
-
-        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
-        {
-            posixSigInt = System.Runtime.InteropServices.PosixSignalRegistration.Create(
-                System.Runtime.InteropServices.PosixSignal.SIGINT,
-                ctx =>
-                {
-                    ctx.Cancel = true;
-                    _ = cts.CancelAsync();
-                });
-
-            posixSigTerm = System.Runtime.InteropServices.PosixSignalRegistration.Create(
-                System.Runtime.InteropServices.PosixSignal.SIGTERM,
-                ctx =>
-                {
-                    ctx.Cancel = true;
-                    _ = cts.CancelAsync();
-                });
-        }
-
-        using var sigIntScope = posixSigInt;
-        using var sigTermScope = posixSigTerm;
-
-        Console.CancelKeyPress += (_, e) =>
-        {
-            e.Cancel = true;
-            _ = cts.CancelAsync();
-        };
+        using var terminationSignals = new TerminationSignalListener(cts);
 
         var auditTask = engine.RunContinuousAuditAsync(cts.Token);
 

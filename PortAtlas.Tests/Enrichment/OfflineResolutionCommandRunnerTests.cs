@@ -1,6 +1,8 @@
+using System.Net;
 using AwesomeAssertions;
 using PortAtlas.Cli.Enrichment;
 using PortAtlas.Core.Enrichment;
+using PortAtlas.Core.Resolution;
 using Xunit;
 
 namespace PortAtlas.Tests.Enrichment;
@@ -59,5 +61,41 @@ public sealed class OfflineResolutionCommandRunnerTests : IDisposable
         File.Exists(enrichedFile).Should().BeTrue();
         var lines = await File.ReadAllLinesAsync(enrichedFile);
         lines[1].Should().Contain(",SRV-CONSOLIDATED-99,");
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenInterruptedDuringTheLookups_SavesTheCacheAndReturns130()
+    {
+        // Arrange
+        var cachePath = Path.Combine(_tempDirectory, "cache.json");
+        await File.WriteAllTextAsync(cachePath, """{ "192.168.1.10": "", "192.168.1.11": "" }""");
+        var outputCachePath = Path.Combine(_tempDirectory, "master_cache.json");
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = outputCachePath };
+        using var interruption = new CancellationTokenSource();
+        var runner = new OfflineResolutionCommandRunner(new OfflineAuditEnricher(offlineResolver: new InterruptedIpResolver(interruption)));
+
+        // Act
+        var act = () => runner.RunAsync([], [cachePath], options, interruption.Token);
+
+        // Assert
+        (await act.Should().NotThrowAsync()).Which.Should().Be(130);
+        new PersistentDnsCacheStore(outputCachePath).Load().Values.Should().ContainSingle(entry => entry.HostName == "nas.home.arpa");
+    }
+
+    // Answers the first lookup, then stops the run as a Ctrl+C would during the second one.
+    private sealed class InterruptedIpResolver(CancellationTokenSource interruption) : IOfflineIpResolver
+    {
+        private int _calls;
+
+        public async Task<DnsCacheEntry?> ResolveSingleAsync(IPAddress address, CancellationToken cancellationToken = default)
+        {
+            if (++_calls > 1)
+            {
+                await interruption.CancelAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return new DnsCacheEntry { HostName = "nas.home.arpa", Source = "DNS" };
+        }
     }
 }

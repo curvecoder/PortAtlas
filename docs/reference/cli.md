@@ -216,6 +216,8 @@ Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). When two caches give differen
 
 Audit logs are optional. When `--cache` is given without `-i`, the audit logs are left alone and the caches alone are resolved: the addresses of the merged cache are the ones to resolve. Without `--force-resolve` only the entries without a name are resolved; with it, every entry is. When audit logs are given, the addresses to resolve are those of the logs. The cache named by `--output-cache` is always merged before it is written, even when `--cache` does not list it, so that running `resolve` from several machines completes the cache instead of replacing it.
 
+`Ctrl+C`, and `SIGTERM` on Linux and macOS, stop the lookups: the addresses resolved before the stop are saved to the cache named by `--output-cache`, the audit logs not processed yet are left as they were, and the command ends with exit code `130`. Running it again resumes from that cache.
+
 ## lookup
 
 Prints a six-step diagnostic of the resolution of one address: classification, local cache, operating system DNS settings, reverse DNS query, RDAP query, resulting cache entry.
@@ -261,3 +263,4 @@ PortAtlas config init [<path>]
 | :--- | :--- |
 | `0` | Success, or help printed |
 | `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |
+| `130` | `resolve` stopped by `Ctrl+C` or `SIGTERM`, after saving the addresses already resolved |

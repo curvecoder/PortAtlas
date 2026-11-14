@@ -246,6 +246,23 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
     }
 
     [Fact]
+    public async Task EnrichFilesAsync_WhenCancelledDuringTheLookups_SavesTheAddressesResolvedSoFar()
+    {
+        // Arrange
+        using var interruption = new CancellationTokenSource();
+        var enricher = new OfflineAuditEnricher(offlineResolver: new InterruptedIpResolver(interruption));
+        var options = Options();
+        var cache = Cache(("192.168.1.10", ""), ("192.168.1.11", ""));
+
+        // Act
+        var act = () => enricher.EnrichFilesAsync([], [cache], options, interruption.Token);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        SavedCache(options).Values.Should().ContainSingle(entry => entry.HostName == "nas.home.arpa");
+    }
+
+    [Fact]
     public async Task EnrichFilesAsync_WhenNoServerAnswersForANamedAddress_KeepsItsEntry()
     {
         // Arrange
@@ -286,6 +303,23 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
             StringComparer.OrdinalIgnoreCase);
 
     private static DnsCacheEntry Resolved(string hostName) => new() { HostName = hostName, Source = "DNS" };
+
+    // Answers the first lookup, then stops the run as a Ctrl+C would during the second one.
+    private sealed class InterruptedIpResolver(CancellationTokenSource interruption) : IOfflineIpResolver
+    {
+        private int _calls;
+
+        public async Task<DnsCacheEntry?> ResolveSingleAsync(IPAddress address, CancellationToken cancellationToken = default)
+        {
+            if (++_calls > 1)
+            {
+                await interruption.CancelAsync();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            return Resolved("nas.home.arpa");
+        }
+    }
 
     private sealed class ScriptedIpResolver : IOfflineIpResolver
     {
