@@ -4,7 +4,7 @@
 
 ## CSV audit log
 
-Written by `audit` (`-o`, `OutputCsvPath`). Fields follow RFC 4180 quoting; the separator is `CsvDelimiter` (`,` by default). One record per deduplicated flow. `audit` writes each line break of a field (a command line, for instance) as a space, so the logs it writes have one line per flow; a log written by an earlier version may hold a quoted field with line breaks, so a record can span several lines: `audit`, `export` and `resolve` read it whole, `map` still reads the log line by line. A quote never closed before the end of the log stops `audit`, `export` and `resolve` with code 1 and a message naming the log and the line where the quote opens. A flow is identified by its protocol, its direction, its application (`TargetExecutable`, or `ExecutablePath` when there is no target) and:
+Written by `audit` (`-o`, `OutputCsvPath`). Fields follow RFC 4180 quoting; the separator is `CsvDelimiter` (`,` by default). One record per deduplicated flow. `audit` writes each line break of a field (a command line, for instance) as a space, so the logs it writes have one line per flow; a log written by an earlier version may hold a quoted field with line breaks, so a record can span several lines: `audit`, `export` and `resolve` read it whole, `map` still reads the log line by line. A quote never closed before the end of the log stops `audit`, `export` and `resolve` with code 1 and a message naming the log and the line where the quote opens. A flow is identified by its protocol, its direction, its application (`TargetExecutable`, or `ExecutablePath` when there is no target, or `ProcessName` when the path is empty too) and:
 
 | Direction | Also identified by | Ignored |
 | :--- | :--- | :--- |
@@ -47,7 +47,7 @@ Each rewrite writes `<log>.tmp`, renames it `<log>.pending` once complete, then 
 
 At startup, `audit` reads the whole existing CSV log, so that counts and first-seen dates continue across restarts. The log is then rewritten from what was read, so a log that cannot be read whole stops `audit` with an error naming the columns or the line, and exit code 1:
 
-- a log without one of the columns that identify a flow (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) or without `FirstSeenUtc`: its flows would match none of the observed ones;
+- a log without one of the columns that identify a flow (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ProcessName`, `ExecutablePath`, `TargetExecutable`) or without `FirstSeenUtc`: its flows would match none of the observed ones;
 - a line whose `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp` or `RemotePort` is empty or unreadable, or whose `LastSeenUtc`, `ObservationCount` or `LocalIp` is unreadable: the rewrite would replace the value with a default.
 
 Correct or remove the line, or write to a new log with `--output`.

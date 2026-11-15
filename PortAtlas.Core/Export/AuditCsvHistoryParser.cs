@@ -48,7 +48,8 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// <remarks>
     /// A resumed flow missing one of these columns would take default values (TCP, outbound, port 0, current time)
     /// and match no observed flow. The local address is left out: it only enters the key of a flow of unknown
-    /// direction, which no socket scanner reports.
+    /// direction, which no socket scanner reports. The process name identifies the owner of a flow whose executable
+    /// path is empty (SocketForge 2.0).
     /// </remarks>
     public static IReadOnlyList<string> ResumeRequiredColumns { get; } =
     [
@@ -58,6 +59,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         nameof(AuditCsvColumn.LocalPort),
         nameof(AuditCsvColumn.RemoteIp),
         nameof(AuditCsvColumn.RemotePort),
+        nameof(AuditCsvColumn.ProcessName),
         nameof(AuditCsvColumn.ExecutablePath),
         nameof(AuditCsvColumn.TargetExecutable)
     ];

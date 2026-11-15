@@ -136,7 +136,7 @@ Le tableau de bord n'est pas affiché quand l'entrée ou la sortie du processus 
 
 Un scan qui échoue (table des sockets illisible, fichier retenu un instant) n'arrête pas l'audit : le tableau de bord affiche `Scan failed (n of 10 in a row): …` dans le titre de la table des flux, ou la ligne est écrite avec son heure sans tableau de bord, et le scan suivant a lieu à l'intervalle habituel. Après 10 scans en échec à la suite, l'audit s'arrête avec `The audit stopped after 10 failed scans in a row: …` et le code de sortie 1, après écriture des journaux.
 
-Un nom de colonne invalide dans `--columns` ou `CsvColumns`, ou une liste sans `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath` et `TargetExecutable` (le journal est relu au démarrage suivant, voir les [formats de sortie](output-formats.fr.md#journal-daudit-csv)), arrête la commande avec `Column configuration error: …` et le code de sortie 1.
+Un nom de colonne invalide dans `--columns` ou `CsvColumns`, ou une liste sans `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ProcessName`, `ExecutablePath` et `TargetExecutable` (le journal est relu au démarrage suivant, voir les [formats de sortie](output-formats.fr.md#journal-daudit-csv)), arrête la commande avec `Column configuration error: …` et le code de sortie 1.
 
 ## map
 

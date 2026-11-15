@@ -136,7 +136,7 @@ The dashboard is not shown when the input or the output of the process is redire
 
 A scan that fails (socket table that cannot be read, file held for a moment) does not stop the audit: the dashboard shows `Scan failed (n of 10 in a row): …` in the title of the flow table, or the line is printed with its time without the dashboard, and the next scan runs at the usual interval. After 10 failed scans in a row the audit stops with `The audit stopped after 10 failed scans in a row: …` and exit code 1, after writing the logs.
 
-An invalid column name in `--columns` or `CsvColumns`, or a list without `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath` and `TargetExecutable` (the log is read back at the next start, see [output formats](output-formats.md#csv-audit-log)), stops the command with `Column configuration error: …` and exit code 1.
+An invalid column name in `--columns` or `CsvColumns`, or a list without `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ProcessName`, `ExecutablePath` and `TargetExecutable` (the log is read back at the next start, see [output formats](output-formats.md#csv-audit-log)), stops the command with `Column configuration error: …` and exit code 1.
 
 ## map
 

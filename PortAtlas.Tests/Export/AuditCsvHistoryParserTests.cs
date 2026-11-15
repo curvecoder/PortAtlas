@@ -223,8 +223,8 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         var parser = new AuditCsvHistoryParser();
         var csvPath = Path.Combine(_tempDirectory, "no_first_seen.csv");
         var csvContent = """
-            LastSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
-            2026-11-01T08:05:00.0000000Z,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,
+            LastSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable
+            2026-11-01T08:05:00.0000000Z,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,proxmox-backup-client,/usr/bin/proxmox-backup-client,
             """;
         await File.WriteAllTextAsync(csvPath, csvContent);
 
@@ -236,15 +236,66 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
     }
 
     [Fact]
+    public async Task ParseLogForResumeAsync_WhenTheProcessNameColumnIsMissing_ThrowsNamingIt()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "no_process_name.csv");
+        var csvContent = """
+            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.2,53,,
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var act = () => parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*no ProcessName column*");
+    }
+
+    [Fact]
+    public async Task ParseLogForResumeAsync_WhenAFlowWithoutExecutablePathIsReadBack_MatchesTheScannedFlowOfTheSameProcess()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "unpathed_flow.csv");
+        var csvContent = """
+            FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,2026-11-01T08:05:00.0000000Z,3,nas,Tcp,Outbound,51000,192.168.1.2,53,lsass,,
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+        var scannedSocket = new ActiveSocketConnection(
+            SocketTransportProtocol.Tcp,
+            SocketFlowDirection.Outbound,
+            new SocketEndpoint(IPAddress.Parse("192.168.1.10"), 51234),
+            new SocketEndpoint(IPAddress.Parse("192.168.1.2"), 53),
+            "Established",
+            new ProcessMetadata(812, "lsass", string.Empty, string.Empty, string.Empty, string.Empty));
+        var otherProcessSocket = scannedSocket with
+        {
+            Process = new ProcessMetadata(940, "svchost", string.Empty, string.Empty, string.Empty, string.Empty)
+        };
+
+        // Act
+        var entries = await parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        var readBackKey = entries.Should().ContainSingle().Which.ComputeAuditKey();
+        readBackKey.Should().Be(scannedSocket.ComputeLogicalKey());
+        readBackKey.Should().NotBe(otherProcessSocket.ComputeLogicalKey());
+    }
+
+    [Fact]
     public async Task ParseLogForResumeAsync_WhenAFirstSeenDateIsUnreadable_ThrowsNamingTheLine()
     {
         // Arrange
         var parser = new AuditCsvHistoryParser();
         var csvPath = Path.Combine(_tempDirectory, "unreadable_date.csv");
         var csvContent = """
-            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
-            2026-11-01T08:00:00.0000000Z,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,
-            yesterday,proxmox,Udp,Outbound,51001,192.168.1.2,53,/usr/bin/pveproxy,
+            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,proxmox-backup-client,/usr/bin/proxmox-backup-client,
+            yesterday,proxmox,Udp,Outbound,51001,192.168.1.2,53,pveproxy,/usr/bin/pveproxy,
             """;
         await File.WriteAllTextAsync(csvPath, csvContent);
 
@@ -270,8 +321,8 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
     public async Task ParseLogForResumeAsync_WhenAValueIsUnreadable_ThrowsNamingTheLineAndTheColumn(string column, string value)
     {
         // Arrange
-        string[] columns = ["FirstSeenUtc", "LastSeenUtc", "ObservationCount", "ServerName", "Protocol", "Direction", "LocalIp", "LocalPort", "RemoteIp", "RemotePort", "ExecutablePath", "TargetExecutable"];
-        string[] readable = ["2026-11-01T08:00:00.0000000Z", "2026-11-02T08:00:00.0000000Z", "3", "proxmox", "Tcp", "Outbound", "192.168.1.20", "51000", "192.168.1.30", "8007", "/usr/bin/proxmox-backup-client", ""];
+        string[] columns = ["FirstSeenUtc", "LastSeenUtc", "ObservationCount", "ServerName", "Protocol", "Direction", "LocalIp", "LocalPort", "RemoteIp", "RemotePort", "ProcessName", "ExecutablePath", "TargetExecutable"];
+        string[] readable = ["2026-11-01T08:00:00.0000000Z", "2026-11-02T08:00:00.0000000Z", "3", "proxmox", "Tcp", "Outbound", "192.168.1.20", "51000", "192.168.1.30", "8007", "proxmox-backup-client", "/usr/bin/proxmox-backup-client", ""];
         var unreadable = (string[])readable.Clone();
         unreadable[Array.IndexOf(columns, column)] = value;
         var csvPath = Path.Combine(_tempDirectory, "unreadable_value.csv");
@@ -291,8 +342,8 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         var csvPath = Path.Combine(_tempDirectory, "blank_optional_values.csv");
         await File.WriteAllLinesAsync(csvPath,
         [
-            "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalIp,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable",
-            "2026-11-01T08:00:00.0000000Z,,,proxmox,Tcp,Outbound,,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,"
+            "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalIp,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable",
+            "2026-11-01T08:00:00.0000000Z,,,proxmox,Tcp,Outbound,,51000,192.168.1.30,8007,proxmox-backup-client,/usr/bin/proxmox-backup-client,"
         ]);
 
         // Act
@@ -309,8 +360,8 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         var parser = new AuditCsvHistoryParser();
         var csvPath = Path.Combine(_tempDirectory, "key_columns.csv");
         var csvContent = """
-            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable
-            2026-11-01T08:00:00.0000000Z,proxmox,Udp,Outbound,51001,192.168.1.2,53,/usr/bin/pveproxy,
+            FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable
+            2026-11-01T08:00:00.0000000Z,proxmox,Udp,Outbound,51001,192.168.1.2,53,pveproxy,/usr/bin/pveproxy,
             """;
         await File.WriteAllTextAsync(csvPath, csvContent);
 
@@ -382,9 +433,9 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         var parser = new AuditCsvHistoryParser();
         var csvPath = Path.Combine(_tempDirectory, "multiline_then_bad_date.csv");
         var csvContent =
-            "FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable,CommandLine\r\n" +
-            "2026-11-01T08:00:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/java,,\"java -jar backup.jar\r\n--target pbs.home.arpa\"\r\n" +
-            "yesterday,nas,Udp,Outbound,51001,192.168.1.2,53,/usr/sbin/dnsmasq,,dnsmasq\r\n";
+            "FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable,CommandLine\r\n" +
+            "2026-11-01T08:00:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.30,8007,java,/usr/bin/java,,\"java -jar backup.jar\r\n--target pbs.home.arpa\"\r\n" +
+            "yesterday,nas,Udp,Outbound,51001,192.168.1.2,53,dnsmasq,/usr/sbin/dnsmasq,,dnsmasq\r\n";
         await File.WriteAllTextAsync(csvPath, csvContent);
 
         // Act
@@ -401,9 +452,9 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         var parser = new AuditCsvHistoryParser();
         var csvPath = Path.Combine(_tempDirectory, "unclosed_quote.csv");
         var csvContent =
-            "FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable,CommandLine\r\n" +
-            "2026-11-01T08:00:00.0000000Z,nas,Udp,Outbound,51001,192.168.1.2,53,/usr/sbin/dnsmasq,,dnsmasq\r\n" +
-            "2026-11-01T08:01:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/java,,\"java -jar backup.jar\r\n";
+            "FirstSeenUtc,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable,CommandLine\r\n" +
+            "2026-11-01T08:00:00.0000000Z,nas,Udp,Outbound,51001,192.168.1.2,53,dnsmasq,/usr/sbin/dnsmasq,,dnsmasq\r\n" +
+            "2026-11-01T08:01:00.0000000Z,nas,Tcp,Outbound,51000,192.168.1.30,8007,java,/usr/bin/java,,\"java -jar backup.jar\r\n";
         await File.WriteAllTextAsync(csvPath, csvContent);
 
         // Act

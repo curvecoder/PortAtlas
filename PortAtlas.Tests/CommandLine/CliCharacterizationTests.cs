@@ -524,10 +524,10 @@ public sealed class CliCharacterizationTests : IDisposable
     }
 
     private const string ResumableHeader =
-        "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ExecutablePath,TargetExecutable";
+        "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable";
 
     private const string ResumableRow =
-        "2026-11-01T08:00:00.0000000Z,2026-11-02T08:00:00.0000000Z,3,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,/usr/bin/proxmox-backup-client,";
+        "2026-11-01T08:00:00.0000000Z,2026-11-02T08:00:00.0000000Z,3,proxmox,Tcp,Outbound,51000,192.168.1.30,8007,proxmox-backup-client,/usr/bin/proxmox-backup-client,";
 
     private async Task<(int ExitCode, string Output)> RunAuditAsync(string log, params string[] options)
     {

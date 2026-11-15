@@ -185,6 +185,54 @@ public sealed class NetworkFlowFilterTests
         filter.ShouldExclude(conn, new HashSet<IPAddress>()).Should().BeTrue();
     }
 
+    // SocketForge 2.0 reads the IPv6 socket tables on Windows: the IPv6 loopback must be treated like 127.0.0.1.
+    [Theory]
+    [InlineData(SocketFlowDirection.Listening, "::1", 8006, "::", 0, true)]
+    [InlineData(SocketFlowDirection.Outbound, "::1", 50100, "::1", 8006, true)]
+    [InlineData(SocketFlowDirection.Listening, "::", 8006, "::", 0, false)]
+    [InlineData(SocketFlowDirection.Inbound, "fd00:1::10", 8006, "fd00:1::20", 50100, false)]
+    public void ShouldExclude_WhenTheFlowUsesIpv6Addresses_ExcludesOnlyLoopbackFlows(
+        SocketFlowDirection direction,
+        string localAddress,
+        int localPort,
+        string remoteAddress,
+        int remotePort,
+        bool expected)
+    {
+        // Arrange
+        var filter = new NetworkFlowFilter(new NetworkFlowFilterOptions { ExcludeLoopbackFlows = true });
+        var conn = new ActiveSocketConnection(
+            SocketTransportProtocol.Tcp,
+            direction,
+            new SocketEndpoint(IPAddress.Parse(localAddress), localPort),
+            new SocketEndpoint(IPAddress.Parse(remoteAddress), remotePort),
+            direction == SocketFlowDirection.Listening ? "Listen" : "Established",
+            DefaultProc);
+
+        // Act
+        var excluded = filter.ShouldExclude(conn, new HashSet<IPAddress> { IPAddress.Parse("fd00:1::10") });
+
+        // Assert
+        excluded.Should().Be(expected);
+    }
+
+    [Fact]
+    public void ShouldExclude_WhenTheRemoteIpv6AddressIsInAnExcludedRange_ReturnsTrue()
+    {
+        // Arrange
+        var filter = new NetworkFlowFilter(new NetworkFlowFilterOptions { ExcludedRemoteIps = ["fd00:1::/64"] });
+        var conn = new ActiveSocketConnection(
+            SocketTransportProtocol.Tcp,
+            SocketFlowDirection.Outbound,
+            new SocketEndpoint(IPAddress.Parse("fd00:1::10"), 50100),
+            new SocketEndpoint(IPAddress.Parse("fd00:1::53"), 53),
+            "Established",
+            DefaultProc);
+
+        // Act & Assert
+        filter.ShouldExclude(conn, new HashSet<IPAddress>()).Should().BeTrue();
+    }
+
     [Fact]
     public void ShouldExclude_WhenNormalOutboundFlow_ReturnsFalse()
     {

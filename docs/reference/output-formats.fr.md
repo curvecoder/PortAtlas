@@ -4,7 +4,7 @@
 
 ## Journal d'audit CSV
 
-Écrit par `audit` (`-o`, `OutputCsvPath`). Les champs suivent les règles de guillemets de la RFC 4180 ; le séparateur est `CsvDelimiter` (`,` par défaut). Un enregistrement par flux dédupliqué. `audit` écrit chaque retour à la ligne d'un champ (une ligne de commande, par exemple) comme une espace : les journaux qu'il écrit ont une ligne par flux. Un journal écrit par une version précédente peut contenir un champ entre guillemets avec des retours à la ligne : un enregistrement peut alors s'étendre sur plusieurs lignes : `audit`, `export` et `resolve` le lisent entier, `map` lit encore le journal ligne à ligne. Un guillemet jamais refermé avant la fin du journal arrête `audit`, `export` et `resolve` avec le code 1 et un message qui nomme le journal et la ligne où le guillemet s'ouvre. Un flux est identifié par son protocole, son sens, son application (`TargetExecutable`, ou `ExecutablePath` en l'absence de cible) et :
+Écrit par `audit` (`-o`, `OutputCsvPath`). Les champs suivent les règles de guillemets de la RFC 4180 ; le séparateur est `CsvDelimiter` (`,` par défaut). Un enregistrement par flux dédupliqué. `audit` écrit chaque retour à la ligne d'un champ (une ligne de commande, par exemple) comme une espace : les journaux qu'il écrit ont une ligne par flux. Un journal écrit par une version précédente peut contenir un champ entre guillemets avec des retours à la ligne : un enregistrement peut alors s'étendre sur plusieurs lignes : `audit`, `export` et `resolve` le lisent entier, `map` lit encore le journal ligne à ligne. Un guillemet jamais refermé avant la fin du journal arrête `audit`, `export` et `resolve` avec le code 1 et un message qui nomme le journal et la ligne où le guillemet s'ouvre. Un flux est identifié par son protocole, son sens, son application (`TargetExecutable`, ou `ExecutablePath` en l'absence de cible, ou `ProcessName` quand le chemin est vide aussi) et :
 
 | Sens | Identifié aussi par | Ignoré |
 | :--- | :--- | :--- |
@@ -47,7 +47,7 @@ Chaque réécriture écrit `<journal>.tmp`, le renomme `<journal>.pending` une f
 
 Au démarrage, `audit` relit tout le journal CSV existant, pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre. Le journal est ensuite réécrit à partir de ce qui a été lu : un journal qui ne peut pas être lu en entier arrête `audit` avec une erreur qui nomme les colonnes ou la ligne, et le code de sortie 1 :
 
-- un journal sans l'une des colonnes qui identifient un flux (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath`, `TargetExecutable`) ou sans `FirstSeenUtc` : ses flux ne correspondraient à aucun flux observé ;
+- un journal sans l'une des colonnes qui identifient un flux (`Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ProcessName`, `ExecutablePath`, `TargetExecutable`) ou sans `FirstSeenUtc` : ses flux ne correspondraient à aucun flux observé ;
 - une ligne dont `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp` ou `RemotePort` est vide ou illisible, ou dont `LastSeenUtc`, `ObservationCount` ou `LocalIp` est illisible : la réécriture remplacerait la valeur par une valeur par défaut.
 
 Corriger ou supprimer la ligne, ou écrire dans un nouveau journal avec `--output`.
