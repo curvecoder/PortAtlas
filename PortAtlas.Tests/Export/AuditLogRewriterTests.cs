@@ -88,6 +88,25 @@ public sealed class AuditLogRewriterTests : IDisposable
             .Should().Equal(("192.168.1.10", 7L), ("192.168.1.20", 1L));
     }
 
+    [Fact]
+    public async Task RewriteAsync_WhenAnNdjsonLogIsConfigured_WritesItWithoutAByteOrderMarkAndKeepsTheOneOfTheCsvLog()
+    {
+        // Arrange
+        var csvPath = Path.Combine(_directory, "audit.csv");
+        var ndjsonPath = Path.Combine(_directory, "audit.ndjson");
+        var rewriter = new AuditLogRewriter(csvPath, new AuditCsvFormatter(new AuditCsvOptions()), ndjsonPath, new AuditNdjsonFormatter());
+
+        // Act
+        await rewriter.RewriteAsync([Flow("192.168.1.10", Monday, Monday, 1)]);
+
+        // Assert
+        var ndjsonBytes = await File.ReadAllBytesAsync(ndjsonPath);
+        ndjsonBytes.Should().NotBeEmpty();
+        ndjsonBytes[0].Should().Be((byte)'{');
+        var csvBytes = await File.ReadAllBytesAsync(csvPath);
+        csvBytes.Take(3).Should().Equal((byte)0xEF, (byte)0xBB, (byte)0xBF);
+    }
+
     private static NetworkAuditEntry Flow(string remoteIp, DateTimeOffset firstSeen, DateTimeOffset lastSeen, long observations, string commandLine = "rsync")
     {
         var socket = new ActiveSocketConnection(

@@ -21,6 +21,8 @@ public sealed class AuditLogRewriter(
     string? ndjsonPath = null,
     AuditNdjsonFormatter? ndjsonFormatter = null)
 {
+    private static readonly UTF8Encoding NdjsonEncoding = new(encoderShouldEmitUTF8Identifier: false);
+
     /// <summary>
     /// Replaces the logs with the given flows.
     /// </summary>
@@ -45,22 +47,23 @@ public sealed class AuditLogRewriter(
             .ThenBy(flow => flow.CsvLine, StringComparer.Ordinal)
             .ToList();
 
-        await WriteLinesAsync(csvPath, ordered.Select(flow => flow.CsvLine).Prepend(csvFormatter.BuildHeaderLine()), cancellationToken).ConfigureAwait(false);
+        // UTF-8 with a byte order mark for the CSV log, as earlier versions wrote it: spreadsheet programs need it to
+        // show accented names. None for the NDJSON log, which JSON Lines readers may refuse with one.
+        await WriteLinesAsync(csvPath, Encoding.UTF8, ordered.Select(flow => flow.CsvLine).Prepend(csvFormatter.BuildHeaderLine()), cancellationToken).ConfigureAwait(false);
 
         if (ndjsonPath is not null && ndjsonFormatter is not null)
         {
-            await WriteLinesAsync(ndjsonPath, ordered.Select(flow => ndjsonFormatter.FormatEntry(flow.Entry)), cancellationToken).ConfigureAwait(false);
+            await WriteLinesAsync(ndjsonPath, NdjsonEncoding, ordered.Select(flow => ndjsonFormatter.FormatEntry(flow.Entry)), cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private static Task WriteLinesAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken) =>
+    private static Task WriteLinesAsync(string path, Encoding encoding, IEnumerable<string> lines, CancellationToken cancellationToken) =>
         AtomicFileWriter.WriteAsync(
             path,
             async (stream, token) =>
             {
-                // UTF-8 with a byte order mark, as earlier versions wrote the logs: spreadsheet programs need it to
-                // show accented names. The stream stays open for AtomicFileWriter, which flushes it to disk.
-                var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true);
+                // The stream stays open for AtomicFileWriter, which flushes it to disk.
+                var writer = new StreamWriter(stream, encoding, leaveOpen: true);
                 await using (writer.ConfigureAwait(false))
                 {
                     foreach (var line in lines)
