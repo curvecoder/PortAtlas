@@ -68,6 +68,47 @@ public sealed class RunViewModelTests
     }
 
     [Fact]
+    public async Task StopAsync_WhenRunIsInProgress_ReturnsOnceTheRunIsCancelled()
+    {
+        // Arrange
+        var started = new TaskCompletionSource();
+        var runner = new StubRunner(async (_, _, ct) =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, ct);
+            return new RunResult(0);
+        });
+        var vm = new RunViewModel(runner, new ImmediateDispatcher(), () => ["audit"]);
+        var runTask = vm.RunCommand.ExecuteAsync(null);
+        await Task.WhenAny(started.Task, Task.Delay(500));
+
+        // Act
+        var stopTask = vm.StopAsync();
+        await Task.WhenAny(stopTask, Task.Delay(TimeSpan.FromSeconds(5)));
+
+        // Assert
+        stopTask.IsCompletedSuccessfully.Should().BeTrue();
+        runTask.IsCompleted.Should().BeTrue();
+        vm.State.Should().Be(RunState.Cancelled);
+    }
+
+    [Fact]
+    public async Task StopAsync_WhenLastRunHasCompleted_KeepsItsState()
+    {
+        // Arrange
+        var runner = new StubRunner((_, _, _) => Task.FromResult(new RunResult(0)));
+        var vm = new RunViewModel(runner, new ImmediateDispatcher(), () => ["map"]);
+        await vm.RunCommand.ExecuteAsync(null);
+
+        // Act
+        await vm.StopAsync();
+
+        // Assert
+        vm.State.Should().Be(RunState.Completed);
+        vm.ExitCode.Should().Be(0);
+    }
+
+    [Fact]
     public async Task Run_WhenExecutableIsMissing_ShowsTheLocatorMessage()
     {
         // Arrange

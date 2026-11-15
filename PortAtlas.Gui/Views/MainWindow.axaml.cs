@@ -14,6 +14,7 @@ namespace PortAtlas.Gui.Views;
 public sealed partial class MainWindow : Window
 {
     private MainViewModel? _viewModel;
+    private Task? _stopBeforeClose;
 
     /// <summary>
     /// Initializes the window.
@@ -22,6 +23,41 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+        Closing += OnClosing;
+    }
+
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        // Once the stop has finished, the Close() below must go through even if the run state was left at Running
+        // (a run that failed with an unexpected exception): checking IsRunning again would cancel the close forever.
+        if (_stopBeforeClose is { IsCompleted: true })
+        {
+            return;
+        }
+
+        // A second close request while the run is stopping waits for the pending one, which closes the window.
+        if (_stopBeforeClose is not null)
+        {
+            e.Cancel = true;
+            return;
+        }
+
+        if (_viewModel is null || !_viewModel.Run.IsRunning)
+        {
+            return;
+        }
+
+        // The CLI child process has no window of its own and would outlive the GUI: the window stays open until the run has stopped.
+        e.Cancel = true;
+        _stopBeforeClose = _viewModel.Run.StopAsync();
+        try
+        {
+            await _stopBeforeClose.ConfigureAwait(true);
+        }
+        finally
+        {
+            Close();
+        }
     }
 
     private async void OnCopyClick(object? sender, RoutedEventArgs e)

@@ -24,6 +24,8 @@ public static class TestAppBuilder
 
 public sealed class MainWindowTests : IDisposable
 {
+    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(5);
+
     private readonly string _root = Directory.CreateTempSubdirectory("portatlas-window-").FullName;
     private string _directory => Path.Combine(_root, "profiles");
 
@@ -86,6 +88,107 @@ public sealed class MainWindowTests : IDisposable
         vm.Run.State.Should().Be(RunState.Completed);
         vm.Run.ExitCode.Should().Be(0);
         File.Exists(configPath).Should().BeTrue();
+    }
+
+    [AvaloniaFact]
+    public async Task Close_WhenCommandIsRunning_CancelsTheRunBeforeClosing()
+    {
+        // Arrange
+        var runner = new BlockingRunner();
+        var vm = new MainViewModel(
+            CommandCatalog.Build(),
+            runner,
+            new NullFilePicker(),
+            new ImmediateDispatcher(),
+            new ProfileStore(new FixedDirectory(_directory)),
+            new AlwaysConfirm(),
+            new UserPreferencesStore(new FixedDirectory(_directory)),
+            new ExecutableViewModel(new PortAtlasExecutableLocator(_root, _ => null), new NullFilePicker()));
+        var window = new MainWindow { DataContext = vm };
+        var closed = new TaskCompletionSource();
+        window.Closed += (_, _) => closed.TrySetResult();
+        window.Show();
+        var runTask = vm.Run.RunCommand.ExecuteAsync(null);
+        var runStarted = await Task.WhenAny(runner.Started, Task.Delay(WaitLimit)) == runner.Started;
+
+        // Act
+        window.Close();
+        var openWhileStopping = window.IsVisible;
+        var runFinished = await Task.WhenAny(runTask, Task.Delay(WaitLimit)) == runTask;
+        var windowClosed = await Task.WhenAny(closed.Task, Task.Delay(WaitLimit)) == closed.Task;
+
+        // Assert
+        runStarted.Should().BeTrue();
+        openWhileStopping.Should().BeTrue("the window waits for the command to stop");
+        runFinished.Should().BeTrue("closing the window must stop the running command");
+        runner.CancellationObserved.Should().BeTrue();
+        vm.Run.State.Should().Be(RunState.Cancelled);
+        windowClosed.Should().BeTrue("the window closes once the command has stopped");
+    }
+
+    [AvaloniaFact]
+    public async Task Close_WhenLastRunFailedUnexpectedly_ClosesTheWindow()
+    {
+        // Arrange
+        var vm = new MainViewModel(
+            CommandCatalog.Build(),
+            new FailingRunner(),
+            new NullFilePicker(),
+            new ImmediateDispatcher(),
+            new ProfileStore(new FixedDirectory(_directory)),
+            new AlwaysConfirm(),
+            new UserPreferencesStore(new FixedDirectory(_directory)),
+            new ExecutableViewModel(new PortAtlasExecutableLocator(_root, _ => null), new NullFilePicker()));
+        var window = new MainWindow { DataContext = vm };
+        var closed = new TaskCompletionSource();
+        window.Closed += (_, _) => closed.TrySetResult();
+        window.Show();
+        var run = () => vm.Run.RunCommand.ExecuteAsync(null);
+        await run.Should().ThrowAsync<InvalidOperationException>();
+
+        // Act
+        window.Close();
+        var windowClosed = await Task.WhenAny(closed.Task, Task.Delay(WaitLimit)) == closed.Task;
+
+        // Assert
+        windowClosed.Should().BeTrue();
+    }
+
+    private sealed class FailingRunner : IPortAtlasRunner
+    {
+        public Task<RunResult> RunAsync(
+            IReadOnlyList<string> arguments,
+            IProgress<RunOutputLine> output,
+            CancellationToken cancellationToken = default) =>
+            Task.FromException<RunResult>(new InvalidOperationException("Process stream closed."));
+    }
+
+    private sealed class BlockingRunner : IPortAtlasRunner
+    {
+        private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Started => _started.Task;
+
+        public bool CancellationObserved { get; private set; }
+
+        public async Task<RunResult> RunAsync(
+            IReadOnlyList<string> arguments,
+            IProgress<RunOutputLine> output,
+            CancellationToken cancellationToken = default)
+        {
+            _started.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                CancellationObserved = true;
+                throw;
+            }
+
+            return new RunResult(0);
+        }
     }
 
     private sealed class AlwaysConfirm : IConfirmationService

@@ -89,6 +89,27 @@ public sealed partial class RunViewModel(
     [RelayCommand(CanExecute = nameof(CanCancel))]
     private void Cancel() => _cts?.Cancel();
 
+    /// <summary>
+    /// Cancels the running command, if any, and waits until it has finished.
+    /// </summary>
+    /// <param name="cancellationToken">Stops waiting for the command; the command itself stays cancelled.</param>
+    /// <returns>A task that completes once no command is running.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> was cancelled before the command finished.</exception>
+    public async Task StopAsync(CancellationToken cancellationToken = default)
+    {
+        if (RunCommand.ExecutionTask is not { IsCompleted: false } execution)
+        {
+            return;
+        }
+
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync().ConfigureAwait(true);
+        }
+
+        await execution.WaitAsync(cancellationToken).ConfigureAwait(true);
+    }
+
     private sealed class DispatchedProgress(IUiDispatcher dispatcher, Action<RunOutputLine> onLine) : IProgress<RunOutputLine>
     {
         public void Report(RunOutputLine value) => dispatcher.Post(() => onLine(value));
