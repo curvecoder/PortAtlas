@@ -233,21 +233,19 @@ public static class ContinuousAuditRunner
 
         engine.ScanCycleFailed += (_, e) => ReportScanFailure(dashboard, e);
 
+        using var mapRefreshScheduler = new TopologyMapRefreshScheduler(
+            ex => ReportWarning(dashboard, $"Topology map not written: {ex.Message}"));
         if (!string.IsNullOrWhiteSpace(config.OutputHtmlMapPath))
         {
-            engine.ScanCycleCompleted += (_, _) =>
-            {
-                var currentEntries = deduplicationRegister.GetAllEntries();
-                var mapFilters = TopologyMapConfigurationBuilder.BuildFilterOptions(config);
-                var mapRendering = TopologyMapConfigurationBuilder.BuildRenderingOptions(config);
-                _ = topologyMapper.GenerateHtmlMapFromEntriesAsync(
-                    currentEntries,
+            engine.ScanCycleCompleted += (_, _) => mapRefreshScheduler.RequestRefresh(
+                cancellationToken => topologyMapper.GenerateHtmlMapFromEntriesAsync(
+                    deduplicationRegister.GetAllEntries(),
                     config.OutputHtmlMapPath,
-                    mapFilters,
-                    mapRendering,
+                    TopologyMapConfigurationBuilder.BuildFilterOptions(config),
+                    TopologyMapConfigurationBuilder.BuildRenderingOptions(config),
                     $"Network Topology Map - {host.HostName}",
-                    cts.Token);
-            };
+                    cancellationToken),
+                cts.Token);
         }
 
         using var terminationSignals = new TerminationSignalListener(cts);
@@ -283,30 +281,14 @@ public static class ContinuousAuditRunner
                             }
                             else if (key.KeyChar is 'm' or 'M')
                             {
-                                var targetHtml = string.IsNullOrWhiteSpace(config.OutputHtmlMapPath)
-                                    ? "netflow_topology.html"
-                                    : config.OutputHtmlMapPath;
-                                var mapFilters = TopologyMapConfigurationBuilder.BuildFilterOptions(config);
-                                var mapRendering = TopologyMapConfigurationBuilder.BuildRenderingOptions(config);
-                                var graph = await topologyMapper.GenerateHtmlMapFromEntriesAsync(
-                                    deduplicationRegister.GetAllEntries(),
-                                    targetHtml,
-                                    mapFilters,
-                                    mapRendering,
-                                    $"Network Topology Map - {host.HostName}",
+                                await mapRefreshScheduler.GenerateExclusivelyAsync(
+                                    cancellationToken => WriteRequestedMapsAsync(
+                                        topologyMapper,
+                                        deduplicationRegister.GetAllEntries(),
+                                        config,
+                                        host.HostName,
+                                        cancellationToken),
                                     cts.Token).ConfigureAwait(false);
-
-                                if (!string.IsNullOrWhiteSpace(config.OutputDrawioPath))
-                                {
-                                    await AuditTopologyMapper.ExportToDrawioAsync(
-                                        graph,
-                                        config.OutputDrawioPath,
-                                        $"PortAtlas Network Topology - {host.HostName}",
-                                        TopologyMapConfigurationBuilder.BuildDrawioEdgeMode(config),
-                                        TopologyMapConfigurationBuilder.BuildDrawioTheme(config),
-                                        TopologyMapConfigurationBuilder.BuildDrawioLayoutOptions(config),
-                                        cts.Token).ConfigureAwait(false);
-                                }
                             }
                             else if (dashboard is not null)
                             {
@@ -423,14 +405,57 @@ public static class ContinuousAuditRunner
             {
                 await asyncResolver.DisposeAsync().ConfigureAwait(false);
             }
+
+            // An audit stopped by repeated scan failures or a log error is not cancelled yet: cancelling stops the
+            // keyboard loop, so no M key generation starts once the scheduler is disposed. The wait comes last so
+            // that an unexpected map failure, rethrown here, does not skip the cleanup above.
+            await cts.CancelAsync().ConfigureAwait(false);
+            await mapRefreshScheduler.WaitForRefreshesAsync().ConfigureAwait(false);
         }
 
         return exitCode;
     }
 
-    private static void ReportScanFailure(FlowAuditDashboardRenderer? dashboard, FlowAuditCycleFailedEventArgs failure)
+    private static void ReportScanFailure(FlowAuditDashboardRenderer? dashboard, FlowAuditCycleFailedEventArgs failure) =>
+        ReportWarning(
+            dashboard,
+            $"Scan failed ({failure.ConsecutiveFailures} of {failure.ConsecutiveFailureLimit} in a row): {failure.Error.Message}");
+
+    private static async Task WriteRequestedMapsAsync(
+        AuditTopologyMapper topologyMapper,
+        IEnumerable<NetworkAuditEntry> entries,
+        AppConfiguration config,
+        string hostName,
+        CancellationToken cancellationToken)
     {
-        var message = $"Scan failed ({failure.ConsecutiveFailures} of {failure.ConsecutiveFailureLimit} in a row): {failure.Error.Message}";
+        var targetHtml = string.IsNullOrWhiteSpace(config.OutputHtmlMapPath)
+            ? "netflow_topology.html"
+            : config.OutputHtmlMapPath;
+        var graph = await topologyMapper.GenerateHtmlMapFromEntriesAsync(
+            entries,
+            targetHtml,
+            TopologyMapConfigurationBuilder.BuildFilterOptions(config),
+            TopologyMapConfigurationBuilder.BuildRenderingOptions(config),
+            $"Network Topology Map - {hostName}",
+            cancellationToken).ConfigureAwait(false);
+
+        if (string.IsNullOrWhiteSpace(config.OutputDrawioPath))
+        {
+            return;
+        }
+
+        await AuditTopologyMapper.ExportToDrawioAsync(
+            graph,
+            config.OutputDrawioPath,
+            $"PortAtlas Network Topology - {hostName}",
+            TopologyMapConfigurationBuilder.BuildDrawioEdgeMode(config),
+            TopologyMapConfigurationBuilder.BuildDrawioTheme(config),
+            TopologyMapConfigurationBuilder.BuildDrawioLayoutOptions(config),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static void ReportWarning(FlowAuditDashboardRenderer? dashboard, string message)
+    {
         if (dashboard is not null)
         {
             dashboard.ShowWarning(message);

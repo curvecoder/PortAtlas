@@ -130,7 +130,7 @@ PortAtlas audit [options]
 | `--mask-ip` | `<address>` | `MaskLocalIp` | aucune | Adresse locale affichée par le tableau de bord |
 | `--obfuscate` | aucune | aucune | inactif | Affiche `HOMELAB-01` et `192.168.1.10`, sauf si `--mask-server` ou `--mask-ip` est donné |
 
-Familles lues : filtres de flux et rendu de la carte. Quand `--html` (ou `OutputHtmlMapPath`) est renseigné, la carte HTML est réécrite après chaque balayage ; la touche `M` l'écrit à la demande, avec le diagramme Draw.io quand `--drawio` (ou `OutputDrawioPath`) est renseigné.
+Familles lues : filtres de flux et rendu de la carte. Quand `--html` (ou `OutputHtmlMapPath`) est renseigné, la carte HTML est réécrite après chaque balayage ; la touche `M` l'écrit à la demande, avec le diagramme Draw.io quand `--drawio` (ou `OutputDrawioPath`) est renseigné. Une seule carte est écrite à la fois : les balayages terminés pendant son écriture donnent une seule réécriture ensuite, et une carte impossible à écrire (fichier verrouillé ou en lecture seule) affiche un avertissement sans arrêter l'audit.
 
 Le tableau de bord n'est pas affiché quand l'entrée ou la sortie du processus est redirigée, même sans `--no-tui`.
 

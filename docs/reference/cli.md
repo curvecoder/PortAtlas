@@ -130,7 +130,7 @@ PortAtlas audit [options]
 | `--mask-ip` | `<address>` | `MaskLocalIp` | none | Local address shown by the dashboard |
 | `--obfuscate` | none | none | off | Shows `HOMELAB-01` and `192.168.1.10` unless `--mask-server` or `--mask-ip` is given |
 
-Families read: flow filters and map rendering. When `--html` (or `OutputHtmlMapPath`) is set, the HTML map is rewritten after every scan; the `M` key writes it on demand, with the Draw.io diagram when `--drawio` (or `OutputDrawioPath`) is set.
+Families read: flow filters and map rendering. When `--html` (or `OutputHtmlMapPath`) is set, the HTML map is rewritten after every scan; the `M` key writes it on demand, with the Draw.io diagram when `--drawio` (or `OutputDrawioPath`) is set. One map is written at a time: scans that end while it is written lead to a single later rewrite, and a map that cannot be written (file locked or read-only) shows a warning while the audit goes on.
 
 The dashboard is not shown when the input or the output of the process is redirected, even without `--no-tui`.
 
