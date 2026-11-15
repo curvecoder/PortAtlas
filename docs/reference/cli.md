@@ -151,6 +151,8 @@ Outputs:
 - `--html` writes the HTML map, `--drawio` the Draw.io diagram; both can be given.
 - Without `--html` and `--drawio`, the command writes the HTML map to `OutputHtmlMapPath` (or `netflow_topology.html` when the key is empty), plus the Draw.io diagram when `OutputDrawioPath` is set.
 
+A log line without a valid local and remote port is left out of the map; the console names the log and the numbers of these lines (the first ten).
+
 Families read: inputs (`.csv`), flow filters, map rendering.
 
 ## export rules

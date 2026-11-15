@@ -33,11 +33,17 @@ public sealed class TopologyMapCommandRunner(AuditTopologyMapper? topologyMapper
 
         var delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',';
         Console.WriteLine($"Reading {auditFiles.Count} audit log(s)...");
-        var graph = await _topologyMapper.BuildGraphFromFilesAsync(
+        var read = await _topologyMapper.ReadGraphFromFilesAsync(
             auditFiles,
             TopologyMapConfigurationBuilder.BuildFilterOptions(config),
             delimiter,
             cancellationToken).ConfigureAwait(false);
+        foreach (var rejected in read.RejectedLines)
+        {
+            Console.WriteLine(rejected.Describe());
+        }
+
+        var graph = read.Graph;
 
         if (htmlPath is not null)
         {

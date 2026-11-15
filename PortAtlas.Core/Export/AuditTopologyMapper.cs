@@ -97,6 +97,10 @@ public sealed class AuditTopologyMapper(
     /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated network topology graph.</returns>
+    /// <remarks>
+    /// Lines without a valid local and remote port are left out without being reported; <see cref="ReadGraphFromFilesAsync"/>
+    /// reports them.
+    /// </remarks>
     public async Task<NetworkTopologyGraph> BuildGraphFromCsvAsync(
         string csvFilePath,
         TopologyFilterOptions filterOptions,
@@ -106,10 +110,10 @@ public sealed class AuditTopologyMapper(
         ArgumentException.ThrowIfNullOrWhiteSpace(csvFilePath);
         ArgumentNullException.ThrowIfNull(filterOptions);
 
-        var flowRecords = await _csvParser.ParseFileAsync(csvFilePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
+        var read = await _csvParser.ReadFileAsync(csvFilePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
         var evaluator = new TopologyFlowEvaluator(filterOptions);
         var builder = new TopologyGraphBuilder(evaluator);
-        return builder.BuildGraph(flowRecords);
+        return builder.BuildGraph(read.Records);
     }
 
     /// <summary>
@@ -126,9 +130,30 @@ public sealed class AuditTopologyMapper(
         char csvDelimiter = ',',
         CancellationToken cancellationToken = default)
     {
+        var result = await ReadGraphFromFilesAsync(csvFilePaths, filterOptions, csvDelimiter, cancellationToken).ConfigureAwait(false);
+        return result.Graph;
+    }
+
+    /// <summary>
+    /// Reads multiple audit CSV files, consolidates flows across all monitored servers, applies filtering rules, and builds a
+    /// unified network topology graph, reporting the lines that hold no valid local and remote port.
+    /// </summary>
+    /// <param name="csvFilePaths">Collection of source audit CSV file paths; a missing file is left out.</param>
+    /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
+    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="cancellationToken">Cooperative cancellation token.</param>
+    /// <returns>The consolidated graph and, for each file that had any, the line numbers left out.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="csvFilePaths"/> or <paramref name="filterOptions"/> is null.</exception>
+    public async Task<AuditTopologyReadResult> ReadGraphFromFilesAsync(
+        IEnumerable<string> csvFilePaths,
+        TopologyFilterOptions filterOptions,
+        char csvDelimiter = ',',
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(csvFilePaths);
         ArgumentNullException.ThrowIfNull(filterOptions);
 
+        var rejectedLines = new List<RejectedAuditLogLines>();
         var allFlowRecords = new List<TopologyFlowRecord>();
         foreach (var filePath in csvFilePaths)
         {
@@ -137,13 +162,17 @@ public sealed class AuditTopologyMapper(
                 continue;
             }
 
-            var records = await _csvParser.ParseFileAsync(filePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
-            allFlowRecords.AddRange(records);
+            var read = await _csvParser.ReadFileAsync(filePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
+            allFlowRecords.AddRange(read.Records);
+            if (read.RejectedLineNumbers.Count > 0)
+            {
+                rejectedLines.Add(new RejectedAuditLogLines(filePath, read.RejectedLineNumbers));
+            }
         }
 
         var evaluator = new TopologyFlowEvaluator(filterOptions);
         var builder = new TopologyGraphBuilder(evaluator);
-        return builder.BuildGraph(allFlowRecords);
+        return new AuditTopologyReadResult(builder.BuildGraph(allFlowRecords), rejectedLines);
     }
 
     /// <summary>

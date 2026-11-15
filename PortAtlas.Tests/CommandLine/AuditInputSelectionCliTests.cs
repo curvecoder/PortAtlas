@@ -226,6 +226,21 @@ public sealed class AuditInputSelectionCliTests : IDisposable
             .And.Contain(Path.Combine(_collected, "firewall_rules.csv"));
     }
 
+    [Fact]
+    public async Task Map_WhenALogLineHoldsNoValidPort_NamesTheLineOnTheConsole()
+    {
+        // Arrange
+        var log = Path.Combine(_collected, "audit_nas.csv");
+        File.WriteAllLines(log, [Header, LogRow, LogRow.Replace(",50000,", ",abc,", StringComparison.Ordinal)]);
+        var html = Path.Combine(_root, "map.html");
+
+        // Act
+        var output = await RunAsync("map", "-i", log, "--html", html);
+
+        // Assert
+        output.Should().Contain($"Skipped 1 line(s) of {log} without a valid local and remote port: line 3.");
+    }
+
     private void WriteEnrichedCopy() =>
         File.WriteAllLines(Path.Combine(_collected, "audit_nas_enriched.csv"), [Header, EnrichedRow]);
 

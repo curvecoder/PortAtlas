@@ -329,4 +329,51 @@ public sealed class AuditTopologyMapperTests
             }
         }
     }
+
+    [Fact]
+    public async Task ReadGraphFromFilesAsync_WhenLinesHoldNoValidPort_ReportsThemAndMapsTheOtherFlows()
+    {
+        // Arrange
+        var mapper = new AuditTopologyMapper();
+        var tempCsv = Path.Combine(Path.GetTempPath(), $"netflow_rejected_{Guid.NewGuid():N}.csv");
+
+        try
+        {
+            await File.WriteAllLinesAsync(tempCsv,
+            [
+                "ServerName,ServerPrimaryIp,Protocol,Direction,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessName,TargetExecutable,ObservationCount",
+                "nas.home.arpa,192.168.1.10,Tcp,Outbound,192.168.1.10,55100,192.168.1.20,5432,pve.home.arpa,dotnet,App.dll,20",
+                "nas.home.arpa,192.168.1.10,Tcp,Outbound,192.168.1.10,abc,192.168.1.30,53,pihole.home.arpa,dotnet,App.dll,3",
+                "nas.home.arpa,192.168.1.10,Tcp,Outbound,192.168.1.10,55102,192.168.1.40,99999,,dotnet,App.dll,1"
+            ]);
+
+            // Act
+            var result = await mapper.ReadGraphFromFilesAsync([tempCsv], new TopologyFilterOptions());
+
+            // Assert
+            result.Graph.Edges.Should().ContainSingle(e => e.TargetPort == 5432);
+            result.RejectedLines.Should().ContainSingle()
+                .Which.Should().BeEquivalentTo(new RejectedAuditLogLines(tempCsv, [3, 4]));
+        }
+        finally
+        {
+            if (File.Exists(tempCsv))
+            {
+                File.Delete(tempCsv);
+            }
+        }
+    }
+
+    [Fact]
+    public void Describe_WhenMoreThanTenLinesAreRejected_ListsTheFirstTenAndTheCount()
+    {
+        // Arrange
+        var rejected = new RejectedAuditLogLines(@"C:\audits\nas.csv", [.. Enumerable.Range(2, 12)]);
+
+        // Act
+        var description = rejected.Describe();
+
+        // Assert
+        description.Should().Be(@"Skipped 12 line(s) of C:\audits\nas.csv without a valid local and remote port: lines 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 and 2 more.");
+    }
 }

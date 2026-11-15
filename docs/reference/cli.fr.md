@@ -151,6 +151,8 @@ Sorties :
 - `--html` écrit la carte HTML, `--drawio` le diagramme Draw.io ; les deux peuvent être donnés.
 - Sans `--html` ni `--drawio`, la commande écrit la carte HTML dans `OutputHtmlMapPath` (ou `netflow_topology.html` si la clé est vide), et le diagramme Draw.io quand `OutputDrawioPath` est renseigné.
 
+Une ligne de journal sans port local et distant valide est écartée de la carte ; la console nomme le journal et les numéros de ces lignes (les dix premiers).
+
 Familles lues : entrées (`.csv`), filtres de flux, rendu de la carte.
 
 ## export rules
