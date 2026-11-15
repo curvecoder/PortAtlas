@@ -301,6 +301,12 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         _ = int.TryParse(remotePortStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var remotePort);
         _ = int.TryParse(pidStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var pid);
 
+        // A port outside 0-65535 cannot become an endpoint: the line is left out like any other unreadable line, not read into a default.
+        if (localPort is < 0 or > IPEndPoint.MaxPort || remotePort is < 0 or > IPEndPoint.MaxPort)
+        {
+            return null;
+        }
+
         var serverMetadata = new ServerHostMetadata(
             HostName: string.IsNullOrWhiteSpace(serverName) ? Environment.MachineName : serverName,
             OperatingSystemDescription: serverOs,

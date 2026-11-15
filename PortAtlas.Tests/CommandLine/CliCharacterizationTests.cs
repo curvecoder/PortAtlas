@@ -488,6 +488,59 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(output).Should().BeFalse();
     }
 
+    // The bounded-integer validator used to read the value itself, which threw on text instead of reporting a command-line error.
+    [Theory]
+    [InlineData("--interval")]
+    [InlineData("--rewrite-interval")]
+    public async Task Main_WhenAnAuditIntegerOptionIsNotANumber_ReturnsExitCodeOneNamingTheOptionAndTheValue(string option)
+    {
+        // Arrange
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["audit", option, "abc", "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain(option).And.Contain("'abc'");
+    }
+
+    [Fact]
+    public async Task Main_WhenMinObservationsIsNotANumber_ReturnsExitCodeOneNamingTheOptionAndTheValue()
+    {
+        // Arrange
+        var output = Path.Combine(_directory, "not-a-number.out");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "rules", "-i", _auditPath, "-o", output, "--min-observations", "abc", "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain("--min-observations").And.Contain("'abc'");
+        File.Exists(output).Should().BeFalse();
+    }
+
     // These audits stop before the first scan: the log is read, and written once, before the audit loop starts.
     [Fact]
     public async Task Main_WhenTheAuditLogToResumeHasAnUnreadableValue_ReturnsExitCodeOneNamingTheLine()
@@ -693,6 +746,40 @@ public sealed class CliCharacterizationTests : IDisposable
         // Assert
         exitCode.Should().Be(1);
         capturedError.ToString().Should().Contain("MapExcludedIps").And.Contain("'pihole'");
+        File.Exists(matrix).Should().BeFalse();
+    }
+
+    // A zero scan interval used to be announced by audit and then end it in the periodic timer; the command-line options already require 1.
+    [Theory]
+    [InlineData("ScanIntervalSeconds", 0)]
+    [InlineData("ScanIntervalSeconds", -5)]
+    [InlineData("LogRewriteIntervalMinutes", 0)]
+    [InlineData("LogRewriteIntervalMinutes", -1)]
+    [InlineData("DnsResolutionTimeoutMs", 0)]
+    [InlineData("DnsResolutionTimeoutMs", -100)]
+    public async Task Main_WhenABoundedKeyOfTheConfigurationIsBelowOne_ReturnsExitCodeOneNamingTheKeyAndTheMinimum(string key, int value)
+    {
+        // Arrange
+        var config = await WriteConfigurationAsync(new Dictionary<string, int> { [key] = value });
+        var matrix = Path.Combine(_directory, "interval-key.csv");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "rules", "-i", _auditPath, "-o", matrix, "--config", config]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain($"\"{key}\"").And.Contain("at least 1");
         File.Exists(matrix).Should().BeFalse();
     }
 

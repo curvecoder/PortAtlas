@@ -12,8 +12,8 @@ Les chemins acceptent les [jetons de nom de fichier](cli.fr.md#jetons-de-nom-de-
 
 | Clé | Type | Défaut | Effet | Option |
 | :--- | :--- | :--- | :--- | :--- |
-| `ScanIntervalSeconds` | entier | `5` | Secondes entre deux balayages | `--interval` |
-| `LogRewriteIntervalMinutes` | entier | `5` | Minutes entre deux réécritures des journaux d'audit, écrits aussi au démarrage et à l'arrêt | `--rewrite-interval` |
+| `ScanIntervalSeconds` | entier | `5` | Secondes entre deux balayages, au moins 1 | `--interval` |
+| `LogRewriteIntervalMinutes` | entier | `5` | Minutes entre deux réécritures des journaux d'audit, écrits aussi au démarrage et à l'arrêt ; au moins 1 | `--rewrite-interval` |
 | `OutputCsvPath` | chemin | `netflow_audit.csv` | Journal d'audit CSV ; entrée par défaut des autres commandes | `-o` (`audit`) |
 | `OutputNdjsonPath` | chemin | `""` | Journal NDJSON écrit en plus du CSV ; vide pour aucun | `--ndjson` |
 | `CsvColumns` | liste de noms | `[]` | Colonnes CSV, dans l'ordre ; vide pour les 20 colonnes | `--columns` |
@@ -46,7 +46,7 @@ Ces clés décident quels sockets `audit` enregistre. Le tableau de bord en comp
 | Clé | Type | Défaut | Effet | Option |
 | :--- | :--- | :--- | :--- | :--- |
 | `ResolveRemoteHostNames` | booléen | `true` | Résolution de nom des adresses distantes ; `false` désactive aussi RDAP et les alias | `--no-dns` |
-| `DnsResolutionTimeoutMs` | entier | `3000` | Millisecondes d'attente d'une réponse DNS inverse ; utilisé par `audit`, `resolve` et `lookup` | `--dns-timeout-ms` |
+| `DnsResolutionTimeoutMs` | entier | `3000` | Millisecondes d'attente d'une réponse DNS inverse ; utilisé par `audit`, `resolve` et `lookup` ; au moins 1 | `--dns-timeout-ms` |
 | `ResolveIpOwners` | booléen | `true` | Requête RDAP sur le propriétaire des adresses publiques, utilisé comme nom faute de nom DNS | `--no-rdap` |
 | `DnsCacheFilePath` | chemin | `netflow_dns_cache.json` | Cache DNS persistant ; cache par défaut de `resolve` et `lookup` | `--cache`, `--output-cache` (`resolve`) |
 | `DnsExcludedNetworks` | liste d'adresses ou CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Adresses jamais résolues | aucune |

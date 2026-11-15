@@ -58,7 +58,10 @@ internal static class OptionFactory
         var option = new Option<int?>(name) { Description = description, HelpName = helpName };
         option.Validators.Add(result =>
         {
-            if (result.GetValueOrDefault<int?>() < minimum)
+            // A value that is not an integer is reported by the parser's own conversion error; reading it here would throw instead.
+            if (result.Tokens.Count > 0
+                && int.TryParse(result.Tokens[0].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                && value < minimum)
             {
                 result.AddError(string.Create(CultureInfo.InvariantCulture, $"{name} must be greater than or equal to {minimum}."));
             }

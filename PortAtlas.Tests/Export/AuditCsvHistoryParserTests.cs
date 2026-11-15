@@ -306,6 +306,28 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
         await act.Should().ThrowAsync<InvalidDataException>().WithMessage("*line 3*yesterday*");
     }
 
+    // A port outside 0-65535 made the endpoint constructor throw, which ended export rules and export ndjson with a stack trace.
+    [Theory]
+    [InlineData("LocalPort", "70000")]
+    [InlineData("RemotePort", "70000")]
+    [InlineData("RemotePort", "-1")]
+    public async Task ParseHistoryAsync_WhenAPortIsOutOfRange_LeavesTheLineOutAndReadsTheOthers(string column, string value)
+    {
+        // Arrange
+        string[] columns = ["FirstSeenUtc", "ServerName", "Protocol", "Direction", "LocalIp", "LocalPort", "RemoteIp", "RemotePort"];
+        string[] readable = ["2026-11-01T08:00:00.0000000Z", "proxmox", "Tcp", "Outbound", "192.168.1.20", "51000", "192.168.1.30", "8007"];
+        var unreadable = (string[])readable.Clone();
+        unreadable[Array.IndexOf(columns, column)] = value;
+        var csvPath = Path.Combine(_tempDirectory, "port_out_of_range.csv");
+        await File.WriteAllLinesAsync(csvPath, [string.Join(',', columns), string.Join(',', unreadable), string.Join(',', readable)]);
+
+        // Act
+        var entries = await new AuditCsvHistoryParser().ParseHistoryAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().ContainSingle().Which.Socket.RemoteEndpoint.Port.Should().Be(8007);
+    }
+
     [Theory]
     [InlineData("Protocol", "Sctp")]
     [InlineData("Protocol", "7")]

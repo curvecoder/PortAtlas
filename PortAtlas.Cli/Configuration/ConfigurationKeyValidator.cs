@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Frozen;
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 
@@ -17,8 +18,16 @@ internal static class ConfigurationKeyValidator
 {
     private static readonly FrozenDictionary<string, KeyRule> RuleByKey = ReadKeysOfAppConfiguration();
 
+    // Same minimum as the --interval, --rewrite-interval and --dns-timeout-ms options: a zero interval ends the audit in its periodic timer, and a zero timeout cancels every lookup.
+    private static readonly FrozenDictionary<string, int> MinimumByKey = new Dictionary<string, int>(StringComparer.Ordinal)
+    {
+        [nameof(AppConfiguration.ScanIntervalSeconds)] = 1,
+        [nameof(AppConfiguration.LogRewriteIntervalMinutes)] = 1,
+        [nameof(AppConfiguration.DnsResolutionTimeoutMs)] = 1
+    }.ToFrozenDictionary(StringComparer.Ordinal);
+
     /// <summary>
-    /// Refuses a document holding an unknown key, a <c>null</c> where the setting needs a value, or a <c>null</c>
+    /// Refuses a document holding an unknown key, an interval below its minimum, a <c>null</c> where the setting needs a value, or a <c>null</c>
     /// entry in a list or in the host aliases.
     /// </summary>
     /// <param name="root">Root element of the configuration document.</param>
@@ -50,6 +59,16 @@ internal static class ConfigurationKeyValidator
         {
             throw new ConfigurationFileException(
                 $"{configPath}: \"{key.Name}\" is null. Give it a value, or remove the key to keep its default.");
+        }
+
+        // A value that is not an integer is left to the deserializer, which reports it as a value of the wrong type.
+        if (MinimumByKey.TryGetValue(key.Name, out var minimum) &&
+            key.Value.ValueKind == JsonValueKind.Number &&
+            key.Value.TryGetInt32(out var value) &&
+            value < minimum)
+        {
+            throw new ConfigurationFileException(
+                string.Create(CultureInfo.InvariantCulture, $"{configPath}: \"{key.Name}\" is {value}. It must be at least {minimum}."));
         }
 
         // A key that takes a single value is left to the deserializer, which reports an array or an object given
