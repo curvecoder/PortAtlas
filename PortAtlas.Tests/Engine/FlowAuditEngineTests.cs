@@ -621,6 +621,41 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         scanner.CallCount.Should().Be(1);
     }
 
+    [Fact]
+    public async Task ExecuteScanCycleAsync_WhenThePeriodicRewriteFails_ReportsItAndKeepsTheFlowsForTheNextPeriod()
+    {
+        // Arrange
+        var (engine, clock, logPath) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        Directory.CreateDirectory(logPath);
+        var failures = new List<FlowAuditLogRewriteFailedEventArgs>();
+        engine.LogRewriteFailed += (_, e) => failures.Add(e);
+        clock.Advance(TimeSpan.FromMinutes(6));
+
+        // Act
+        var count = await engine.ExecuteScanCycleAsync();
+
+        // Assert
+        count.Should().Be(1);
+        failures.Should().ContainSingle();
+        (failures[0].Error is IOException or UnauthorizedAccessException).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExecuteScanCycleAsync_WhenThePeriodicRewriteSucceeds_ReportsNoFailure()
+    {
+        // Arrange
+        var (engine, clock, _) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        var failures = 0;
+        engine.LogRewriteFailed += (_, _) => failures++;
+        clock.Advance(TimeSpan.FromMinutes(6));
+
+        // Act
+        await engine.ExecuteScanCycleAsync();
+
+        // Assert
+        failures.Should().Be(0);
+    }
+
     private (FlowAuditEngine Engine, ManualTimeProvider Clock, string LogPath) CreateEngineWithRewritePeriod(
         ISocketScanner scanner,
         PortAtlas.Core.Resolution.IHostNameResolver resolver)

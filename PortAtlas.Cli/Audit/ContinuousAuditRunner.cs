@@ -183,6 +183,11 @@ public static class ContinuousAuditRunner
             ? new CachedHostNameResolver(TimeSpan.FromMilliseconds(config.DnsResolutionTimeoutMs), exclusionEvaluator, dnsCacheStore, orgResolver, config.CustomHostAliases)
             : new NoOpHostNameResolver();
 
+        // Owns the resolver on every path out of this method (cancellation, log error, normal stop): its disposal
+        // finishes the background resolutions and saves the DNS cache. It only exists once the cache was read, so the
+        // refusal of an unreadable cache, thrown by the constructor above, never reaches a save that would replace it.
+        await using var resolverOwner = hostNameResolver as IAsyncDisposable;
+
         var logRewriter = string.IsNullOrWhiteSpace(config.OutputNdjsonPath)
             ? new AuditLogRewriter(config.OutputCsvPath, csvFormatter)
             : new AuditLogRewriter(config.OutputCsvPath, csvFormatter, config.OutputNdjsonPath, new AuditNdjsonFormatter());
@@ -213,11 +218,6 @@ public static class ContinuousAuditRunner
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            if (hostNameResolver is IAsyncDisposable startupResolver)
-            {
-                await startupResolver.DisposeAsync().ConfigureAwait(false);
-            }
-
             WriteAuditLogError(ex);
             return 1;
         }
@@ -243,6 +243,7 @@ public static class ContinuousAuditRunner
         }
 
         engine.ScanCycleFailed += (_, e) => ReportScanFailure(dashboard, e);
+        engine.LogRewriteFailed += (_, e) => ReportWarning(dashboard, FormatLogRewriteFailure(e.Error));
 
         using var mapRefreshScheduler = new TopologyMapRefreshScheduler(
             ex => ReportWarning(dashboard, $"Topology map not written: {ex.Message}"));
@@ -412,11 +413,6 @@ public static class ContinuousAuditRunner
         finally
         {
             dashboard?.RestoreCursor();
-            if (hostNameResolver is IAsyncDisposable asyncResolver)
-            {
-                await asyncResolver.DisposeAsync().ConfigureAwait(false);
-            }
-
             // An audit stopped by repeated scan failures or a log error is not cancelled yet: cancelling stops the
             // keyboard loop, so no M key generation starts once the scheduler is disposed. The wait comes last so
             // that an unexpected map failure, rethrown here, does not skip the cleanup above.
@@ -431,6 +427,10 @@ public static class ContinuousAuditRunner
         ReportWarning(
             dashboard,
             $"Scan failed ({failure.ConsecutiveFailures} of {failure.ConsecutiveFailureLimit} in a row): {failure.Error.Message}");
+
+    // The message of the exception names the log that was not replaced.
+    private static string FormatLogRewriteFailure(Exception error) =>
+        $"Could not rewrite the audit log: {error.Message.TrimEnd('.')}. The flows stay in memory; the next rewrite retries.";
 
     private static async Task WriteRequestedMapsAsync(
         AuditTopologyMapper topologyMapper,

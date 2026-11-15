@@ -110,6 +110,12 @@ public sealed class FlowAuditEngine(
     public event EventHandler<FlowAuditCycleFailedEventArgs>? ScanCycleFailed;
 
     /// <summary>
+    /// Event raised when a periodic rewrite of the logs fails and the audit keeps running: the flows stay in memory
+    /// and the next period rewrites them again.
+    /// </summary>
+    public event EventHandler<FlowAuditLogRewriteFailedEventArgs>? LogRewriteFailed;
+
+    /// <summary>
     /// Executes the continuous audit loop until cancellation is requested, then writes the logs.
     /// </summary>
     /// <exception cref="IOException">When the logs cannot be written at the stop; the message names the log.</exception>
@@ -278,7 +284,9 @@ public sealed class FlowAuditEngine(
         {
             // A log held open by another program (a spreadsheet, a backup) must not stop the audit: the flows stay
             // in memory and the next period, or the stop, writes them all again. A complete version left in
-            // <log>.pending is applied when the next audit starts.
+            // <log>.pending is applied when the next audit starts. The failure is reported so that the operator
+            // knows the log on disk is not being updated.
+            LogRewriteFailed?.Invoke(this, new FlowAuditLogRewriteFailedEventArgs(ex));
         }
     }
 

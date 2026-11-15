@@ -36,7 +36,8 @@ new one, never a mix.
   `<log>.tmp`; a log that cannot be read whole, or cannot be replaced, stops the audit with exit code 1 and a
   message naming the log and, when it applies, the line and the column.
 - During the audit, a refused replacement (Windows, while another program holds the log open) is tolerated: the
-  flows stay in memory, `<log>.pending` stays, the next period tries again.
+  flows stay in memory, `<log>.pending` stays, the next period tries again. Each failed period shows a warning on
+  the dashboard (or the console with `--no-tui`) naming the log and the reason.
 - At stop, a failed rewrite ends the audit with exit code 1 and the message, since the observations since the last
   period are not on disk.
 
