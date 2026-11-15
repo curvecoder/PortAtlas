@@ -42,4 +42,29 @@ public sealed class FirewallRulePairCsvFormatterTests
         // Assert
         row.Should().Be("PAIR-001,192.168.1.10,desktop,192.168.1.50,nas,3,\"443/TCP, 873/TCP\",15,2026-10-01T08:00:00.0000000+00:00,2026-10-04T08:00:00.0000000+00:00");
     }
+
+    // A host name comes from DNS or RDAP, both under a third party's control; the export is opened in a spreadsheet.
+    [Fact]
+    public void FormatRow_WhenHostNameStartsLikeAFormula_PrefixesItWithAnApostrophe()
+    {
+        // Arrange
+        var formatter = new FirewallRulePairCsvFormatter();
+        var pair = new FirewallRulePairItem(
+            "PAIR-001",
+            "192.168.1.10",
+            "desktop",
+            "192.168.1.50",
+            "@SUM(1+1)",
+            1,
+            ["443/TCP"],
+            1,
+            DateTimeOffset.Parse("2026-10-01T08:00:00Z", System.Globalization.CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse("2026-10-04T08:00:00Z", System.Globalization.CultureInfo.InvariantCulture));
+
+        // Act
+        var row = formatter.FormatRow(pair, ',');
+
+        // Assert
+        row.Should().StartWith("PAIR-001,192.168.1.10,desktop,192.168.1.50,'@SUM(1+1),1,");
+    }
 }

@@ -68,7 +68,10 @@ public sealed class FirewallRuleCsvFormatter
             rule.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture)
         };
 
-        var escapedValues = values.Select(v => PersistentDelimitedFileWriter.EscapeField(v, delimiter));
+        // The rule matrix is meant to be opened in a spreadsheet and is never read back by PortAtlas, while a process
+        // name, a path or a host name can be chosen by a third party: a value that would start a formula is written
+        // with a leading apostrophe. The audit log is not neutralized, since the apostrophe would change what is read.
+        var escapedValues = values.Select(v => PersistentDelimitedFileWriter.EscapeField(v, delimiter, neutralizeFormulas: true));
         return string.Join(delimiter, escapedValues);
     }
 }

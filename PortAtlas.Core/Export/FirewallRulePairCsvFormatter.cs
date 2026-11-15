@@ -53,6 +53,7 @@ public sealed class FirewallRulePairCsvFormatter
             pair.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture)
         };
 
-        return string.Join(delimiter, values.Select(v => PersistentDelimitedFileWriter.EscapeField(v, delimiter)));
+        // Opened in a spreadsheet and never read back, with host names from DNS or RDAP: see FirewallRuleCsvFormatter.
+        return string.Join(delimiter, values.Select(v => PersistentDelimitedFileWriter.EscapeField(v, delimiter, neutralizeFormulas: true)));
     }
 }

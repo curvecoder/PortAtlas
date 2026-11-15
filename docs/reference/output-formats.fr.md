@@ -62,7 +62,7 @@ Corriger ou supprimer la ligne, ou écrire dans un nouveau journal avec `--outpu
 
 ## Matrice de règles de pare-feu
 
-Écrite par `export rules`. Une ligne par sens, adresse source, adresse de destination, port de destination, protocole et processus, triée par sens, zone, port, destination, source, protocole et processus : la numérotation ne dépend pas de l'ordre des journaux donnés à `--input`.
+Écrite par `export rules`. Une ligne par sens, adresse source, adresse de destination, port de destination, protocole et processus, triée par sens, zone, port, destination, source, protocole et processus : la numérotation ne dépend pas de l'ordre des journaux donnés à `--input`. Une valeur qui commence par `=`, `+`, `-`, `@` (ou leurs formes pleine chasse), une tabulation ou un retour chariot est écrite précédée d'une apostrophe, pour qu'un tableur l'affiche comme du texte, apostrophe comprise, au lieu de l'exécuter comme une formule : un nom de processus ou d'hôte peut être choisi par un tiers. Le journal d'audit garde ses valeurs telles quelles, puisque PortAtlas le relit.
 
 | Colonne | Contenu |
 | :--- | :--- |
@@ -85,7 +85,7 @@ Corriger ou supprimer la ligne, ou écrire dans un nouveau journal avec `--outpu
 
 ## Matrice par paire
 
-Écrite par `export rules --pairs-output`, à partir des lignes de la matrice de règles après filtrage. Une ligne par adresse source et adresse de destination : les deux sens entre deux serveurs restent sur deux lignes, comme des règles de pare-feu. Triée par adresse source puis de destination.
+Écrite par `export rules --pairs-output`, à partir des lignes de la matrice de règles après filtrage. Une ligne par adresse source et adresse de destination : les deux sens entre deux serveurs restent sur deux lignes, comme des règles de pare-feu. Triée par adresse source puis de destination. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
 
 | Colonne | Contenu |
 | :--- | :--- |

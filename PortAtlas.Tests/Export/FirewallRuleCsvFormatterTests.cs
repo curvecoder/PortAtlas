@@ -52,4 +52,44 @@ public sealed class FirewallRuleCsvFormatterTests
         row.Should().Contain("\"DOMAIN\\service,oracle\"");
         row.Should().StartWith("RULE-001,Outbound,10.0.0.10,SRV-APP-01,10.20.1.5,");
     }
+
+    // A process name or a path can be chosen by whoever started the process; the export is opened in a spreadsheet.
+    [Theory]
+    [InlineData("=HYPERLINK(\"http://nas.home.arpa\")", "\"'=HYPERLINK(\"\"http://nas.home.arpa\"\")\"")]
+    [InlineData("+cmd", "'+cmd")]
+    [InlineData("-cmd", "'-cmd")]
+    [InlineData("@cmd", "'@cmd")]
+    [InlineData("\tcmd", "'\tcmd")]
+    [InlineData("＝cmd", "'＝cmd")]
+    [InlineData("sync-agent", "sync-agent")]
+    public void FormatRow_WhenProcessNameStartsLikeAFormula_PrefixesItWithAnApostrophe(string processName, string expectedField)
+    {
+        // Arrange
+        var formatter = new FirewallRuleCsvFormatter();
+        var rule = new FirewallRuleItem
+        {
+            RuleId = "RULE-001",
+            Direction = "Outbound",
+            SourceIp = "192.168.1.10",
+            SourceHost = "desktop",
+            DestinationIp = "192.168.1.50",
+            DestinationHost = "nas",
+            DestinationZone = "Internal",
+            Protocol = "TCP",
+            DestinationPort = 443,
+            ServiceName = "HTTPS",
+            ProcessName = processName,
+            ExecutablePath = @"C:\Tools\sync.exe",
+            UserName = "user",
+            ObservationCount = 1,
+            FirstSeenUtc = DateTimeOffset.Parse("2026-10-01T08:00:00Z", System.Globalization.CultureInfo.InvariantCulture),
+            LastSeenUtc = DateTimeOffset.Parse("2026-10-25T17:30:00Z", System.Globalization.CultureInfo.InvariantCulture)
+        };
+
+        // Act
+        var row = formatter.FormatRow(rule, ',');
+
+        // Assert
+        row.Should().Contain(",HTTPS," + expectedField + ",C:\\Tools\\sync.exe,");
+    }
 }
