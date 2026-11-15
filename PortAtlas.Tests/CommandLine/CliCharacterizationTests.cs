@@ -591,6 +591,26 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(log).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Main_WhenTheNdjsonLogHoldsFlowsAndTheCsvLogIsMissing_ReturnsExitCodeOneAndWritesNothing()
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "ndjson_only_audit.csv");
+        var ndjson = Path.Combine(_directory, "ndjson_only_audit.ndjson");
+        const string Record = "{\"firstSeenUtc\":\"2026-11-01T08:00:00+00:00\",\"lastSeenUtc\":\"2026-11-02T08:00:00+00:00\",\"observationCount\":3,\"serverName\":\"proxmox\",\"protocol\":\"Tcp\",\"direction\":\"Outbound\",\"localPort\":51000,\"remoteIp\":\"192.168.1.30\",\"remotePort\":8007}";
+        await File.WriteAllLinesAsync(ndjson, [Record]);
+        var before = await File.ReadAllBytesAsync(ndjson);
+
+        // Act
+        var (exitCode, output) = await RunAuditAsync(log, "--ndjson", ndjson);
+
+        // Assert
+        exitCode.Should().Be(1);
+        output.Should().Contain($"'{ndjson}'").And.Contain($"'{log}'").And.Contain("erase");
+        (await File.ReadAllBytesAsync(ndjson)).Should().Equal(before);
+        File.Exists(log).Should().BeFalse();
+    }
+
     private const string ResumableHeader =
         "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable";
 

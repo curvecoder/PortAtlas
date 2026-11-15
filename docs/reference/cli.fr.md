@@ -140,6 +140,8 @@ Un nom de colonne invalide dans `--columns` ou `CsvColumns`, ou une liste sans `
 
 Quand la résolution de noms est active, le cache DNS désigné par `DnsCacheFilePath` est lu au démarrage et enregistré pendant l'audit. S'il existe mais est illisible (JSON tronqué ou invalide, fichier tenu par un autre programme ou non lisible par le compte), l'audit s'arrête avant son premier scan avec `The DNS cache '<path>' cannot be read: …` et le code de sortie 1, sans écrire ni les journaux ni le cache : le cache n'est pas remplacé par les seuls noms de cette exécution.
 
+La commande `audit` ne reprend que depuis le journal CSV. Si le journal NDJSON (`--ndjson`, `OutputNdjsonPath`) existe et contient au moins un enregistrement alors que le journal CSV est absent ou ne contient aucun flux, l'audit s'arrête avant son premier scan avec `The NDJSON log '<path>' holds flows but the CSV log '<path>' is missing or holds none: …` et le code de sortie 1, sans rien écrire : démarrer remplacerait le journal NDJSON par les seuls flux de cette exécution. Restaurez le journal CSV ou déplacez le journal NDJSON. Un journal NDJSON vide ou absent n'arrête pas l'audit.
+
 ## map
 
 Construit le graphe topologique à partir des journaux CSV et écrit les sorties demandées.
@@ -272,5 +274,5 @@ Lorsque la variable d'environnement `PORTATLAS_STOP_ON_INPUT_END` vaut `1` et qu
 | Code | Signification |
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
-| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), `audit` arrêté par 10 scans en échec à la suite, port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true`, cache DNS d'`audit` ou cache de sortie de `resolve` illisible |
+| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), `audit` arrêté par 10 scans en échec à la suite, port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true`, cache DNS d'`audit` ou cache de sortie de `resolve` illisible, journal NDJSON d'`audit` qui contient des flux alors que son journal CSV est absent |
 | `130` | `resolve` arrêtée par `Ctrl+C` ou `SIGTERM`, après enregistrement des adresses déjà résolues ; commande autre qu'`audit` [arrêtée par son entrée](#arrêt-par-lentrée-standard) |

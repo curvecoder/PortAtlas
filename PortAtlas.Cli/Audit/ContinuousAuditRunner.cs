@@ -84,6 +84,14 @@ public static class ContinuousAuditRunner
                 maxRows: null,
                 delimiter,
                 cts.Token).ConfigureAwait(false);
+
+            // The startup rewrite replaces the NDJSON log with the flows resumed from the CSV log: when that log
+            // gave none, the records of the NDJSON log would be erased.
+            await NdjsonLogLossValidator.EnsureNoFlowIsLostAsync(
+                config.OutputCsvPath,
+                parsedEntries.Count,
+                config.OutputNdjsonPath,
+                cts.Token).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is InvalidDataException or AuditLogFormatException or IOException or UnauthorizedAccessException)
         {

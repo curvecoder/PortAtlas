@@ -140,6 +140,8 @@ An invalid column name in `--columns` or `CsvColumns`, or a list without `FirstS
 
 With name resolution on, the DNS cache named by `DnsCacheFilePath` is read at start and saved during the audit. If it exists but cannot be read (truncated or invalid JSON, file held by another program or not readable by the account), the audit stops before its first scan with `The DNS cache '<path>' cannot be read: …` and exit code 1, and writes neither the logs nor the cache, so that the cache is not replaced by the names of this run alone.
 
+The `audit` command resumes from the CSV log only. If the NDJSON log (`--ndjson`, `OutputNdjsonPath`) exists and holds at least one record while the CSV log is missing or holds no flow, the audit stops before its first scan with `The NDJSON log '<path>' holds flows but the CSV log '<path>' is missing or holds none: …` and exit code 1, and writes nothing: starting would replace the NDJSON log with the flows of this run alone. Restore the CSV log or move the NDJSON log. An empty or absent NDJSON log does not stop the audit.
+
 ## map
 
 Builds the topology graph from CSV audit logs and writes the requested outputs.
@@ -272,5 +274,5 @@ When the environment variable `PORTATLAS_STOP_ON_INPUT_END` is `1` and the stand
 | Code | Meaning |
 | :--- | :--- |
 | `0` | Success, or help printed |
-| `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), `audit` stopped by 10 failed scans in a row, a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true`, `audit` DNS cache or `resolve` output cache that cannot be read |
+| `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), `audit` stopped by 10 failed scans in a row, a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true`, `audit` DNS cache or `resolve` output cache that cannot be read, `audit` NDJSON log that holds flows while its CSV log is missing |
 | `130` | `resolve` stopped by `Ctrl+C` or `SIGTERM`, after saving the addresses already resolved; a command other than `audit` [stopped through its input](#stopping-through-the-standard-input) |
