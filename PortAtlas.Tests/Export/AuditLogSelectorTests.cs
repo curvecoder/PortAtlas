@@ -358,6 +358,68 @@ public sealed class AuditLogSelectorTests : IDisposable
         sentence.Should().Be("Skipped firewall_rules.csv: its first line is not the header of an audit log.");
     }
 
+    [Fact]
+    public async Task SelectAsync_WhenAFileOfTheDirectoryIsHeldExclusively_SkipsItAndKeepsTheOthers()
+    {
+        // Arrange
+        var readable = WriteCsvLog("audit_nas.csv");
+        var locked = WriteCsvLog("audit_proxmox.csv");
+        using var exclusiveHandle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        // Act
+        var selection = await AuditLogSelector.SelectAsync([_directory], AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.OneFilePerAudit);
+
+        // Assert
+        selection.Files.Should().Equal(readable);
+        selection.Skipped.Should().Equal(new SkippedAuditInput(locked, AuditInputSkipReason.Unreadable));
+        selection.Skipped[0].Describe().Should().Contain(locked).And.Contain("cannot be read");
+    }
+
+    [Fact]
+    public async Task SelectAsync_WhenANamedFileIsHeldExclusively_ThrowsNamingTheFile()
+    {
+        // Arrange
+        var locked = WriteCsvLog("audit_nas.csv");
+        using var exclusiveHandle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        // Act
+        var select = () => AuditLogSelector.SelectAsync([locked], AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.OneFilePerAudit);
+
+        // Assert
+        await select.Should().ThrowAsync<AuditLogFormatException>().WithMessage("*audit_nas.csv*cannot be read*");
+    }
+
+    [Fact]
+    public async Task SelectAsync_WhenEveryFileOfTheDirectoryIsHeldExclusively_SelectsNothing()
+    {
+        // Arrange
+        var locked = WriteCsvLog("audit_nas.csv");
+        using var exclusiveHandle = new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+
+        // Act
+        var selection = await AuditLogSelector.SelectAsync([Path.Combine(_directory, "*.csv")], [".csv"], AuditDuplicatePolicy.OneFilePerAudit);
+
+        // Assert
+        selection.Files.Should().BeEmpty();
+        selection.Skipped.Should().ContainSingle();
+    }
+
+    [Fact]
+    public async Task SelectAsync_WhenWildcardPatternMatchesAnNdjsonLogForACsvCommand_LeavesItOutAsADirectoryDoes()
+    {
+        // Arrange
+        var csv = WriteCsvLog("audit_nas.csv");
+        Write("audit_nas_copy.ndjson", NdjsonRecord);
+
+        // Act
+        var fromPattern = await AuditLogSelector.SelectAsync([Path.Combine(_directory, "*")], [".csv"], AuditDuplicatePolicy.OneFilePerAudit);
+        var fromDirectory = await AuditLogSelector.SelectAsync([_directory], [".csv"], AuditDuplicatePolicy.OneFilePerAudit);
+
+        // Assert
+        fromDirectory.Files.Should().Equal(csv);
+        fromPattern.Should().BeEquivalentTo(fromDirectory);
+    }
+
     private string WriteCsvLog(string relativePath) => Write(relativePath, Header);
 
     private string Write(string relativePath, params string[] lines)

@@ -179,6 +179,10 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
 
         var columnMap = BuildColumnIndexMap(records[0].Fields);
         var isHeaderPresent = HeaderMarkerColumns.Any(columnMap.ContainsKey);
+
+        // A first line that names audit columns but neither flow key column is a header of a reduced log, not a data
+        // row: read by position it would become a flow of its own, and its rows would be read through the wrong columns.
+        isHeaderPresent |= Enum.GetNames<AuditCsvColumn>().Any(columnMap.ContainsKey);
         if (!isHeaderPresent)
         {
             columnMap = StandardPositionalColumnMap;

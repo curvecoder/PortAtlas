@@ -411,6 +411,25 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
     }
 
     [Fact]
+    public async Task ParseHistoryAsync_WhenHeaderLacksTheFlowKeyColumns_ReadsNoFlow()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "no_flow_key.csv");
+        var csvContent = """
+            FirstSeenUtc,Protocol,Direction,LocalIp,RemoteIp,RemotePort,ProcessName
+            2026-11-01T08:00:00.0000000Z,Tcp,Outbound,192.168.1.20,192.168.1.30,5432,psql
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseHistoryAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task ParseHistoryAsync_WhenFlowKeyColumnsAreMissing_StillReadsTheLog()
     {
         // Arrange

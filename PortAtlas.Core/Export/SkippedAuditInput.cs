@@ -15,6 +15,7 @@ public sealed record SkippedAuditInput(string Path, AuditInputSkipReason Reason,
     public string Describe() => Reason switch
     {
         AuditInputSkipReason.SameAuditAsAnotherFile => $"Skipped {Path}: same audit as {KeptPath}, the file kept.",
+        AuditInputSkipReason.Unreadable => $"Skipped {Path}: the file cannot be read (it may be in use by another program, or access is denied).",
         _ => $"Skipped {Path}: its first line is not the header of an audit log."
     };
 }

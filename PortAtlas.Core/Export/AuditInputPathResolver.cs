@@ -15,9 +15,9 @@ public static class AuditInputPathResolver
     /// </summary>
     /// <param name="pathsOrPatterns">
     /// File paths, directory paths (every file with one of <paramref name="directoryExtensions"/> in the directory, not recursive)
-    /// or wildcard patterns on the file name (<c>audits/nas-*.csv</c>).
+    /// or wildcard patterns on the file name (<c>audits/nas-*.csv</c>), which keep the same extensions as a directory.
     /// </param>
-    /// <param name="directoryExtensions">Extensions kept when an input is a directory.</param>
+    /// <param name="directoryExtensions">Extensions kept when an input is a directory or a wildcard pattern.</param>
     /// <returns>Distinct full paths of the existing files, in input order; inputs matching nothing are skipped.</returns>
     /// <exception cref="ArgumentNullException">When an argument is null.</exception>
     /// <remarks>
@@ -83,6 +83,9 @@ public static class AuditInputPathResolver
             return [];
         }
 
-        return Directory.EnumerateFiles(directory, pattern, SearchOption.TopDirectoryOnly).Order(StringComparer.OrdinalIgnoreCase);
+        // A pattern selects the kinds of file a directory does: `collected/*` must not bring an NDJSON log to a CSV reader.
+        return Directory.EnumerateFiles(directory, pattern, SearchOption.TopDirectoryOnly)
+            .Where(file => directoryExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase))
+            .Order(StringComparer.OrdinalIgnoreCase);
     }
 }

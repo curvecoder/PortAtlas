@@ -14,5 +14,10 @@ public enum AuditInputSkipReason
     /// <summary>
     /// Another file kept by the command holds the same audit.
     /// </summary>
-    SameAuditAsAnotherFile
+    SameAuditAsAnotherFile,
+
+    /// <summary>
+    /// The file is held by another program or denied to the user, so its first line cannot be read.
+    /// </summary>
+    Unreadable
 }

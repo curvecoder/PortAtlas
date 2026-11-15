@@ -22,8 +22,7 @@ public static class AuditLogSelector
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>The audit logs to read and the files left out.</returns>
     /// <exception cref="ArgumentNullException">When a reference argument is null.</exception>
-    /// <exception cref="IOException">When a file of a directory or of a pattern cannot be opened.</exception>
-    /// <exception cref="UnauthorizedAccessException">When a file of a directory or of a pattern is denied to the user.</exception>
+    /// <exception cref="AuditLogFormatException">When a file named by its own path cannot be opened.</exception>
     public static async Task<AuditLogSelection> SelectAsync(
         IEnumerable<string> pathsOrPatterns,
         IReadOnlyCollection<string> directoryExtensions,
@@ -39,13 +38,21 @@ public static class AuditLogSelector
 
         foreach (var input in inputs)
         {
-            if (input.IsNamed || await AuditLogRecognizer.IsAuditLogAsync(input.FullPath, cancellationToken).ConfigureAwait(false))
+            if (input.IsNamed)
+            {
+                EnsureNamedFileIsReadable(input.FullPath);
+                candidates.Add(AuditLogCandidate.From(input));
+                continue;
+            }
+
+            var reason = await ClassifyAsync(input.FullPath, cancellationToken).ConfigureAwait(false);
+            if (reason is null)
             {
                 candidates.Add(AuditLogCandidate.From(input));
             }
             else
             {
-                skippedByPath[input.FullPath] = new SkippedAuditInput(input.FullPath, AuditInputSkipReason.NotAnAuditLog);
+                skippedByPath[input.FullPath] = new SkippedAuditInput(input.FullPath, reason.Value);
             }
         }
 
@@ -62,6 +69,36 @@ public static class AuditLogSelector
         return new AuditLogSelection(
             inputs.Where(input => !skippedByPath.ContainsKey(input.FullPath)).Select(input => input.FullPath).ToList(),
             inputs.Where(input => skippedByPath.ContainsKey(input.FullPath)).Select(input => skippedByPath[input.FullPath]).ToList());
+    }
+
+    // A file the user named is never left out, so a lock on it stops the command with a one-line message instead of
+    // surfacing later as an unhandled IOException from whichever reader opens it first.
+    private static void EnsureNamedFileIsReadable(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new AuditLogFormatException($"The audit log '{path}' cannot be read: {ex.Message}", ex);
+        }
+    }
+
+    private static async Task<AuditInputSkipReason?> ClassifyAsync(string path, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await AuditLogRecognizer.IsAuditLogAsync(path, cancellationToken).ConfigureAwait(false)
+                ? null
+                : AuditInputSkipReason.NotAnAuditLog;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A file held exclusively by another program (an audit still writing with no sharing, a backup tool) must not
+            // stop the commands from reading the other logs of the directory: the caller names the file in its warning.
+            return AuditInputSkipReason.Unreadable;
+        }
     }
 
     private static AuditLogCandidate ChooseKeptFile(IEnumerable<AuditLogCandidate> sameAudit, AuditDuplicatePolicy duplicatePolicy)
