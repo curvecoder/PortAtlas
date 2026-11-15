@@ -152,6 +152,31 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         report.CacheReport.Conflicts.Should().ContainSingle(conflict => conflict.ConflictingHostName == "backup.home.arpa");
     }
 
+    [Theory]
+    [InlineData("{\"192.168.1.20\": {\"HostName\": \"pihole.home.arpa\", ", false)]
+    [InlineData("{\"192.168.1.20\": {\"HostName\": \"pihole.home.arpa\", ", true)]
+    [InlineData("[\"192.168.1.20\"]", false)]
+    [InlineData("[\"192.168.1.20\"]", true)]
+    public async Task EnrichPathsAsync_WhenOutputCacheIsUnreadable_ThrowsWithoutResolvingOrWriting(string content, bool listedAsInput)
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.10");
+        var outputCache = Path.Combine(_tempDirectory, "master.json");
+        await File.WriteAllTextAsync(outputCache, content);
+        var resolver = new ScriptedIpResolver { ["192.168.1.10"] = Resolved("nas.home.arpa") };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = outputCache };
+        string[] caches = listedAsInput ? [outputCache] : [];
+
+        // Act
+        var act = () => new OfflineAuditEnricher(offlineResolver: resolver).EnrichPathsAsync([auditPath], caches, options);
+
+        // Assert
+        (await act.Should().ThrowAsync<DnsCacheUnreadableException>()).WithMessage($"*'{outputCache}'*");
+        resolver.ResolvedAddresses.Should().BeEmpty();
+        (await File.ReadAllTextAsync(outputCache)).Should().Be(content);
+        Directory.GetFiles(_tempDirectory, "*_enriched*").Should().BeEmpty();
+    }
+
     [Fact]
     public void Consolidate_WhenOneEntryHasNoName_KeepsTheNamedEntryWithoutConflict()
     {

@@ -230,6 +230,35 @@ public sealed class CliCharacterizationTests : IDisposable
     }
 
     [Fact]
+    public async Task Resolve_WhenOutputCacheIsUnreadable_ReturnsExitCodeOneNamingTheFileAndLeavesItUnchanged()
+    {
+        // Arrange
+        var masterCache = Path.Combine(_directory, "truncated_master.json");
+        const string Truncated = "{\"192.168.1.20\": {\"HostName\": \"pihole.home.arpa\", ";
+        await File.WriteAllTextAsync(masterCache, Truncated);
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["resolve", "-i", _auditPath, "--output-cache", masterCache, "--cache-only", "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain($"'{masterCache}'");
+        (await File.ReadAllTextAsync(masterCache)).Should().Be(Truncated);
+        Directory.GetFiles(_directory, "*_enriched.*").Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task ConfigInit_WhenPathGiven_WritesDeserializableConfiguration()
     {
         // Arrange

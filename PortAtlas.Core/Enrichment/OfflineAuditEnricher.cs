@@ -159,6 +159,8 @@ public sealed class OfflineAuditEnricher(
     /// <param name="options">Enrichment and output options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>The outcome report: processed and generated file paths, and counters.</returns>
+    /// <exception cref="DnsCacheUnreadableException">When the output cache exists but cannot be read; nothing is resolved
+    /// or written.</exception>
     public async Task<OfflineAuditEnrichmentReport> EnrichPathsAsync(
         IReadOnlyList<string> auditPathsOrPatterns,
         IReadOnlyList<string> cachePathsOrPatterns,
@@ -187,18 +189,23 @@ public sealed class OfflineAuditEnricher(
 
         // The master cache is read even when the caller did not list it: writing it back without merging would erase
         // every name that the other caches do not carry. It is merged first but not counted as a source cache.
+        // For the same reason a master cache that cannot be read stops the run, listed or not, before anything is
+        // resolved or written: reading it as empty would overwrite it with the names of this run only.
+        var outputCacheFullPath = string.IsNullOrWhiteSpace(options.OutputCachePath) ? null : Path.GetFullPath(options.OutputCachePath);
         IReadOnlyDictionary<string, DnsCacheEntry>? masterCache = null;
-        if (File.Exists(options.OutputCachePath) &&
-            !cacheFiles.Contains(Path.GetFullPath(options.OutputCachePath), StringComparer.OrdinalIgnoreCase))
+        if (outputCacheFullPath is not null &&
+            File.Exists(outputCacheFullPath) &&
+            !cacheFiles.Contains(outputCacheFullPath, StringComparer.OrdinalIgnoreCase))
         {
-            masterCache = new PersistentDnsCacheStore(options.OutputCachePath).Load();
+            masterCache = new PersistentDnsCacheStore(options.OutputCachePath).LoadOrThrow();
         }
 
         var loadedCaches = new List<IReadOnlyDictionary<string, DnsCacheEntry>>();
         foreach (var cachePath in cacheFiles)
         {
             var store = new PersistentDnsCacheStore(cachePath);
-            loadedCaches.Add(store.Load());
+            var isOutputCache = string.Equals(cachePath, outputCacheFullPath, StringComparison.OrdinalIgnoreCase);
+            loadedCaches.Add(isOutputCache ? store.LoadOrThrow() : store.Load());
         }
 
         return await EnrichAsync(auditFiles, loadedCaches, masterCache, options, cancellationToken).ConfigureAwait(false);

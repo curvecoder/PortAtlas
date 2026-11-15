@@ -3,6 +3,7 @@ using PortAtlas.Cli.CommandLine;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Cli.Terminal;
 using PortAtlas.Core.Export;
+using PortAtlas.Core.Resolution;
 
 namespace PortAtlas.Cli;
 
@@ -40,15 +41,15 @@ public static class Program
 
         // ProcessTerminationTimeout = null: the audit loop registers its own Ctrl+C and SIGTERM handlers to flush the
         // CSV writers before exiting; System.CommandLine must not force the process exit after its 2-second default.
-        // The default exception handler is off so that a configuration or filter error, or an audit log that cannot be
-        // read, reaches the catch below and is shown as one line instead of a stack trace; any other exception still
-        // ends the process with its stack trace.
+        // The default exception handler is off so that a configuration or filter error, or an audit log or output DNS
+        // cache that cannot be read, reaches the catch below and is shown as one line instead of a stack trace; any
+        // other exception still ends the process with its stack trace.
         var invocation = new InvocationConfiguration { ProcessTerminationTimeout = null, EnableDefaultExceptionHandler = false };
         try
         {
             return await PortAtlasCommandLine.CreateRootCommand().Parse(args).InvokeAsync(invocation).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is ConfigurationFileException or FlowFilterFormatException or AuditLogFormatException)
+        catch (Exception ex) when (ex is ConfigurationFileException or FlowFilterFormatException or AuditLogFormatException or DnsCacheUnreadableException)
         {
             await Console.Error.WriteLineAsync(ex.Message).ConfigureAwait(false);
             return 1;

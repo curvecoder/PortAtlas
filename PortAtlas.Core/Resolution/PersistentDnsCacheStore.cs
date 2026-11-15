@@ -29,39 +29,7 @@ public sealed class PersistentDnsCacheStore(string filePath)
 
             try
             {
-                var json = File.ReadAllText(_filePath);
-                using var doc = JsonDocument.Parse(json);
-                var result = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
-
-                if (doc.RootElement.ValueKind != JsonValueKind.Object)
-                {
-                    return result;
-                }
-
-                foreach (var prop in doc.RootElement.EnumerateObject())
-                {
-                    var ipKey = prop.Name;
-
-                    if (prop.Value.ValueKind == JsonValueKind.String)
-                    {
-                        // Backward-compatible flat format: { "IP": "HostName" }
-                        var name = prop.Value.GetString() ?? string.Empty;
-                        result[ipKey] = new DnsCacheEntry
-                        {
-                            HostName = name,
-                            Organization = name.Contains(' ') ? name : null,
-                            Source = name.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(name) ? "RDAP" : "None"),
-                            ResolvedAtUtc = DateTimeOffset.UtcNow
-                        };
-                    }
-                    else if (prop.Value.ValueKind == JsonValueKind.Object &&
-                             TryReadStructuredEntry(prop.Value, out var entry))
-                    {
-                        result[ipKey] = entry;
-                    }
-                }
-
-                return result;
+                return ReadEntries(File.ReadAllText(_filePath)) ?? new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
             }
             catch (Exception ex) when (ex is IOException or JsonException)
             {
@@ -69,6 +37,69 @@ public sealed class PersistentDnsCacheStore(string filePath)
                 return new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
             }
         }
+    }
+
+    /// <summary>
+    /// Loads the cache entries of a file that the caller is about to rewrite, refusing a file that cannot be read.
+    /// </summary>
+    /// <returns>Dictionary of known IP-to-entry mappings, or an empty dictionary if the file does not exist.</returns>
+    /// <exception cref="DnsCacheUnreadableException">When the file exists but cannot be read, is not valid JSON, or its
+    /// root is not a JSON object; the message names the file and the error.</exception>
+    public Dictionary<string, DnsCacheEntry> LoadOrThrow()
+    {
+        lock (_syncLock)
+        {
+            if (!File.Exists(_filePath))
+            {
+                return new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            try
+            {
+                return ReadEntries(File.ReadAllText(_filePath))
+                    ?? throw new DnsCacheUnreadableException($"The DNS cache '{_filePath}' cannot be read: its root is not a JSON object.");
+            }
+            catch (Exception ex) when (ex is IOException or JsonException)
+            {
+                throw new DnsCacheUnreadableException($"The DNS cache '{_filePath}' cannot be read: {ex.Message}", ex);
+            }
+        }
+    }
+
+    // Returns null when the root is not an object: the file holds no cache that this version can read.
+    private static Dictionary<string, DnsCacheEntry>? ReadEntries(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        if (doc.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        var result = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in doc.RootElement.EnumerateObject())
+        {
+            var ipKey = prop.Name;
+
+            if (prop.Value.ValueKind == JsonValueKind.String)
+            {
+                // Backward-compatible flat format: { "IP": "HostName" }
+                var name = prop.Value.GetString() ?? string.Empty;
+                result[ipKey] = new DnsCacheEntry
+                {
+                    HostName = name,
+                    Organization = name.Contains(' ') ? name : null,
+                    Source = name.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(name) ? "RDAP" : "None"),
+                    ResolvedAtUtc = DateTimeOffset.UtcNow
+                };
+            }
+            else if (prop.Value.ValueKind == JsonValueKind.Object &&
+                     TryReadStructuredEntry(prop.Value, out var entry))
+            {
+                result[ipKey] = entry;
+            }
+        }
+
+        return result;
     }
 
     // An entry edited by hand or written by another version can hold a value of the wrong type: only that entry is
