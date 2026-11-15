@@ -11,6 +11,9 @@ namespace PortAtlas.Cli;
 /// </summary>
 public static class Program
 {
+    // Exit code of a command stopped before its end, as after SIGINT on Linux; resolve returns the same code.
+    private const int InterruptedExitCode = 130;
+
     /// <summary>
     /// Parses the command line and runs the selected command.
     /// </summary>
@@ -30,6 +33,10 @@ public static class Program
         }
 
         ConsoleVirtualTerminalActivator.TryEnable();
+
+        // A launcher that closes the input stops the command as Ctrl+C would: a command that saves its work claims the
+        // end of the input, and any other command ends at once with the exit code of an interrupted command.
+        StopInputWatcher.StartIfRequested(() => Environment.Exit(InterruptedExitCode));
 
         // ProcessTerminationTimeout = null: the audit loop registers its own Ctrl+C and SIGTERM handlers to flush the
         // CSV writers before exiting; System.CommandLine must not force the process exit after its 2-second default.

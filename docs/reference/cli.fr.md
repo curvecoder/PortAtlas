@@ -261,10 +261,14 @@ PortAtlas config init [<path>]
 
 `config init` accepte `--config` parce que l'option est globale, mais ne la lit pas.
 
+## Arrêt par l'entrée standard
+
+Lorsque la variable d'environnement `PORTATLAS_STOP_ON_INPUT_END` vaut `1` et que l'entrée standard est redirigée, la fin de cette entrée arrête la commande comme `Ctrl+C` : `audit` écrit ses journaux et enregistre son cache DNS, `resolve` enregistre les adresses déjà résolues et se termine avec le code `130`, et les autres commandes se terminent aussitôt avec le code `130`. La fin de l'entrée est prise en compte dès qu'elle arrive, même quand l'entrée est vide dès le départ. L'interface graphique définit la variable et ferme l'entrée pour arrêter une commande. Sans la variable, l'entrée n'est pas lue : un service lancé avec une entrée vide continue de tourner.
+
 ## Codes de sortie
 
 | Code | Signification |
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
 | `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), `audit` arrêté par 10 scans en échec à la suite, port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
-| `130` | `resolve` arrêtée par `Ctrl+C` ou `SIGTERM`, après enregistrement des adresses déjà résolues |
+| `130` | `resolve` arrêtée par `Ctrl+C` ou `SIGTERM`, après enregistrement des adresses déjà résolues ; commande autre qu'`audit` [arrêtée par son entrée](#arrêt-par-lentrée-standard) |

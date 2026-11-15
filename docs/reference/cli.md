@@ -261,10 +261,14 @@ PortAtlas config init [<path>]
 
 `config init` accepts `--config` because the option is global, but does not read it.
 
+## Stopping through the standard input
+
+When the environment variable `PORTATLAS_STOP_ON_INPUT_END` is `1` and the standard input is redirected, the end of that input stops the command as `Ctrl+C` does: `audit` writes its logs and saves its DNS cache, `resolve` saves the addresses already resolved and ends with exit code `130`, and the other commands end at once with exit code `130`. The end of the input is acted on as soon as it arrives, even when the input was empty from the start. The graphical interface sets the variable and closes the input to stop a command. Without the variable the input is not read, so a service started with an empty input keeps running.
+
 ## Exit codes
 
 | Code | Meaning |
 | :--- | :--- |
 | `0` | Success, or help printed |
 | `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), `audit` stopped by 10 failed scans in a row, a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |
-| `130` | `resolve` stopped by `Ctrl+C` or `SIGTERM`, after saving the addresses already resolved |
+| `130` | `resolve` stopped by `Ctrl+C` or `SIGTERM`, after saving the addresses already resolved; a command other than `audit` [stopped through its input](#stopping-through-the-standard-input) |
