@@ -74,6 +74,8 @@ public sealed class CachedHostNameResolver(
 
     // Aliases and exclusions are read from the configuration at each start and never cached: an entry written by an
     // older version with one of these sources would keep applying after its removal from the configuration.
+    // The resolver saves the cache it loads: a file that cannot be read is refused (DnsCacheUnreadableException) rather
+    // than read as empty and then replaced by the names of this run only.
     private static ConcurrentDictionary<IPAddress, DnsCacheEntry> LoadCache(PersistentDnsCacheStore? cacheStore)
     {
         var cache = new ConcurrentDictionary<IPAddress, DnsCacheEntry>();
@@ -82,7 +84,7 @@ public sealed class CachedHostNameResolver(
             return cache;
         }
 
-        foreach (var (key, entry) in cacheStore.Load())
+        foreach (var (key, entry) in cacheStore.LoadOrThrow())
         {
             if (IPAddress.TryParse(key, out var address) && !IsConfigurationSource(entry.Source))
             {

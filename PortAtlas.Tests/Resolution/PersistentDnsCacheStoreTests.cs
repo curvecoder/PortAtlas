@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using System.Text;
 using AwesomeAssertions;
 using PortAtlas.Core.Resolution;
@@ -199,5 +201,33 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
 
         // Assert
         loaded.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task LoadOrThrow_WhenReadingTheFileIsDenied_ThrowsDnsCacheUnreadableExceptionNamingTheFile()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDir, "read_denied.json");
+        await File.WriteAllTextAsync(filePath, """{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""");
+        var file = new FileInfo(filePath);
+        using var identity = WindowsIdentity.GetCurrent();
+        var denyRead = new FileSystemAccessRule(identity.User ?? throw new InvalidOperationException("The test account has no security identifier."), FileSystemRights.ReadData, AccessControlType.Deny);
+        var security = file.GetAccessControl();
+        security.AddAccessRule(denyRead);
+        file.SetAccessControl(security);
+        var store = new PersistentDnsCacheStore(filePath);
+        try
+        {
+            // Act
+            var act = () => store.LoadOrThrow();
+
+            // Assert
+            act.Should().Throw<DnsCacheUnreadableException>().WithMessage($"*'{filePath}'*");
+        }
+        finally
+        {
+            security.RemoveAccessRule(denyRead);
+            file.SetAccessControl(security);
+        }
     }
 }

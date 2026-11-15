@@ -43,8 +43,8 @@ public sealed class PersistentDnsCacheStore(string filePath)
     /// Loads the cache entries of a file that the caller is about to rewrite, refusing a file that cannot be read.
     /// </summary>
     /// <returns>Dictionary of known IP-to-entry mappings, or an empty dictionary if the file does not exist.</returns>
-    /// <exception cref="DnsCacheUnreadableException">When the file exists but cannot be read, is not valid JSON, or its
-    /// root is not a JSON object; the message names the file and the error.</exception>
+    /// <exception cref="DnsCacheUnreadableException">When the file exists but cannot be read (I/O error or access
+    /// denied), is not valid JSON, or its root is not a JSON object; the message names the file and the error.</exception>
     public Dictionary<string, DnsCacheEntry> LoadOrThrow()
     {
         lock (_syncLock)
@@ -59,7 +59,7 @@ public sealed class PersistentDnsCacheStore(string filePath)
                 return ReadEntries(File.ReadAllText(_filePath))
                     ?? throw new DnsCacheUnreadableException($"The DNS cache '{_filePath}' cannot be read: its root is not a JSON object.");
             }
-            catch (Exception ex) when (ex is IOException or JsonException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
                 throw new DnsCacheUnreadableException($"The DNS cache '{_filePath}' cannot be read: {ex.Message}", ex);
             }

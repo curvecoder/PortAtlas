@@ -168,6 +168,8 @@ public static class ContinuousAuditRunner
             ? new RdapIpOrganizationResolver()
             : (IIpOrganizationResolver)new NoOpIpOrganizationResolver();
 
+        // A DNS cache that cannot be read stops the audit here (DnsCacheUnreadableException, shown by Program.Main),
+        // before the log is rewritten or the cache saved, and before any dashboard exists, so the message stays on screen.
         IHostNameResolver hostNameResolver = config.ResolveRemoteHostNames
             ? new CachedHostNameResolver(TimeSpan.FromMilliseconds(config.DnsResolutionTimeoutMs), exclusionEvaluator, dnsCacheStore, orgResolver, config.CustomHostAliases)
             : new NoOpHostNameResolver();

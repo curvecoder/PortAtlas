@@ -552,6 +552,45 @@ public sealed class CliCharacterizationTests : IDisposable
         File.Exists(log).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task Main_WhenTheDnsCacheIsUnreadableAtAuditStart_ReturnsExitCodeOneNamingTheCacheAndWritesNothing()
+    {
+        // Arrange
+        var log = Path.Combine(_directory, "cache_refused_audit.csv");
+        var cache = Path.Combine(_directory, "truncated_dns_cache.json");
+        const string Truncated = "{\"192.168.1.20\": {\"HostName\": \"pihole.home.arpa\", ";
+        await File.WriteAllTextAsync(cache, Truncated);
+        var config = await WriteConfigurationAsync(new { DnsCacheFilePath = cache });
+        var consoleOut = Console.Out;
+        var consoleError = Console.Error;
+        using var capturedOut = new StringWriter();
+        using var capturedError = new StringWriter();
+        Console.SetOut(capturedOut);
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            var audit = Program.Main(["audit", "--output", log, "--no-tui", "--no-rdap", "--config", config]);
+            var finished = await Task.WhenAny(audit, Task.Delay(TimeSpan.FromSeconds(20)));
+            finished.Should().BeSameAs(audit, "the audit must stop before its first scan");
+            exitCode = await audit;
+        }
+        finally
+        {
+            Console.SetOut(consoleOut);
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        // A stack frame line starts with "   at "; the JSON error quoted in the message may itself contain " at ".
+        capturedError.ToString().Should().Contain($"'{cache}'").And.NotContain("   at ");
+        (await File.ReadAllTextAsync(cache)).Should().Be(Truncated);
+        File.Exists(log).Should().BeFalse();
+    }
+
     private const string ResumableHeader =
         "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort,ProcessName,ExecutablePath,TargetExecutable";
 

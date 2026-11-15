@@ -60,6 +60,26 @@ public sealed class CachedHostNameResolverTests
     }
 
     [Fact]
+    public async Task Constructor_WhenTheCacheFileCannotBeRead_ThrowsDnsCacheUnreadableExceptionNamingTheFile()
+    {
+        // Arrange
+        var cachePath = Path.Combine(Path.GetTempPath(), "PortAtlas_TruncatedDnsCache_" + Guid.NewGuid().ToString("N") + ".json");
+        await File.WriteAllTextAsync(cachePath, "{\"192.168.1.20\": {\"HostName\": \"pihole.home.arpa\", ");
+        try
+        {
+            // Act
+            var act = () => new CachedHostNameResolver(TimeSpan.FromSeconds(1), cacheStore: new PersistentDnsCacheStore(cachePath));
+
+            // Assert
+            act.Should().Throw<DnsCacheUnreadableException>().WithMessage($"*'{cachePath}'*");
+        }
+        finally
+        {
+            File.Delete(cachePath);
+        }
+    }
+
+    [Fact]
     public async Task ResolveHostNameAsync_WhenLoopbackAddress_ReturnsLocalhost()
     {
         // Arrange
