@@ -95,4 +95,26 @@ public sealed class IpResolutionDiagnosticReporterTests
         report.Should().Contain("SKIPPED (Defensive guard)");
         report.Should().Contain("Synthesized Source     : Excluded");
     }
+
+    [Fact]
+    public async Task RunDiagnosticAsync_WhenTheCacheCannotBeRead_ReportsTheCacheErrorNamingTheFile()
+    {
+        // Arrange
+        var cachePath = Path.Combine(Path.GetTempPath(), $"PortAtlas_LookupCache_{Guid.NewGuid():N}.json");
+        await File.WriteAllTextAsync(cachePath, """{ "192.168.1.10": { "HostName": """);
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        try
+        {
+            // Act
+            await reporter.RunDiagnosticAsync("127.0.0.1", new AppConfiguration { DnsCacheFilePath = cachePath });
+
+            // Assert
+            output.ToString().Should().Contain($"Cache access error     : The DNS cache '{cachePath}' cannot be read");
+        }
+        finally
+        {
+            File.Delete(cachePath);
+        }
+    }
 }

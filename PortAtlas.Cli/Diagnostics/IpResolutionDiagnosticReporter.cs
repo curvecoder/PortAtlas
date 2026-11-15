@@ -81,7 +81,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
             try
             {
                 var cacheStore = new PersistentDnsCacheStore(config.DnsCacheFilePath);
-                var loaded = cacheStore.Load();
+                var loaded = cacheStore.LoadOrThrow();
                 if (loaded.TryGetValue(address.ToString(), out cachedEntry))
                 {
                     await _output.WriteLineAsync("  * Found in cache         : YES").ConfigureAwait(false);
@@ -97,9 +97,9 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
                     await _output.WriteLineAsync("  * Found in cache         : NO (Entry not present in file)").ConfigureAwait(false);
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            catch (DnsCacheUnreadableException ex)
             {
-                await _output.WriteLineAsync($"  * Cache access error     : {ex.GetType().Name} - {ex.Message}").ConfigureAwait(false);
+                await _output.WriteLineAsync($"  * Cache access error     : {ex.Message}").ConfigureAwait(false);
             }
         }
         else

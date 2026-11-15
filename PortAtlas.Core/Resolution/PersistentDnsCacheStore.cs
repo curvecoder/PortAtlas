@@ -31,9 +31,11 @@ public sealed class PersistentDnsCacheStore(string filePath)
             {
                 return ReadEntries(File.ReadAllText(_filePath)) ?? new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
             }
-            catch (Exception ex) when (ex is IOException or JsonException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
-                // Tolerated: On file corruption or transient locking, start with a clean in-memory cache
+                // Tolerated without a message: this load serves caches that are only read (resolve --cache), so a
+                // corrupt, locked or access-denied file silently adds no names and the run goes on, with the other
+                // caches and online lookups. Caches about to be rewritten, and the lookup diagnostic, use LoadOrThrow.
                 return new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase);
             }
         }
