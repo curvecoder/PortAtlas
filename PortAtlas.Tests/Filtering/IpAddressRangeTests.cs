@@ -1,11 +1,13 @@
 using System.Net;
 using AwesomeAssertions;
-using PortAtlas.Core.Filtering;
+using TopologyForge.Filtering;
 using Xunit;
 
 namespace PortAtlas.Tests.Filtering;
 
-public sealed class CidrRangeTests
+// IpAddressRange comes from TopologyForge; these tests pin the reading of the address filters that PortAtlas users
+// type (--include-ips, --exclude-ips, configuration keys), so a framework upgrade that changes it fails here.
+public sealed class IpAddressRangeTests
 {
     [Theory]
     [InlineData("192.168.1.10/24", "192.168.1.0/24")]
@@ -18,7 +20,7 @@ public sealed class CidrRangeTests
     public void Parse_WhenSubnetIsWrittenWithHostBits_KeepsTheNetworkOfThatHost(string text, string expected)
     {
         // Act
-        var range = CidrRange.Parse(text);
+        var range = IpAddressRange.Parse(text);
 
         // Assert
         range.ToString().Should().Be(expected);
@@ -34,7 +36,7 @@ public sealed class CidrRangeTests
     public void Parse_WhenTextIsOneAddress_ReturnsASingleAddressRange(string text, string expected)
     {
         // Act
-        var range = CidrRange.Parse(text);
+        var range = IpAddressRange.Parse(text);
 
         // Assert
         range.ToString().Should().Be(expected);
@@ -57,7 +59,7 @@ public sealed class CidrRangeTests
     public void Parse_WhenTextIsNotAnAddressNorASubnet_ThrowsFormatExceptionNamingTheText(string text)
     {
         // Act
-        var act = () => CidrRange.Parse(text);
+        var act = () => IpAddressRange.Parse(text);
 
         // Assert
         act.Should().Throw<FormatException>().WithMessage($"'{text}'*");
@@ -75,7 +77,7 @@ public sealed class CidrRangeTests
     public void Parse_WhenIPv4AddressIsNotWrittenAsFourDecimalBytes_ThrowsFormatException(string text)
     {
         // Act
-        var act = () => CidrRange.Parse(text);
+        var act = () => IpAddressRange.Parse(text);
 
         // Assert
         act.Should().Throw<FormatException>().WithMessage($"'{text}'*");
@@ -85,12 +87,14 @@ public sealed class CidrRangeTests
     [InlineData("nas")]
     [InlineData("192.168.1.0/33")]
     [InlineData("443")]
+    [InlineData("[2001:db8::1]")]
+    [InlineData("[2001:db8::1]:443")]
     [InlineData("")]
     [InlineData(null)]
     public void TryParse_WhenTextIsNotAnAddressNorASubnet_ReturnsFalseWithoutRange(string? text)
     {
         // Act
-        var isRead = CidrRange.TryParse(text, out var range);
+        var isRead = IpAddressRange.TryParse(text, out var range);
 
         // Assert
         isRead.Should().BeFalse();
@@ -102,23 +106,27 @@ public sealed class CidrRangeTests
     public void Parse_WhenIPv6AddressCarriesAZone_KeepsTheAddressWithoutIt()
     {
         // Act
-        var range = CidrRange.Parse("fe80::1%12");
+        var range = IpAddressRange.Parse("fe80::1%12");
 
         // Assert
         range.ToString().Should().Be("fe80::1");
         range.Contains(IPAddress.Parse("fe80::1%12")).Should().BeTrue();
     }
 
-    // Both forms of an IPv4 host meet the same rule, so an IPv6 subnet that holds the IPv4-mapped block holds IPv4.
+    // An IPv6 rule such as ::/0 ("every IPv6 peer") must leave the IPv4 peers alone, whichever form the socket reports
+    // them in; only a rule written in the IPv4-mapped form, with the whole mapped prefix, names IPv4 hosts.
     [Theory]
-    [InlineData("::/0", "192.168.1.50", true)]
+    [InlineData("::/0", "192.168.1.50", false)]
+    [InlineData("::/0", "::ffff:192.168.1.50", false)]
+    [InlineData("::ffff:0:0/80", "192.168.1.50", false)]
     [InlineData("::ffff:0:0/96", "192.168.1.50", true)]
+    [InlineData("::ffff:0:0/96", "::ffff:192.168.1.50", true)]
     [InlineData("2001:db8::/32", "192.168.1.50", false)]
     [InlineData("0.0.0.0/0", "2001:db8::1", false)]
-    public void Contains_WhenIPv6SubnetIsTestedWithAnIPv4Address_FollowsTheIPv4MappedBlock(string text, string address, bool expected)
+    public void Contains_WhenIPv6SubnetIsTestedWithAnIPv4Address_MatchesOnlyAnIPv4MappedRule(string text, string address, bool expected)
     {
         // Arrange
-        var range = CidrRange.Parse(text);
+        var range = IpAddressRange.Parse(text);
 
         // Act
         var contains = range.Contains(IPAddress.Parse(address));
@@ -139,7 +147,7 @@ public sealed class CidrRangeTests
     public void Contains_WhenAddressIsTested_TellsWhetherItBelongsToTheRange(string text, string address, bool expected)
     {
         // Arrange
-        var range = CidrRange.Parse(text);
+        var range = IpAddressRange.Parse(text);
 
         // Act
         var contains = range.Contains(IPAddress.Parse(address));
@@ -157,7 +165,7 @@ public sealed class CidrRangeTests
     public void Contains_WhenRuleAndAddressDifferOnlyByTheIPv4MappedForm_ReturnsTrue(string text, string address)
     {
         // Arrange
-        var range = CidrRange.Parse(text);
+        var range = IpAddressRange.Parse(text);
 
         // Act
         var contains = range.Contains(IPAddress.Parse(address));
@@ -170,8 +178,8 @@ public sealed class CidrRangeTests
     public void Equals_WhenTwoTextsNameTheSameSubnet_ReturnsTrue()
     {
         // Act
-        var first = CidrRange.Parse("192.168.1.10/24");
-        var second = CidrRange.Parse("192.168.1.200/24");
+        var first = IpAddressRange.Parse("192.168.1.10/24");
+        var second = IpAddressRange.Parse("192.168.1.200/24");
 
         // Assert
         first.Should().Be(second);
@@ -181,7 +189,7 @@ public sealed class CidrRangeTests
     public void Parse_WhenTextIsNull_ThrowsArgumentNullException()
     {
         // Act
-        var act = () => CidrRange.Parse(null!);
+        var act = () => IpAddressRange.Parse(null!);
 
         // Assert
         act.Should().Throw<ArgumentNullException>();

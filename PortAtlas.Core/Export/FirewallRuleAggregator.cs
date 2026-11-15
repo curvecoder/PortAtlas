@@ -2,6 +2,7 @@ using System.Net;
 using PortAtlas.Core.Filtering;
 using PortAtlas.Core.Models;
 using SocketForge.Models;
+using TopologyForge.Filtering;
 using TopologyForge.Models;
 
 namespace PortAtlas.Core.Export;
@@ -320,7 +321,7 @@ public sealed class FirewallRuleAggregator
         return false;
     }
 
-    private static IpMatcher BuildIpMatcher(IReadOnlyList<CidrRange> included, IReadOnlyList<CidrRange> excluded)
+    private static IpMatcher BuildIpMatcher(IReadOnlyList<IpAddressRange> included, IReadOnlyList<IpAddressRange> excluded)
     {
         var inc = included.Count > 0 ? IpAddressRangeMatcher.FromRanges(included) : null;
         var exc = excluded.Count > 0 ? IpAddressRangeMatcher.FromRanges(excluded) : null;

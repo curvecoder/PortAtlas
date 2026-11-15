@@ -1,4 +1,5 @@
 using PortAtlas.Core.Filtering;
+using TopologyForge.Filtering;
 using TopologyForge.Models;
 
 namespace PortAtlas.Cli.Configuration;
@@ -14,8 +15,8 @@ namespace PortAtlas.Cli.Configuration;
 public sealed record FlowFilters(
     IReadOnlyList<NetworkPortRange> IncludedPorts,
     IReadOnlyList<NetworkPortRange> ExcludedPorts,
-    IReadOnlyList<CidrRange> IncludedIps,
-    IReadOnlyList<CidrRange> ExcludedIps)
+    IReadOnlyList<IpAddressRange> IncludedIps,
+    IReadOnlyList<IpAddressRange> ExcludedIps)
 {
     private static readonly char[] PortSeparators = [',', ';'];
 
@@ -60,13 +61,13 @@ public sealed record FlowFilters(
         return ranges;
     }
 
-    private static List<CidrRange> ParseAddresses(IEnumerable<string> values, string option, string key)
+    private static List<IpAddressRange> ParseAddresses(IEnumerable<string> values, string option, string key)
     {
-        var ranges = new List<CidrRange>();
+        var ranges = new List<IpAddressRange>();
 
         foreach (var value in values.Where(value => !string.IsNullOrWhiteSpace(value)))
         {
-            if (!CidrRange.TryParse(value, out var range))
+            if (!IpAddressRange.TryParse(value, out var range))
             {
                 throw new FlowFilterFormatException(
                     $"{option} (configuration key {key}): '{value.Trim()}' is not an IP address or a CIDR subnet. Expected an address (192.168.1.50) or a subnet (192.168.1.0/24).");

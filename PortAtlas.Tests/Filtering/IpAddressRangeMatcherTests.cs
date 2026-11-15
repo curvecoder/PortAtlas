@@ -140,4 +140,20 @@ public sealed class IpAddressRangeMatcherTests
         // Act & Assert
         matcher.IsMatch(address).Should().BeTrue();
     }
+
+    // An exclusion of every IPv6 peer (::/0) used to exclude every IPv4 peer as well.
+    [Theory]
+    [InlineData("192.168.1.50")]
+    [InlineData("::ffff:192.168.1.50")]
+    public void IsMatch_WhenRuleIsTheWholeIPv6Space_DoesNotMatchAnIPv4Address(string address)
+    {
+        // Arrange
+        var matcher = new IpAddressRangeMatcher(["::/0"]);
+
+        // Act
+        var isMatch = matcher.IsMatch(IPAddress.Parse(address));
+
+        // Assert
+        isMatch.Should().BeFalse();
+    }
 }

@@ -5,6 +5,7 @@ using PortAtlas.Core.Filtering;
 using PortAtlas.Core.Models;
 using ProcessForge.Models;
 using SocketForge.Models;
+using TopologyForge.Filtering;
 using TopologyForge.Models;
 using Xunit;
 
@@ -678,7 +679,7 @@ public sealed class FirewallRuleAggregatorTests
         var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
 
         // Act
-        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ExcludedIps = [CidrRange.Parse(excluded)] });
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { ExcludedIps = [IpAddressRange.Parse(excluded)] });
 
         // Assert
         rules.Should().BeEmpty();
@@ -698,7 +699,7 @@ public sealed class FirewallRuleAggregatorTests
         var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
 
         // Act
-        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedIps = [CidrRange.Parse(included)] });
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedIps = [IpAddressRange.Parse(included)] });
 
         // Assert
         rules.Should().ContainSingle();
@@ -714,7 +715,7 @@ public sealed class FirewallRuleAggregatorTests
         var entry = CreateRemoteNamedEntry(direction, remoteHost: "pihole.home.arpa", lastSeen: DateTimeOffset.UtcNow);
 
         // Act
-        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedIps = [CidrRange.Parse("192.168.1.2")] });
+        var rules = aggregator.Aggregate([entry], new FirewallRuleExportOptions { IncludedIps = [IpAddressRange.Parse("192.168.1.2")] });
 
         // Assert
         rules.Should().BeEmpty();
@@ -737,7 +738,7 @@ public sealed class FirewallRuleAggregatorTests
         // Act
         var rules = aggregator.Aggregate(
             [entry],
-            new FirewallRuleExportOptions { IncludedIps = [CidrRange.Parse(included)], ExcludedIps = [CidrRange.Parse(excluded)] });
+            new FirewallRuleExportOptions { IncludedIps = [IpAddressRange.Parse(included)], ExcludedIps = [IpAddressRange.Parse(excluded)] });
 
         // Assert
         rules.Should().BeEmpty();
@@ -757,7 +758,7 @@ public sealed class FirewallRuleAggregatorTests
         // Act
         var rules = aggregator.Aggregate(
             [entry],
-            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedIps = [CidrRange.Parse(excluded)] });
+            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedIps = [IpAddressRange.Parse(excluded)] });
 
         // Assert
         rules.Should().ContainSingle();
@@ -773,7 +774,7 @@ public sealed class FirewallRuleAggregatorTests
         // Act
         var rules = aggregator.Aggregate(
             [entry],
-            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = [CidrRange.Parse("0.0.0.0")] });
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = [IpAddressRange.Parse("0.0.0.0")] });
 
         // Assert
         rules.Should().BeEmpty();
@@ -789,7 +790,7 @@ public sealed class FirewallRuleAggregatorTests
         // Act
         var rules = aggregator.Aggregate(
             [entry],
-            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = [CidrRange.Parse("192.168.1.0/24")] });
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = [IpAddressRange.Parse("192.168.1.0/24")] });
 
         // Assert
         rules.Should().ContainSingle();
@@ -805,7 +806,7 @@ public sealed class FirewallRuleAggregatorTests
         // Act
         var rules = aggregator.Aggregate(
             [entry],
-            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedIps = [CidrRange.Parse("192.168.1.0/24")] });
+            new FirewallRuleExportOptions { ListenersOnly = true, ExcludedIps = [IpAddressRange.Parse("192.168.1.0/24")] });
 
         // Assert
         rules.Should().BeEmpty();
@@ -825,7 +826,7 @@ public sealed class FirewallRuleAggregatorTests
         // Act
         var rules = aggregator.Aggregate(
             [entry],
-            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = [CidrRange.Parse("192.168.1.0/24")] });
+            new FirewallRuleExportOptions { ListenersOnly = true, IncludedIps = [IpAddressRange.Parse("192.168.1.0/24")] });
 
         // Assert
         rules.Should().BeEmpty();

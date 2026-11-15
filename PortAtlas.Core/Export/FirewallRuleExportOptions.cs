@@ -1,4 +1,5 @@
 using PortAtlas.Core.Filtering;
+using TopologyForge.Filtering;
 using TopologyForge.Models;
 
 namespace PortAtlas.Core.Export;
@@ -61,12 +62,12 @@ public sealed record FirewallRuleExportOptions
     /// <summary>
     /// IP addresses or CIDR subnets to include.
     /// </summary>
-    public IReadOnlyList<CidrRange> IncludedIps { get; init; } = [];
+    public IReadOnlyList<IpAddressRange> IncludedIps { get; init; } = [];
 
     /// <summary>
     /// IP addresses or CIDR subnets to exclude.
     /// </summary>
-    public IReadOnlyList<CidrRange> ExcludedIps { get; init; } = [];
+    public IReadOnlyList<IpAddressRange> ExcludedIps { get; init; } = [];
 
     /// <summary>
     /// Process names or targets to include.
