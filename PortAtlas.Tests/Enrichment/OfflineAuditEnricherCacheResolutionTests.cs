@@ -107,6 +107,52 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
     }
 
     [Fact]
+    public async Task EnrichPathsAsync_WhenOutputCacheIsNotListedAsInput_CountsOnlyTheListedCachesAsSources()
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.10");
+        var outputCache = Path.Combine(_tempDirectory, "master.json");
+        await new PersistentDnsCacheStore(outputCache).SaveAsync(Cache(("192.168.1.20", "pihole.home.arpa"), ("192.168.1.30", "pve.home.arpa")));
+        var otherCache = Path.Combine(_tempDirectory, "other.json");
+        await new PersistentDnsCacheStore(otherCache).SaveAsync(Cache(("192.168.1.10", "nas.home.arpa")));
+        var options = new OfflineAuditEnrichmentOptions { Isolated = true, OutputCachePath = outputCache };
+
+        // Act
+        var report = await new OfflineAuditEnricher().EnrichPathsAsync([auditPath], [otherCache], options);
+
+        // Assert
+        report.CacheReport.TotalCachesProcessed.Should().Be(1);
+        report.CacheReport.TotalEntriesLoaded.Should().Be(1);
+        report.CacheReport.MergedEntries.Keys.Should().BeEquivalentTo(["192.168.1.10", "192.168.1.20", "192.168.1.30"]);
+    }
+
+    [Fact]
+    public async Task EnrichPathsAsync_WhenOutputCacheAndListedCacheDisagreeOnATie_KeepsTheOutputCacheName()
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.10");
+        var resolvedAt = new DateTimeOffset(2026, 10, 24, 7, 0, 0, TimeSpan.Zero);
+        var outputCache = Path.Combine(_tempDirectory, "master.json");
+        await new PersistentDnsCacheStore(outputCache).SaveAsync(new Dictionary<string, DnsCacheEntry>
+        {
+            ["192.168.1.10"] = new() { HostName = "nas.home.arpa", Source = "DNS", ResolvedAtUtc = resolvedAt }
+        });
+        var otherCache = Path.Combine(_tempDirectory, "other.json");
+        await new PersistentDnsCacheStore(otherCache).SaveAsync(new Dictionary<string, DnsCacheEntry>
+        {
+            ["192.168.1.10"] = new() { HostName = "backup.home.arpa", Source = "DNS", ResolvedAtUtc = resolvedAt }
+        });
+        var options = new OfflineAuditEnrichmentOptions { Isolated = true, OutputCachePath = outputCache };
+
+        // Act
+        var report = await new OfflineAuditEnricher().EnrichPathsAsync([auditPath], [otherCache], options);
+
+        // Assert
+        report.CacheReport.MergedEntries["192.168.1.10"].HostName.Should().Be("nas.home.arpa");
+        report.CacheReport.Conflicts.Should().ContainSingle(conflict => conflict.ConflictingHostName == "backup.home.arpa");
+    }
+
+    [Fact]
     public void Consolidate_WhenOneEntryHasNoName_KeepsTheNamedEntryWithoutConflict()
     {
         // Arrange

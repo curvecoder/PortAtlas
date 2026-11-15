@@ -10,7 +10,19 @@ public sealed class DnsCacheConsolidator
     /// </summary>
     /// <param name="caches">Collection of DNS cache dictionaries to merge.</param>
     /// <returns>A consolidation report containing deduplicated entries and detected conflicts.</returns>
-    public DnsCacheConsolidationReport Consolidate(IEnumerable<IReadOnlyDictionary<string, DnsCacheEntry>> caches)
+    public DnsCacheConsolidationReport Consolidate(IEnumerable<IReadOnlyDictionary<string, DnsCacheEntry>> caches) =>
+        Consolidate(caches, baseCache: null);
+
+    /// <summary>
+    /// Merges multiple DNS cache dictionaries into a base cache, such as the master cache about to be rewritten.
+    /// </summary>
+    /// <param name="caches">Collection of DNS cache dictionaries to merge; only these are counted as sources.</param>
+    /// <param name="baseCache">Cache merged before the others and left out of the source counters, or <see langword="null"/>.</param>
+    /// <returns>A consolidation report containing deduplicated entries and detected conflicts.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="caches"/> is null.</exception>
+    public DnsCacheConsolidationReport Consolidate(
+        IEnumerable<IReadOnlyDictionary<string, DnsCacheEntry>> caches,
+        IReadOnlyDictionary<string, DnsCacheEntry>? baseCache)
     {
         ArgumentNullException.ThrowIfNull(caches);
 
@@ -19,40 +31,16 @@ public sealed class DnsCacheConsolidator
         var totalCaches = 0;
         var totalLoaded = 0;
 
+        if (baseCache is not null)
+        {
+            MergeInto(merged, conflicts, baseCache);
+        }
+
         foreach (var cache in caches)
         {
             totalCaches++;
-            foreach (var (ip, incomingEntry) in cache)
-            {
-                totalLoaded++;
-                if (string.IsNullOrWhiteSpace(ip) || incomingEntry is null)
-                {
-                    continue;
-                }
-
-                if (!merged.TryGetValue(ip, out var existingEntry))
-                {
-                    merged[ip] = incomingEntry;
-                    continue;
-                }
-
-                // An entry without a name only records a failed attempt: the named one wins and no conflict is worth reporting.
-                if (string.IsNullOrWhiteSpace(existingEntry.HostName) != string.IsNullOrWhiteSpace(incomingEntry.HostName))
-                {
-                    merged[ip] = string.IsNullOrWhiteSpace(existingEntry.HostName) ? incomingEntry : existingEntry;
-                    continue;
-                }
-
-                if (string.Equals(existingEntry.HostName, incomingEntry.HostName, StringComparison.OrdinalIgnoreCase))
-                {
-                    merged[ip] = MergeMatchingEntries(existingEntry, incomingEntry);
-                    continue;
-                }
-
-                var (winner, loser, reason) = ArbitrateConflict(ip, existingEntry, incomingEntry);
-                merged[ip] = winner;
-                conflicts.Add(new DnsCacheConflict(ip, loser.HostName, winner.HostName, reason));
-            }
+            totalLoaded += cache.Count;
+            MergeInto(merged, conflicts, cache);
         }
 
         return new DnsCacheConsolidationReport(merged, conflicts, totalCaches, totalLoaded);
@@ -82,6 +70,43 @@ public sealed class DnsCacheConsolidator
         }
 
         return Consolidate(caches);
+    }
+
+    private static void MergeInto(
+        Dictionary<string, DnsCacheEntry> merged,
+        List<DnsCacheConflict> conflicts,
+        IReadOnlyDictionary<string, DnsCacheEntry> cache)
+    {
+        foreach (var (ip, incomingEntry) in cache)
+        {
+            if (string.IsNullOrWhiteSpace(ip) || incomingEntry is null)
+            {
+                continue;
+            }
+
+            if (!merged.TryGetValue(ip, out var existingEntry))
+            {
+                merged[ip] = incomingEntry;
+                continue;
+            }
+
+            // An entry without a name only records a failed attempt: the named one wins and no conflict is worth reporting.
+            if (string.IsNullOrWhiteSpace(existingEntry.HostName) != string.IsNullOrWhiteSpace(incomingEntry.HostName))
+            {
+                merged[ip] = string.IsNullOrWhiteSpace(existingEntry.HostName) ? incomingEntry : existingEntry;
+                continue;
+            }
+
+            if (string.Equals(existingEntry.HostName, incomingEntry.HostName, StringComparison.OrdinalIgnoreCase))
+            {
+                merged[ip] = MergeMatchingEntries(existingEntry, incomingEntry);
+                continue;
+            }
+
+            var (winner, loser, reason) = ArbitrateConflict(ip, existingEntry, incomingEntry);
+            merged[ip] = winner;
+            conflicts.Add(new DnsCacheConflict(ip, loser.HostName, winner.HostName, reason));
+        }
     }
 
     private static DnsCacheEntry MergeMatchingEntries(DnsCacheEntry existing, DnsCacheEntry incoming)

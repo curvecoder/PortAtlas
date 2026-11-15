@@ -41,7 +41,7 @@ public sealed class OfflineAuditEnricher(
     /// <param name="options">Enrichment and output options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>The outcome report: processed and generated file paths, and counters.</returns>
-    public async Task<OfflineAuditEnrichmentReport> EnrichFilesAsync(
+    public Task<OfflineAuditEnrichmentReport> EnrichFilesAsync(
         IReadOnlyList<string> auditFiles,
         IReadOnlyList<IReadOnlyDictionary<string, DnsCacheEntry>> initialCaches,
         OfflineAuditEnrichmentOptions options,
@@ -51,8 +51,18 @@ public sealed class OfflineAuditEnricher(
         ArgumentNullException.ThrowIfNull(initialCaches);
         ArgumentNullException.ThrowIfNull(options);
 
+        return EnrichAsync(auditFiles, initialCaches, masterCache: null, options, cancellationToken);
+    }
+
+    private async Task<OfflineAuditEnrichmentReport> EnrichAsync(
+        IReadOnlyList<string> auditFiles,
+        IReadOnlyList<IReadOnlyDictionary<string, DnsCacheEntry>> initialCaches,
+        IReadOnlyDictionary<string, DnsCacheEntry>? masterCache,
+        OfflineAuditEnrichmentOptions options,
+        CancellationToken cancellationToken)
+    {
         // 1. Consolidate input caches
-        var cacheReport = _consolidator.Consolidate(initialCaches);
+        var cacheReport = _consolidator.Consolidate(initialCaches, masterCache);
         var activeCache = new Dictionary<string, DnsCacheEntry>(cacheReport.MergedEntries, StringComparer.OrdinalIgnoreCase);
 
         // 2. Scan audit files to identify missing IP addresses requiring resolution
@@ -176,22 +186,22 @@ public sealed class OfflineAuditEnricher(
         var cacheFiles = AuditInputPathResolver.Resolve(cachePathsOrPatterns, [".json"]);
 
         // The master cache is read even when the caller did not list it: writing it back without merging would erase
-        // every name that the other caches do not carry.
-        var inputCaches = cacheFiles.ToList();
+        // every name that the other caches do not carry. It is merged first but not counted as a source cache.
+        IReadOnlyDictionary<string, DnsCacheEntry>? masterCache = null;
         if (File.Exists(options.OutputCachePath) &&
-            !inputCaches.Contains(Path.GetFullPath(options.OutputCachePath), StringComparer.OrdinalIgnoreCase))
+            !cacheFiles.Contains(Path.GetFullPath(options.OutputCachePath), StringComparer.OrdinalIgnoreCase))
         {
-            inputCaches.Insert(0, options.OutputCachePath);
+            masterCache = new PersistentDnsCacheStore(options.OutputCachePath).Load();
         }
 
         var loadedCaches = new List<IReadOnlyDictionary<string, DnsCacheEntry>>();
-        foreach (var cachePath in inputCaches)
+        foreach (var cachePath in cacheFiles)
         {
             var store = new PersistentDnsCacheStore(cachePath);
             loadedCaches.Add(store.Load());
         }
 
-        return await EnrichFilesAsync(auditFiles, loadedCaches, options, cancellationToken).ConfigureAwait(false);
+        return await EnrichAsync(auditFiles, loadedCaches, masterCache, options, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<int> ResolveUnknownAddressesAsync(
