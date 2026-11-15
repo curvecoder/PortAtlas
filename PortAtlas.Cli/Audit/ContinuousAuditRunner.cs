@@ -231,6 +231,8 @@ public static class ContinuousAuditRunner
             }
         }
 
+        engine.ScanCycleFailed += (_, e) => ReportScanFailure(dashboard, e);
+
         if (!string.IsNullOrWhiteSpace(config.OutputHtmlMapPath))
         {
             engine.ScanCycleCompleted += (_, _) =>
@@ -398,6 +400,14 @@ public static class ContinuousAuditRunner
                 Console.WriteLine("Graceful shutdown of network flow audit.");
             }
         }
+        catch (ConsecutiveScanFailuresException ex)
+        {
+            dashboard?.RestoreCursor();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(ex.Message);
+            Console.ResetColor();
+            exitCode = 1;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // The logs are written a last time when the audit stops; when that fails, the operator must know that
@@ -416,6 +426,20 @@ public static class ContinuousAuditRunner
         }
 
         return exitCode;
+    }
+
+    private static void ReportScanFailure(FlowAuditDashboardRenderer? dashboard, FlowAuditCycleFailedEventArgs failure)
+    {
+        var message = $"Scan failed ({failure.ConsecutiveFailures} of {failure.ConsecutiveFailureLimit} in a row): {failure.Error.Message}";
+        if (dashboard is not null)
+        {
+            dashboard.ShowWarning(message);
+            return;
+        }
+
+        Console.ForegroundColor = ConsoleColor.Yellow;
+        Console.WriteLine($"[{DateTimeOffset.Now:HH:mm:ss}] {message}");
+        Console.ResetColor();
     }
 
     private static void WriteAuditLogError(Exception ex)

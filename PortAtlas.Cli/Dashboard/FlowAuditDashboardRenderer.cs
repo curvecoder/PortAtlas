@@ -36,6 +36,9 @@ public sealed partial class FlowAuditDashboardRenderer
     private const int DefaultFallbackHeight = 30;
     private const int UnlimitedDiscoveriesCapacity = 50_000;
 
+    // Long enough to be read between two scans at the default interval; a failure that repeats renews it.
+    private static readonly TimeSpan WarningBannerDuration = TimeSpan.FromSeconds(15);
+
     private static readonly IReadOnlySet<IPAddress> NoLocalHostAddresses = new HashSet<IPAddress>();
 
     private readonly Stopwatch _uptime = Stopwatch.StartNew();
@@ -65,6 +68,7 @@ public sealed partial class FlowAuditDashboardRenderer
     private InteractiveExclusionColumn _selectedColumn = InteractiveExclusionColumn.Local;
     private string? _statusBannerMessage;
     private DateTime _statusBannerExpiresUtc = DateTime.MinValue;
+    private bool _statusBannerIsWarning;
 
     /// <summary>
     /// Indicates whether the socket/process filters are currently bypassed for display.
@@ -98,10 +102,9 @@ public sealed partial class FlowAuditDashboardRenderer
         lock (_syncLock)
         {
             _isFilterBypassed = !_isFilterBypassed;
-            _statusBannerMessage = _isFilterBypassed
+            SetStatusBanner(_isFilterBypassed
                 ? "View switched: Active Sockets (Real-time snapshot)"
-                : "View switched: Audit Log (Session discoveries)";
-            _statusBannerExpiresUtc = DateTime.UtcNow.AddSeconds(3);
+                : "View switched: Audit Log (Session discoveries)", TimeSpan.FromSeconds(3));
             _currentPageIndex = 0;
             _selectedRowIndex = 0;
             RenderInternal(forceClear: false);
@@ -381,9 +384,26 @@ public sealed partial class FlowAuditDashboardRenderer
         {
             var increment = Math.Max(10, batchSize);
             _maxStoredDiscoveries = Math.Min(UnlimitedDiscoveriesCapacity, _maxStoredDiscoveries + increment);
-            _statusBannerMessage = $"Buffer capacity increased to {_maxStoredDiscoveries} flows";
-            _statusBannerExpiresUtc = DateTime.UtcNow.AddSeconds(3);
+            SetStatusBanner($"Buffer capacity increased to {_maxStoredDiscoveries} flows", TimeSpan.FromSeconds(3));
             RenderInternal(forceClear: false);
+        }
+    }
+
+    /// <summary>
+    /// Shows a warning in the title of the flow table, in place of the page information, for a few seconds.
+    /// </summary>
+    /// <param name="message">Warning shown to the operator.</param>
+    public void ShowWarning(string message)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(message);
+
+        lock (_syncLock)
+        {
+            SetStatusBanner(message, WarningBannerDuration, isWarning: true);
+            if (_lastResult is not null && _lastHost is not null)
+            {
+                RenderInternal(forceClear: false);
+            }
         }
     }
 
@@ -395,8 +415,7 @@ public sealed partial class FlowAuditDashboardRenderer
         lock (_syncLock)
         {
             _maxStoredDiscoveries = UnlimitedDiscoveriesCapacity;
-            _statusBannerMessage = "Buffer capacity set to ALL flows";
-            _statusBannerExpiresUtc = DateTime.UtcNow.AddSeconds(3);
+            SetStatusBanner("Buffer capacity set to ALL flows", TimeSpan.FromSeconds(3));
             RenderInternal(forceClear: false);
         }
     }
@@ -534,8 +553,7 @@ public sealed partial class FlowAuditDashboardRenderer
                     return false;
             }
 
-            _statusBannerMessage = actionDescription;
-            _statusBannerExpiresUtc = DateTime.UtcNow.AddSeconds(4);
+            SetStatusBanner(actionDescription, TimeSpan.FromSeconds(4));
 
             var totalPages = Math.Max(1, (int)Math.Ceiling(GetCurrentDisplayCount() / (double)pageSize));
             if (_currentPageIndex >= totalPages)
@@ -667,8 +685,7 @@ public sealed partial class FlowAuditDashboardRenderer
                 _maxStoredDiscoveries = _recentDiscoveries.Count;
             }
 
-            _statusBannerMessage = $"Reloaded {existingEntries.Count} historical flows from CSV";
-            _statusBannerExpiresUtc = DateTime.UtcNow.AddSeconds(5);
+            SetStatusBanner($"Reloaded {existingEntries.Count} historical flows from CSV", TimeSpan.FromSeconds(5));
         }
     }
 
@@ -784,6 +801,13 @@ public sealed partial class FlowAuditDashboardRenderer
         }
 
         return Math.Min(pageSize, totalCount - startIndex);
+    }
+
+    private void SetStatusBanner(string message, TimeSpan duration, bool isWarning = false)
+    {
+        _statusBannerMessage = message;
+        _statusBannerExpiresUtc = DateTime.UtcNow.Add(duration);
+        _statusBannerIsWarning = isWarning;
     }
 
     private void RenderInternal(bool forceClear)
@@ -1029,8 +1053,9 @@ public sealed partial class FlowAuditDashboardRenderer
         var tableTitlePrefix = _isFilterBypassed
             ? $" {AnsiBold}{AnsiWhite}ACTIVE SOCKETS (SNAPSHOT){AnsiReset}"
             : $" {AnsiBold}{AnsiWhite}AUDIT LOG (DISCOVERIES){AnsiReset}";
+        var bannerStyle = _statusBannerIsWarning ? $"{AnsiYellow}\u26A0" : $"{AnsiGreen}\u2714";
         var tableTitle = hasActiveBanner
-            ? $" {AnsiBold}{AnsiGreen}\u2714 {_statusBannerMessage}{AnsiReset}"
+            ? $" {AnsiBold}{bannerStyle} {_statusBannerMessage}{AnsiReset}"
             : $"{tableTitlePrefix} {AnsiDarkGray}[Page {_currentPageIndex + 1}/{totalPages} | Rows {startRowNum}-{endRowNum} of {displayEntries.Count} | Max: {capLabel}]{AnsiReset}";
         sb.AppendLine(FormatRow(tableTitle, interiorWidth));
 

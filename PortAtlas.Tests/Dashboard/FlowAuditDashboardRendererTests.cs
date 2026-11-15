@@ -205,6 +205,22 @@ public sealed class FlowAuditDashboardRendererTests
     }
 
     [Fact]
+    public void BuildDashboardFrame_WhenAWarningIsShown_RendersItInTheTableTitle()
+    {
+        // Arrange
+        var renderer = new FlowAuditDashboardRenderer(5, "output.csv");
+        var result = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 0, 0, 0, 0, [], []);
+        renderer.ShowWarning("Scan failed (1 of 10 in a row): Access is denied.");
+
+        // Act
+        var frame = renderer.BuildDashboardFrame(result, SampleHost, 120, 25);
+
+        // Assert
+        frame.Should().Contain("⚠ Scan failed (1 of 10 in a row): Access is denied.");
+        frame.Should().NotContain("[Page 1/1");
+    }
+
+    [Fact]
     public void BuildDashboardFrame_WhenEntryHasRemoteHostName_RendersHostNameInRemoteColumn()
     {
         // Arrange

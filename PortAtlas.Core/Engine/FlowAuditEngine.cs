@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using PortAtlas.Core.Deduplication;
 using PortAtlas.Core.Export;
 using PortAtlas.Core.Filtering;
@@ -6,6 +7,7 @@ using PortAtlas.Core.Providers;
 using PortAtlas.Core.Resolution;
 using ProcessForge.Filtering;
 using SocketForge.Contracts;
+using SocketForge.Models;
 
 namespace PortAtlas.Core.Engine;
 
@@ -32,6 +34,11 @@ public sealed class FlowAuditEngine(
     /// Period between two rewrites of the logs used by the overloads that do not take one.
     /// </summary>
     public static readonly TimeSpan DefaultLogRewriteInterval = TimeSpan.FromMinutes(5);
+
+    /// <summary>
+    /// Number of scan cycles failing in a row that stops the audit.
+    /// </summary>
+    public const int ConsecutiveScanFailureLimit = 10;
 
     private readonly IHostNameResolver _hostNameResolver = InitializeHostNameResolver(
         socketScanner,
@@ -98,6 +105,11 @@ public sealed class FlowAuditEngine(
     public event EventHandler<FlowAuditCycleEventArgs>? ScanCycleCompleted;
 
     /// <summary>
+    /// Event raised when a scan cycle fails and the audit keeps running.
+    /// </summary>
+    public event EventHandler<FlowAuditCycleFailedEventArgs>? ScanCycleFailed;
+
+    /// <summary>
     /// Executes the continuous audit loop until cancellation is requested, then writes the logs.
     /// </summary>
     /// <exception cref="IOException">When the logs cannot be written at the stop; the message names the log.</exception>
@@ -108,13 +120,21 @@ public sealed class FlowAuditEngine(
         try
         {
             using var timer = new PeriodicTimer(scanInterval);
+            var consecutiveFailures = 0;
 
-            await ExecuteScanCycleAsync(cancellationToken).ConfigureAwait(false);
-
-            while (!cancellationToken.IsCancellationRequested && await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
+            do
             {
-                await ExecuteScanCycleAsync(cancellationToken).ConfigureAwait(false);
+                var activeSockets = await ScanSocketsToleratingFailureAsync(consecutiveFailures + 1, cancellationToken).ConfigureAwait(false);
+                if (activeSockets is null)
+                {
+                    consecutiveFailures++;
+                    continue;
+                }
+
+                consecutiveFailures = 0;
+                await ProcessScannedSocketsAsync(activeSockets, cancellationToken).ConfigureAwait(false);
             }
+            while (!cancellationToken.IsCancellationRequested && await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false));
 
             stoppedByFailure = false;
         }
@@ -145,6 +165,24 @@ public sealed class FlowAuditEngine(
     public async Task<int> ExecuteScanCycleAsync(CancellationToken cancellationToken = default)
     {
         var activeSockets = await socketScanner.ScanSocketsAsync(cancellationToken).ConfigureAwait(false);
+        return await ProcessScannedSocketsAsync(activeSockets, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Writes every flow held in memory to the logs, replacing their previous content.
+    /// </summary>
+    /// <param name="cancellationToken">Cooperative cancellation token.</param>
+    /// <returns>A task that ends when the logs hold the flows.</returns>
+    /// <exception cref="IOException">When a log was not replaced; the message names it.</exception>
+    /// <exception cref="UnauthorizedAccessException">When the folder of a log cannot be written.</exception>
+    public Task RewriteLogAsync(CancellationToken cancellationToken = default)
+    {
+        _lastLogRewriteUtc = _timeProvider.GetUtcNow();
+        return logRewriter.RewriteAsync(deduplicationRegister.GetAllEntries(), cancellationToken);
+    }
+
+    private async Task<int> ProcessScannedSocketsAsync(IReadOnlyList<ActiveSocketConnection> activeSockets, CancellationToken cancellationToken)
+    {
         var host = hostProvider.GetCurrentHostMetadata();
         var localAddresses = hostProvider.GetLocalIpAddresses();
         var now = _timeProvider.GetUtcNow();
@@ -198,18 +236,37 @@ public sealed class FlowAuditEngine(
         return newlyDiscovered.Count;
     }
 
-    /// <summary>
-    /// Writes every flow held in memory to the logs, replacing their previous content.
-    /// </summary>
-    /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>A task that ends when the logs hold the flows.</returns>
-    /// <exception cref="IOException">When a log was not replaced; the message names it.</exception>
-    /// <exception cref="UnauthorizedAccessException">When the folder of a log cannot be written.</exception>
-    public Task RewriteLogAsync(CancellationToken cancellationToken = default)
+    private async Task<IReadOnlyList<ActiveSocketConnection>?> ScanSocketsToleratingFailureAsync(int failures, CancellationToken cancellationToken)
     {
-        _lastLogRewriteUtc = _timeProvider.GetUtcNow();
-        return logRewriter.RewriteAsync(deduplicationRegister.GetAllEntries(), cancellationToken);
+        try
+        {
+            return await socketScanner.ScanSocketsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (cancellationToken.IsCancellationRequested && IsTransientScanFailure(ex))
+        {
+            // Stopping the audit can dispose what the scanner was using before it saw the token: the audit stops
+            // as cancelled, which is what was asked, and writes its logs.
+            throw new OperationCanceledException("The audit stopped during a scan.", ex, cancellationToken);
+        }
+        catch (Exception ex) when (IsTransientScanFailure(ex))
+        {
+            if (failures >= ConsecutiveScanFailureLimit)
+            {
+                throw new ConsecutiveScanFailuresException($"The audit stopped after {failures} failed scans in a row: {ex.Message}", ex);
+            }
+
+            ScanCycleFailed?.Invoke(this, new FlowAuditCycleFailedEventArgs(ex, failures, ConsecutiveScanFailureLimit));
+            return null;
+        }
     }
+
+    // An audit runs unattended for weeks: a socket table that cannot be read for one cycle (SocketForge throws
+    // Win32Exception, or InvalidOperationException when the table keeps growing between its size and read calls) or a
+    // file held for a moment must not end it. Only failures that repeat cycle after cycle stop it. Any other exception
+    // is a defect and stops the audit at once, as does any failure after the scan (log, dashboard, map): those are not
+    // scan failures.
+    private static bool IsTransientScanFailure(Exception ex) =>
+        ex is Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException;
 
     private async Task RewriteLogKeepingFlowsOnFailureAsync(CancellationToken cancellationToken)
     {

@@ -134,6 +134,8 @@ Familles lues : filtres de flux et rendu de la carte. Quand `--html` (ou `Output
 
 Le tableau de bord n'est pas affiché quand l'entrée ou la sortie du processus est redirigée, même sans `--no-tui`.
 
+Un scan qui échoue (table des sockets illisible, fichier retenu un instant) n'arrête pas l'audit : le tableau de bord affiche `Scan failed (n of 10 in a row): …` dans le titre de la table des flux, ou la ligne est écrite avec son heure sans tableau de bord, et le scan suivant a lieu à l'intervalle habituel. Après 10 scans en échec à la suite, l'audit s'arrête avec `The audit stopped after 10 failed scans in a row: …` et le code de sortie 1, après écriture des journaux.
+
 Un nom de colonne invalide dans `--columns` ou `CsvColumns`, ou une liste sans `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath` et `TargetExecutable` (le journal est relu au démarrage suivant, voir les [formats de sortie](output-formats.fr.md#journal-daudit-csv)), arrête la commande avec `Column configuration error: …` et le code de sortie 1.
 
 ## map
@@ -262,5 +264,5 @@ PortAtlas config init [<path>]
 | Code | Signification |
 | :--- | :--- |
 | `0` | Succès, ou aide affichée |
-| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
+| `1` | Ligne de commande invalide, aucun journal trouvé, nom de colonne CSV invalide ou liste de colonnes sans les colonnes de la clé d'un flux, journal d'`audit` illisible ou impossible à remplacer au démarrage ou à écrire à l'arrêt ([détails](output-formats.fr.md#journal-daudit-csv)), `audit` arrêté par 10 scans en échec à la suite, port ou adresse illisible dans un [filtre de flux](#filtres-de-flux), chemin donné par `--config` vide ou introuvable, ou fichier de configuration illisible, invalide (voir la [référence de configuration](configuration.fr.md)) ou qui fixe `"IsolatedMode": true` |
 | `130` | `resolve` arrêtée par `Ctrl+C` ou `SIGTERM`, après enregistrement des adresses déjà résolues |

@@ -134,6 +134,8 @@ Families read: flow filters and map rendering. When `--html` (or `OutputHtmlMapP
 
 The dashboard is not shown when the input or the output of the process is redirected, even without `--no-tui`.
 
+A scan that fails (socket table that cannot be read, file held for a moment) does not stop the audit: the dashboard shows `Scan failed (n of 10 in a row): …` in the title of the flow table, or the line is printed with its time without the dashboard, and the next scan runs at the usual interval. After 10 failed scans in a row the audit stops with `The audit stopped after 10 failed scans in a row: …` and exit code 1, after writing the logs.
+
 An invalid column name in `--columns` or `CsvColumns`, or a list without `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp`, `RemotePort`, `ExecutablePath` and `TargetExecutable` (the log is read back at the next start, see [output formats](output-formats.md#csv-audit-log)), stops the command with `Column configuration error: …` and exit code 1.
 
 ## map
@@ -262,5 +264,5 @@ PortAtlas config init [<path>]
 | Code | Meaning |
 | :--- | :--- |
 | `0` | Success, or help printed |
-| `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |
+| `1` | Invalid command line, no audit log found, invalid CSV column name or column list without the columns of the flow key, `audit` log that cannot be read back or replaced at start or written at stop ([details](output-formats.md#csv-audit-log)), `audit` stopped by 10 failed scans in a row, a port or an address of a [flow filter](#flow-filters) that cannot be read, a `--config` path that is empty or does not exist, or a configuration file that cannot be read, is not valid (see the [configuration reference](configuration.md)) or sets `"IsolatedMode": true` |
 | `130` | `resolve` stopped by `Ctrl+C` or `SIGTERM`, after saving the addresses already resolved |

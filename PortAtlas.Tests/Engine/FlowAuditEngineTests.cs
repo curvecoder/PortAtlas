@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Net;
 using AwesomeAssertions;
 using PortAtlas.Core.Deduplication;
@@ -494,7 +495,130 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
         var act = () => engine.RunContinuousAuditAsync();
 
         // Assert
-        await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("The socket table cannot be read.");
+        (await act.Should().ThrowAsync<ConsecutiveScanFailuresException>())
+            .WithInnerException<InvalidOperationException>().WithMessage("The socket table cannot be read.");
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenAScanFailsOnce_ReportsTheFailureAndRecordsTheNextCycle()
+    {
+        // Arrange
+        var scanner = new FailingThenWorkingSocketScanner(1, new Win32Exception(5), [NasBackupFlow()]);
+        var (engine, _, _) = CreateEngineWithRewritePeriod(scanner, new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        var failures = new List<FlowAuditCycleFailedEventArgs>();
+        engine.ScanCycleFailed += (_, e) => failures.Add(e);
+        using var cts = new CancellationTokenSource();
+        var trackedFlows = 0;
+        engine.ScanCycleCompleted += (_, e) =>
+        {
+            trackedFlows = e.Result.TotalUniqueFlowsTracked;
+            _ = cts.CancelAsync();
+        };
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync(cts.Token);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+        trackedFlows.Should().Be(1);
+        failures.Should().ContainSingle();
+        failures[0].Error.Should().BeOfType<Win32Exception>();
+        failures[0].ConsecutiveFailures.Should().Be(1);
+        failures[0].ConsecutiveFailureLimit.Should().Be(FlowAuditEngine.ConsecutiveScanFailureLimit);
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenEveryScanFails_StopsAtTheLimitAfterReportingEachEarlierFailure()
+    {
+        // Arrange
+        var (engine, _, logPath) = CreateEngineWithRewritePeriod(new FailingSocketScanner(), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        var reportedCounts = new List<int>();
+        engine.ScanCycleFailed += (_, e) => reportedCounts.Add(e.ConsecutiveFailures);
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync();
+
+        // Assert
+        (await act.Should().ThrowAsync<ConsecutiveScanFailuresException>())
+            .WithMessage($"The audit stopped after {FlowAuditEngine.ConsecutiveScanFailureLimit} failed scans in a row: The socket table cannot be read.")
+            .WithInnerException<InvalidOperationException>();
+        reportedCounts.Should().Equal(Enumerable.Range(1, FlowAuditEngine.ConsecutiveScanFailureLimit - 1));
+        (await ReadLogAsync(logPath)).Should().Equal("LastSeenUtc,ObservationCount,RemoteIp,RemoteHostName");
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenScansFailBetweenSuccessfulCycles_CountsOnlyTheFailuresInARow()
+    {
+        // Arrange
+        var scanner = new AlternatingSocketScanner([NasBackupFlow()]);
+        var (engine, _, _) = CreateEngineWithRewritePeriod(scanner, new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        var reportedCounts = new List<int>();
+        engine.ScanCycleFailed += (_, e) => reportedCounts.Add(e.ConsecutiveFailures);
+        using var cts = new CancellationTokenSource();
+        engine.ScanCycleCompleted += (_, _) =>
+        {
+            if (scanner.CallCount >= 2 * FlowAuditEngine.ConsecutiveScanFailureLimit)
+            {
+                _ = cts.CancelAsync();
+            }
+        };
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync(cts.Token);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+        reportedCounts.Should().OnlyContain(count => count == 1).And.HaveCount(FlowAuditEngine.ConsecutiveScanFailureLimit);
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenTheCycleFailsAfterTheScan_StopsAtOnceWithoutCountingAScanFailure()
+    {
+        // Arrange
+        var (engine, _, _) = CreateEngineWithRewritePeriod(new FakeSocketScanner([NasBackupFlow()]), new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        var failures = 0;
+        engine.ScanCycleFailed += (_, _) => failures++;
+        engine.ScanCycleCompleted += (_, _) => throw new IOException("The map file is held by another program.");
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<IOException>().WithMessage("The map file is held by another program.");
+        failures.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenStoppedDuringAFailingScan_StopsAsCancelledWithoutReportingAScanFailure()
+    {
+        // Arrange
+        using var cts = new CancellationTokenSource();
+        var scanner = new CancellingThenFailingSocketScanner(cts);
+        var (engine, _, _) = CreateEngineWithRewritePeriod(scanner, new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+        var failures = 0;
+        engine.ScanCycleFailed += (_, _) => failures++;
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync(cts.Token);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        failures.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task RunContinuousAuditAsync_WhenAScanFailsWithAnUnexpectedError_StopsAtOnce()
+    {
+        // Arrange
+        var scanner = new FailingThenWorkingSocketScanner(1, new NotSupportedException("Unsupported platform."), [NasBackupFlow()]);
+        var (engine, _, _) = CreateEngineWithRewritePeriod(scanner, new PortAtlas.Core.Resolution.NoOpHostNameResolver());
+
+        // Act
+        var act = () => engine.RunContinuousAuditAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<NotSupportedException>().WithMessage("Unsupported platform.");
+        scanner.CallCount.Should().Be(1);
     }
 
     private (FlowAuditEngine Engine, ManualTimeProvider Clock, string LogPath) CreateEngineWithRewritePeriod(
@@ -515,7 +639,7 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
             new LocalServerHostProvider(),
             new AuditLogRewriter(logPath, formatter),
             resolver,
-            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMilliseconds(10),
             TimeSpan.FromMinutes(5),
             clock);
         return (engine, clock, logPath);
@@ -545,6 +669,39 @@ public sealed class FlowAuditEngineTests : IAsyncLifetime
     {
         public Task<IReadOnlyList<ActiveSocketConnection>> ScanSocketsAsync(CancellationToken cancellationToken = default)
             => throw new InvalidOperationException("The socket table cannot be read.");
+    }
+
+    private sealed class FailingThenWorkingSocketScanner(int failingCalls, Exception error, IReadOnlyList<ActiveSocketConnection> connections) : ISocketScanner
+    {
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<ActiveSocketConnection>> ScanSocketsAsync(CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return CallCount <= failingCalls ? Task.FromException<IReadOnlyList<ActiveSocketConnection>>(error) : Task.FromResult(connections);
+        }
+    }
+
+    private sealed class CancellingThenFailingSocketScanner(CancellationTokenSource stop) : ISocketScanner
+    {
+        public async Task<IReadOnlyList<ActiveSocketConnection>> ScanSocketsAsync(CancellationToken cancellationToken = default)
+        {
+            await stop.CancelAsync();
+            throw new ObjectDisposedException("SocketScanner");
+        }
+    }
+
+    private sealed class AlternatingSocketScanner(IReadOnlyList<ActiveSocketConnection> connections) : ISocketScanner
+    {
+        public int CallCount { get; private set; }
+
+        public Task<IReadOnlyList<ActiveSocketConnection>> ScanSocketsAsync(CancellationToken cancellationToken = default)
+        {
+            CallCount++;
+            return CallCount % 2 == 1
+                ? Task.FromException<IReadOnlyList<ActiveSocketConnection>>(new InvalidOperationException("The socket table changed size eight times."))
+                : Task.FromResult(connections);
+        }
     }
 
     private sealed class LateHostNameResolver : PortAtlas.Core.Resolution.IHostNameResolver
