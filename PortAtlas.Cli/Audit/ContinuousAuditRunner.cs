@@ -127,8 +127,9 @@ public static class ContinuousAuditRunner
             Console.WriteLine("Starting continuous audit... (Press 'm' to refresh topology map, 'q' to stop)\n");
         }
 
-        var processInspector = new CrossPlatformProcessInspector();
-        var socketScanner = SocketScannerFactory.Create(processInspector);
+        // One scanner for the whole audit: its process cache, keyed by PID and start time, is what spares
+        // re-reading every process at each scan cycle.
+        var socketScanner = SocketScannerFactory.Create();
 
         var filterOptions = new ProcessExclusionOptions
         {

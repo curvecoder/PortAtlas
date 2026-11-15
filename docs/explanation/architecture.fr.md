@@ -59,8 +59,8 @@ Le programme est réparti entre l'application et quatre frameworks publiés en p
 
 | Paquet | Rôle dans PortAtlas |
 | :--- | :--- |
-| SocketForge 2.0.0 | Tables de sockets (IPv4 et IPv6) sous Windows et Linux |
-| ProcessForge 1.2.1 | Informations et compte des processus, cibles des lanceurs, exclusion de processus |
+| SocketForge 2.1.0 | Tables de sockets (IPv4 et IPv6) sous Windows et Linux |
+| ProcessForge 1.3.0 | Informations et compte des processus, cibles des lanceurs, exclusion de processus |
 | FileForge.Core 1.4.1 | Lecture des enregistrements RFC 4180, et remplacement d'un fichier seulement une fois sa nouvelle version complète (journaux d'audit, configuration, profils, cache DNS) |
 | TopologyForge 1.13.0 | Graphe topologique, filtres, carte HTML et export Draw.io |
 
