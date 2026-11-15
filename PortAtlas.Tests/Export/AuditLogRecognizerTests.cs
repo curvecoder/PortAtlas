@@ -1,11 +1,18 @@
+using System.Text;
 using AwesomeAssertions;
 using PortAtlas.Core.Export;
 using Xunit;
 
 namespace PortAtlas.Tests.Export;
 
-public sealed class AuditLogRecognizerTests
+public sealed class AuditLogRecognizerTests : IDisposable
 {
+    private const string CsvHeader = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalPort,RemoteIp,RemotePort";
+
+    private readonly string _directory = Directory.CreateTempSubdirectory("portatlas-recognizer-").FullName;
+
+    public void Dispose() => Directory.Delete(_directory, recursive: true);
+
     [Theory]
     [InlineData("FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,Direction,LocalIp,LocalPort,RemoteIp,RemotePort")]
     [InlineData("FirstSeenUtc;LastSeenUtc;ServerName;LocalPort;RemoteIp;RemotePort")]
@@ -84,5 +91,99 @@ public sealed class AuditLogRecognizerTests
 
         // Assert
         isNdjson.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("\uFEFF" + CsvHeader + "\r\n2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,1,nas,Tcp,Outbound,50000,192.168.1.30,5432\r\n")]
+    [InlineData(CsvHeader + "\n")]
+    [InlineData(CsvHeader)]
+    public async Task IsAuditLogAsync_WhenCsvStartsWithAnAuditHeader_ReturnsTrue(string content)
+    {
+        // Arrange
+        var path = WriteFile("audit.csv", content);
+
+        // Act
+        var isAuditLog = await AuditLogRecognizer.IsAuditLogAsync(path);
+
+        // Assert
+        isAuditLog.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsAuditLogAsync_WhenCsvStartsWithABlankLine_ReturnsFalse()
+    {
+        // Arrange
+        var path = WriteFile("audit.csv", "\r\n" + CsvHeader + "\r\n");
+
+        // Act
+        var isAuditLog = await AuditLogRecognizer.IsAuditLogAsync(path);
+
+        // Assert
+        isAuditLog.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("{\"serverName\":\"nas\",\"localPort\":50000}\n")]
+    [InlineData("\r\n\r\n  \n{\"serverName\":\"nas\",\"localPort\":50000}")]
+    [InlineData("\r\n{\"serverName\":\"nas\",\"localPort\":50000}\r{\"serverName\":\"pve\"}")]
+    public async Task IsAuditLogAsync_WhenNdjsonFirstRecordIsAnAuditRecord_ReturnsTrue(string content)
+    {
+        // Arrange
+        var path = WriteFile("audit.ndjson", content);
+
+        // Act
+        var isAuditLog = await AuditLogRecognizer.IsAuditLogAsync(path);
+
+        // Assert
+        isAuditLog.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsAuditLogAsync_WhenCsvFirstLineIsJustUnderTheReadLimit_ReturnsTrue()
+    {
+        // Arrange
+        var padding = new string('x', AuditLogRecognizer.MaxFirstLineLength - CsvHeader.Length - 2);
+        var path = WriteFile("audit.csv", CsvHeader + "," + padding + "\r\n");
+
+        // Act
+        var isAuditLog = await AuditLogRecognizer.IsAuditLogAsync(path);
+
+        // Assert
+        isAuditLog.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task IsAuditLogAsync_WhenCsvFirstLineIsLongerThanTheReadLimit_ReturnsFalse()
+    {
+        // Arrange: an audit header followed, on the same line, by more text than an audit header can hold.
+        var path = WriteFile("audit.csv", CsvHeader + "," + new string('x', AuditLogRecognizer.MaxFirstLineLength) + "\r\n");
+
+        // Act
+        var isAuditLog = await AuditLogRecognizer.IsAuditLogAsync(path);
+
+        // Assert
+        isAuditLog.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task IsAuditLogAsync_WhenNdjsonFirstRecordIsLongerThanTheReadLimit_ReturnsFalse()
+    {
+        // Arrange
+        var path = WriteFile(
+            "audit.ndjson",
+            "\n{\"serverName\":\"nas\",\"commandLine\":\"" + new string('x', AuditLogRecognizer.MaxFirstLineLength) + "\"}\n");
+
+        // Act
+        var isAuditLog = await AuditLogRecognizer.IsAuditLogAsync(path);
+
+        // Assert
+        isAuditLog.Should().BeFalse();
+    }
+
+    private string WriteFile(string name, string content)
+    {
+        var path = Path.Combine(_directory, name);
+        File.WriteAllText(path, content, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        return path;
     }
 }

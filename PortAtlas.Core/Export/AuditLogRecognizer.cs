@@ -8,7 +8,16 @@ namespace PortAtlas.Core.Export;
 /// </summary>
 internal static class AuditLogRecognizer
 {
+    /// <summary>
+    /// Number of characters read at most to find the first line, or the first record of an NDJSON file.
+    /// </summary>
+    internal const int MaxFirstLineLength = 1024 * 1024;
+
+    private const int ReadBufferLength = 4096;
+
     private static readonly string[] NdjsonExtensions = [".ndjson", ".jsonl"];
+
+    private static readonly char[] LineBreaks = ['\r', '\n'];
 
     /// <summary>
     /// Tells whether the file is read as NDJSON (one JSON record per line) rather than as CSV.
@@ -29,19 +38,64 @@ internal static class AuditLogRecognizer
         await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 4096, useAsync: true);
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
-        var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+        var beginning = await ReadUpToFirstRecordAsync(reader, cancellationToken).ConfigureAwait(false);
+        if (beginning is null)
+        {
+            return false;
+        }
+
+        var lines = beginning.Split(LineBreaks);
         if (!IsNdjsonPath(path))
         {
-            return IsAuditCsvHeader(line);
+            return IsAuditCsvHeader(lines[0]);
         }
 
         // The NDJSON parser skips blank lines, a CSV is read from its very first line.
-        while (line is not null && string.IsNullOrWhiteSpace(line))
+        return IsAuditNdjsonRecord(lines.FirstOrDefault(line => !string.IsNullOrWhiteSpace(line)));
+    }
+
+    // A directory may hold a large file without line breaks (a dump, a minified export) that ReadLineAsync would load
+    // whole: 1.4 GB allocated for a 200 MB file. The text is read up to the first line break that follows a non-blank
+    // character, which ends the CSV header and the first NDJSON record alike; null when MaxFirstLineLength characters
+    // hold none, since no audit header or record is that long. Blank lines before an NDJSON record count toward the
+    // limit: a log the audit writes has none.
+    private static async Task<string?> ReadUpToFirstRecordAsync(TextReader reader, CancellationToken cancellationToken)
+    {
+        var buffer = new char[ReadBufferLength];
+        var text = new StringBuilder();
+        var hasContent = false;
+        while (text.Length < MaxFirstLineLength)
         {
-            line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            var count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            if (count == 0)
+            {
+                return text.ToString();
+            }
+
+            var recordEnd = FindRecordEnd(buffer.AsSpan(0, count), ref hasContent);
+            text.Append(buffer, 0, recordEnd < 0 ? count : recordEnd);
+            if (recordEnd >= 0)
+            {
+                return text.ToString();
+            }
         }
 
-        return IsAuditNdjsonRecord(line);
+        return null;
+    }
+
+    private static int FindRecordEnd(ReadOnlySpan<char> chunk, ref bool hasContent)
+    {
+        for (var i = 0; i < chunk.Length; i++)
+        {
+            if (hasContent && chunk[i] is '\r' or '\n')
+            {
+                return i;
+            }
+
+            hasContent |= !char.IsWhiteSpace(chunk[i]);
+        }
+
+        return -1;
     }
 
     /// <summary>
