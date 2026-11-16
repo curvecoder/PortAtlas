@@ -860,8 +860,11 @@ public sealed class FlowAuditDashboardRendererTests
             .Should().Be(unselectedRow2.IndexOf("dasHost", StringComparison.Ordinal));
     }
 
-    [Fact]
-    public void ApplyExclusionAtSelection_WhenRemoteIpIsAny_ExcludesRemoteIp0000AndPurgesMatchingEntries()
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    [InlineData("::ffff:0.0.0.0")]
+    public void ApplyExclusionAtSelection_WhenRemoteIpIsUnspecified_WritesNoRuleAndShowsWarning(string unspecifiedAddress)
     {
         // Arrange
         var tempFile = Path.Combine(Path.GetTempPath(), $"test_render_any_{Guid.NewGuid():N}.json");
@@ -873,11 +876,12 @@ public sealed class FlowAuditDashboardRendererTests
 
             var renderer = new FlowAuditDashboardRenderer(5, "output.csv", flowFilter, procFilter, null);
 
+            var remote = IPAddress.Parse(unspecifiedAddress);
             var socket = new ActiveSocketConnection(
                 SocketTransportProtocol.Tcp,
                 SocketFlowDirection.Listening,
-                new SocketEndpoint(IPAddress.Parse("0.0.0.0"), 50001),
-                new SocketEndpoint(IPAddress.Any, 0),
+                new SocketEndpoint(remote, 50001),
+                new SocketEndpoint(remote, 0),
                 "Listen",
                 new ProcessMetadata(100, "spoolsv", "", "", "", "user"));
 
@@ -895,23 +899,26 @@ public sealed class FlowAuditDashboardRendererTests
             var applied = renderer.ApplyExclusionAtSelection(configurator);
 
             // Assert
-            applied.Should().BeTrue();
-            configurator.CurrentConfiguration.ExcludedRemoteIps.Should().Contain("0.0.0.0");
+            applied.Should().BeFalse();
+            renderer.SelectedColumn.Should().Be(InteractiveExclusionColumn.Remote);
+            configurator.CurrentConfiguration.ExcludedRemoteIps.Should().BeEmpty();
+            File.Exists(tempFile).Should().BeFalse();
 
-            // Subsequent render with 0.0.0.0 should be dropped
+            // Every listener still shows: the selected one and one found at the next cycle.
             var nextSocket = new ActiveSocketConnection(
                 SocketTransportProtocol.Tcp,
                 SocketFlowDirection.Listening,
-                new SocketEndpoint(IPAddress.Parse("0.0.0.0"), 50002),
-                new SocketEndpoint(IPAddress.Any, 0),
+                new SocketEndpoint(remote, 50002),
+                new SocketEndpoint(remote, 0),
                 "Listen",
                 new ProcessMetadata(100, "services", "", "", "", "user"));
             var nextEntry = new NetworkAuditEntry(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 2, SampleHost, nextSocket);
             var nextResult = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 1, 0, 1, 2, [nextEntry], [nextSocket]);
 
             renderer.Render(nextResult, SampleHost);
-            var frame = renderer.BuildDashboardFrame(nextResult, SampleHost);
-            frame.Should().NotContain("50002");
+            var frame = renderer.BuildDashboardFrame(nextResult, SampleHost, 160, 25);
+            frame.Should().Contain("50001").And.Contain("50002");
+            frame.Should().Contain("⚠ No remote address to exclude on a listening or UDP row: select LOCAL or PROCESS");
         }
         finally
         {

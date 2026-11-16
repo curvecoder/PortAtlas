@@ -527,8 +527,17 @@ public sealed partial class FlowAuditDashboardRenderer
 
                 case InteractiveExclusionColumn.Remote:
                     var remoteAddress = entry.Socket.RemoteEndpoint.Address;
-                    var normalizedIp = (remoteAddress.IsIPv4MappedToIPv6 ? remoteAddress.MapToIPv4() : remoteAddress).ToString();
-                    actionDescription = configurator.ExcludeRemoteIp(normalizedIp);
+                    var normalizedAddress = remoteAddress.IsIPv4MappedToIPv6 ? remoteAddress.MapToIPv4() : remoteAddress;
+                    if (normalizedAddress.Equals(IPAddress.Any) || normalizedAddress.Equals(IPAddress.IPv6Any))
+                    {
+                        // A listening or UDP socket has no peer: Windows reports 0.0.0.0 (or ::) for every one of them,
+                        // so a rule on that address would hide every listener, now and at later starts.
+                        SetStatusBanner("No remote address to exclude on a listening or UDP row: select LOCAL or PROCESS", WarningBannerDuration, isWarning: true);
+                        RenderInternal(forceClear: false);
+                        return false;
+                    }
+
+                    actionDescription = configurator.ExcludeRemoteIp(normalizedAddress.ToString());
                     _recentDiscoveries.RemoveAll(e => AddressesEqual(e.Socket.RemoteEndpoint.Address, remoteAddress) || IsEntryExcluded(e));
                     break;
 
