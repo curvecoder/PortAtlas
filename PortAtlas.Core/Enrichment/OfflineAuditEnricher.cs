@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -418,12 +419,17 @@ public sealed class OfflineAuditEnricher(
         var isNdjson = AuditLogRecognizer.IsNdjsonPath(inputPath);
         var tally = new EnrichmentTally();
 
+        // The audit writes its CSV with a byte order mark so that Excel reads it as UTF-8: the rewritten log keeps the
+        // signature of the original, and a log written without one stays byte for byte the same when nothing changes.
+        var outputEncoding = new UTF8Encoding(
+            encoderShouldEmitUTF8Identifier: await StartsWithUtf8ByteOrderMarkAsync(inputPath, cancellationToken).ConfigureAwait(false));
+
         await AtomicFileWriter.WriteAsync(
             outputPath,
             async (stream, token) =>
             {
                 // The stream stays open: the writer flushes it to disk and closes it once the content is written.
-                var writer = new StreamWriter(stream, leaveOpen: true);
+                var writer = new StreamWriter(stream, outputEncoding, leaveOpen: true);
                 await using (writer.ConfigureAwait(false))
                 {
                     var write = isNdjson
@@ -435,6 +441,18 @@ public sealed class OfflineAuditEnricher(
             cancellationToken).ConfigureAwait(false);
 
         return (tally.Scanned, tally.Updated, outputPath, [.. tally.EnrichedIps]);
+    }
+
+    private static async Task<bool> StartsWithUtf8ByteOrderMarkAsync(string path, CancellationToken cancellationToken)
+    {
+        byte[] utf8ByteOrderMark = [0xEF, 0xBB, 0xBF];
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 1, useAsync: true);
+        await using (stream.ConfigureAwait(false))
+        {
+            var start = new byte[utf8ByteOrderMark.Length];
+            var read = await stream.ReadAtLeastAsync(start, start.Length, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+            return read == start.Length && start.AsSpan().SequenceEqual(utf8ByteOrderMark);
+        }
     }
 
     private static async Task WriteEnrichedNdjsonAsync(

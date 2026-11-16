@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using AwesomeAssertions;
 using PortAtlas.Core.Enrichment;
@@ -233,6 +234,67 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         // Assert
         (await File.ReadAllTextAsync(linked)).Should().Contain("pbs.home.arpa");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task EnrichFilesAsync_WhenTheCsvLogStartsWithAByteOrderMark_KeepsItInTheRewrittenLog(bool inPlace)
+    {
+        // Arrange
+        var csvPath = Path.Combine(_tempDirectory, "audit_bom.csv");
+        await File.WriteAllTextAsync(csvPath, "FirstSeenUtc,RemoteIp,RemoteHostName\r\n2026-11-01T08:00:00Z,192.168.1.30,\r\n", Encoding.UTF8);
+        var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+        };
+        var options = new OfflineAuditEnrichmentOptions { InPlace = inPlace, Isolated = true };
+
+        // Act
+        var report = await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
+
+        // Assert
+        var written = await File.ReadAllBytesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject);
+        written.Take(3).Should().Equal(0xEF, 0xBB, 0xBF);
+        Encoding.UTF8.GetString(written).Should().Contain("pbs.home.arpa");
+    }
+
+    [Theory]
+    [InlineData("audit_plain.csv", "FirstSeenUtc,RemoteIp,RemoteHostName\r\n2026-11-01T08:00:00Z,192.168.1.30,\r\n")]
+    [InlineData("audit_plain.ndjson", "{\"remoteIp\":\"192.168.1.30\",\"remoteHostName\":\"\"}\r\n")]
+    public async Task EnrichFilesAsync_WhenTheLogHasNoByteOrderMark_WritesNone(string fileName, string content)
+    {
+        // Arrange
+        var path = Path.Combine(_tempDirectory, fileName);
+        await File.WriteAllTextAsync(path, content);
+        var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+        };
+        var options = new OfflineAuditEnrichmentOptions { InPlace = true, Isolated = true };
+
+        // Act
+        await new OfflineAuditEnricher().EnrichFilesAsync([path], [cache], options);
+
+        // Assert
+        var written = await File.ReadAllBytesAsync(path);
+        written[0].Should().Be((byte)content[0]);
+        Encoding.UTF8.GetString(written).Should().Contain("pbs.home.arpa");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenTheLogIsShorterThanAByteOrderMark_WritesNone()
+    {
+        // Arrange
+        var path = Path.Combine(_tempDirectory, "audit_short.csv");
+        await File.WriteAllBytesAsync(path, [0xEF, 0xBB]);
+        var options = new OfflineAuditEnrichmentOptions { InPlace = true, Isolated = true };
+
+        // Act
+        await new OfflineAuditEnricher().EnrichFilesAsync([path], [], options);
+
+        // Assert
+        (await File.ReadAllBytesAsync(path)).Take(3).Should().NotEqual(new byte[] { 0xEF, 0xBB, 0xBF });
     }
 
     [Fact]
