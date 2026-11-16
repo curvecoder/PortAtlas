@@ -42,6 +42,8 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// </summary>
     internal static readonly IReadOnlyList<string> HeaderMarkerColumns = [nameof(AuditCsvColumn.ServerName), nameof(AuditCsvColumn.LocalPort)];
 
+    private static readonly HashSet<string> AuditColumnNames = new(Enum.GetNames<AuditCsvColumn>(), StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Columns an audit log must hold to be resumed: the parts of the flow key and the first-seen date.
     /// </summary>
@@ -92,6 +94,18 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// <returns>True when the line names one of <see cref="HeaderMarkerColumns"/>.</returns>
     internal static bool IsHeaderLine(string line, char delimiter)
         => HeaderMarkerColumns.Any(BuildColumnIndexMap(AuditCsvRecordReader.SplitHeader(line, delimiter)).ContainsKey);
+
+    /// <summary>
+    /// Tells whether the first record of an audit log is its header rather than a flow written without header.
+    /// </summary>
+    /// <remarks>
+    /// A record that names any audit column is a header, even the header of a reduced log that names neither flow key
+    /// column: read by position, it would become a flow of its own, and its rows would be read through the wrong columns.
+    /// </remarks>
+    /// <param name="fields">Fields of the first record of a CSV file.</param>
+    /// <returns>True when one field, trimmed, is the name of an <see cref="AuditCsvColumn"/>.</returns>
+    internal static bool IsHeaderRecord(IReadOnlyList<string> fields)
+        => fields.Any(field => AuditColumnNames.Contains(field.Trim()));
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<NetworkAuditEntry>> ParseHistoryAsync(
@@ -178,11 +192,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         }
 
         var columnMap = BuildColumnIndexMap(records[0].Fields);
-        var isHeaderPresent = HeaderMarkerColumns.Any(columnMap.ContainsKey);
-
-        // A first line that names audit columns but neither flow key column is a header of a reduced log, not a data
-        // row: read by position it would become a flow of its own, and its rows would be read through the wrong columns.
-        isHeaderPresent |= Enum.GetNames<AuditCsvColumn>().Any(columnMap.ContainsKey);
+        var isHeaderPresent = IsHeaderRecord(records[0].Fields);
         if (!isHeaderPresent)
         {
             columnMap = StandardPositionalColumnMap;

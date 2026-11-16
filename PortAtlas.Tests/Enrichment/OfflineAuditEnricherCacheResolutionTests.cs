@@ -452,6 +452,59 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         SavedCache(options)["192.168.1.20"].HostName.Should().Be("old-nas.home.arpa");
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenTheCsvLogHasNoHeader_ResolvesAndNamesTheFirstFlowLikeTheOthers()
+    {
+        // Arrange
+        var auditPath = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");
+        await File.WriteAllLinesAsync(auditPath,
+        [
+            "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,nas,Linux,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,50000,192.168.1.30,5432,,1234,psql,/usr/bin/psql,psql,,backup",
+            "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,nas,Linux,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,50001,192.168.1.40,443,,1234,curl,/usr/bin/curl,curl,,backup"
+        ]);
+        var resolver = new ScriptedIpResolver
+        {
+            ["192.168.1.30"] = Resolved("db.home.arpa"),
+            ["192.168.1.40"] = Resolved("proxmox.home.arpa")
+        };
+        var options = Options();
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([auditPath], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEquivalentTo(["192.168.1.30", "192.168.1.40"]);
+        report.TotalRecordsScanned.Should().Be(2);
+        report.TotalRecordsUpdated.Should().Be(2);
+        var lines = await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject);
+        lines.Should().HaveCount(2);
+        lines[0].Should().Contain(",192.168.1.30,5432,db.home.arpa,");
+        lines[1].Should().Contain(",192.168.1.40,443,proxmox.home.arpa,");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenTheCsvLogHasAReducedHeaderWithoutTheNameColumns_RewritesItUnchanged()
+    {
+        // Arrange
+        var auditPath = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");
+        string[] content =
+        [
+            "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemotePort,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName,SourceAudit,Note",
+            "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,nas,Linux,192.168.1.20,Tcp,Outbound,Established,192.168.1.20,50000,192.168.1.30,5432,,1234,psql,/usr/bin/psql,psql,,backup"
+        ];
+        await File.WriteAllLinesAsync(auditPath, content);
+        var resolver = new ScriptedIpResolver { ["192.168.1.30"] = Resolved("db.home.arpa") };
+        var options = Options();
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([auditPath], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEmpty();
+        report.TotalRecordsUpdated.Should().Be(0);
+        (await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject)).Should().Equal(content);
+    }
+
     private async Task<string> WriteAuditAsync(string remoteIp)
     {
         var path = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");

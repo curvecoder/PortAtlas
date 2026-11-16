@@ -318,27 +318,28 @@ public sealed class OfflineAuditEnricher(
         {
             var delimiter = await AuditCsvDelimiterDetector.DetectAsync(filePath, AuditCsvDefaultDelimiter, cancellationToken).ConfigureAwait(false);
             using var reader = new StreamReader(filePath);
-            var (remoteIpIdx, remoteHostIdx) = (-1, -1);
-            var isHeader = true;
+            CsvNameColumns? located = null;
             await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, filePath, delimiter, cancellationToken).ConfigureAwait(false))
             {
                 var fields = record.Fields;
-                if (isHeader)
+                if (located is null)
                 {
-                    (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(fields);
-                    if (remoteIpIdx < 0)
+                    located = CsvNameColumns.Locate(fields);
+                    if (located.RemoteIpIndex < 0)
                     {
                         return [];
                     }
 
-                    isHeader = false;
-                    continue;
+                    if (located.FirstRecordIsHeader)
+                    {
+                        continue;
+                    }
                 }
 
-                if (remoteIpIdx < fields.Count)
+                if (located.RemoteIpIndex < fields.Count)
                 {
-                    var ip = fields[remoteIpIdx];
-                    var host = remoteHostIdx >= 0 && remoteHostIdx < fields.Count ? fields[remoteHostIdx] : string.Empty;
+                    var ip = fields[located.RemoteIpIndex];
+                    var host = located.RemoteHostIndex >= 0 && located.RemoteHostIndex < fields.Count ? fields[located.RemoteHostIndex] : string.Empty;
 
                     if (ShouldResolve(ip, host, knownCache, forceResolve))
                     {
@@ -488,19 +489,20 @@ public sealed class OfflineAuditEnricher(
     {
         var delimiter = await AuditCsvDelimiterDetector.DetectAsync(inputPath, AuditCsvDefaultDelimiter, cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(inputPath);
-        var (remoteIpIdx, remoteHostIdx) = (-1, -1);
-        var isHeader = true;
+        CsvNameColumns? located = null;
         await foreach (var record in AuditCsvRecordReader.ReadRecordsAsync(reader, inputPath, delimiter, cancellationToken).ConfigureAwait(false))
         {
-            if (isHeader)
+            if (located is null)
             {
-                (remoteIpIdx, remoteHostIdx) = ResolveCsvColumnIndices(record.Fields);
-                await writer.WriteLineAsync(JoinCsvRecord(record.Fields, delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
-                isHeader = false;
-                continue;
+                located = CsvNameColumns.Locate(record.Fields);
+                if (located.FirstRecordIsHeader)
+                {
+                    await writer.WriteLineAsync(JoinCsvRecord(record.Fields, delimiter).AsMemory(), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
             }
 
-            var (modifiedLine, wasUpdated, ip) = EnrichCsvRecord(record.Fields, delimiter, remoteIpIdx, remoteHostIdx, cache, forceResolve);
+            var (modifiedLine, wasUpdated, ip) = EnrichCsvRecord(record.Fields, delimiter, located.RemoteIpIndex, located.RemoteHostIndex, cache, forceResolve);
             tally.Count(wasUpdated, ip);
             await writer.WriteLineAsync(modifiedLine.AsMemory(), cancellationToken).ConfigureAwait(false);
         }
@@ -647,35 +649,42 @@ public sealed class OfflineAuditEnricher(
         return Path.Combine(dir, $"{fileNameWithoutExt}{AuditLogSelector.EnrichedCopySuffix}{ext}");
     }
 
-    private static (int RemoteIpIdx, int RemoteHostIdx) ResolveCsvColumnIndices(IReadOnlyList<string> headers)
+    /// <summary>
+    /// Where the address and name columns of a CSV audit log are, read from its first record.
+    /// </summary>
+    /// <param name="FirstRecordIsHeader">False for a log written without header, whose first record is a flow.</param>
+    /// <param name="RemoteIpIndex">Index of the remote address column, or -1 when the log has none.</param>
+    /// <param name="RemoteHostIndex">Index of the remote name column, or -1 when the log has none.</param>
+    private sealed record CsvNameColumns(bool FirstRecordIsHeader, int RemoteIpIndex, int RemoteHostIndex)
     {
-        var remoteIpIdx = -1;
-        var remoteHostIdx = -1;
+        private const int StandardColumnCount = 20;
+        private const int StandardRemoteIpIndex = 11;
+        private const int StandardRemoteHostIndex = 13;
 
-        for (var i = 0; i < headers.Count; i++)
+        public static CsvNameColumns Locate(IReadOnlyList<string> firstRecord)
         {
-            var header = headers[i];
-            if (string.Equals(header, "RemoteIp", StringComparison.OrdinalIgnoreCase))
+            if (AuditCsvHistoryParser.IsHeaderRecord(firstRecord))
             {
-                remoteIpIdx = i;
+                return new(FirstRecordIsHeader: true, IndexOf(firstRecord, nameof(AuditCsvColumn.RemoteIp)), IndexOf(firstRecord, nameof(AuditCsvColumn.RemoteHostName)));
             }
-            else if (string.Equals(header, "RemoteHostName", StringComparison.OrdinalIgnoreCase))
+
+            return firstRecord.Count >= StandardColumnCount
+                ? new(FirstRecordIsHeader: false, StandardRemoteIpIndex, StandardRemoteHostIndex)
+                : new(FirstRecordIsHeader: false, -1, -1);
+        }
+
+        private static int IndexOf(IReadOnlyList<string> header, string columnName)
+        {
+            for (var i = 0; i < header.Count; i++)
             {
-                remoteHostIdx = i;
+                if (string.Equals(header[i].Trim(), columnName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
             }
-        }
 
-        // Positional fallbacks for headerless standard 20-column files
-        if (remoteIpIdx < 0 && headers.Count >= 20)
-        {
-            remoteIpIdx = 11;
+            return -1;
         }
-        if (remoteHostIdx < 0 && headers.Count >= 20)
-        {
-            remoteHostIdx = 13;
-        }
-
-        return (remoteIpIdx, remoteHostIdx);
     }
 
     private sealed class ResolutionOutcomeCounter
