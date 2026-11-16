@@ -20,6 +20,7 @@ public static class ConfigurationTemplateGenerator
     /// </summary>
     /// <param name="targetPath">Target file path or directory (defaults to 'portatlas.json' in current directory).</param>
     /// <returns>Resolved absolute path of the generated configuration file.</returns>
+    /// <exception cref="OutputFileUnwritableException">Thrown when the file or its folder cannot be created or written.</exception>
     public static string GenerateDefaultConfigFile(string? targetPath = null)
     {
         var resolvedPath = ResolveTargetPath(targetPath);
@@ -32,13 +33,21 @@ public static class ConfigurationTemplateGenerator
         };
 
         var json = JsonSerializer.Serialize(defaultConfig, JsonOptions);
-        var dir = Path.GetDirectoryName(resolvedPath);
-        if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+        try
         {
-            Directory.CreateDirectory(dir);
+            var dir = Path.GetDirectoryName(resolvedPath);
+            if (!string.IsNullOrEmpty(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            File.WriteAllText(resolvedPath, json);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            throw OutputFileUnwritableException.Naming(resolvedPath, ex);
         }
 
-        File.WriteAllText(resolvedPath, json);
         return resolvedPath;
     }
 

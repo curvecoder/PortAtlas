@@ -28,6 +28,7 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
     /// <returns>The total number of entries written.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="entries"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="outputNdjsonFilePath"/> is null or white-space.</exception>
+    /// <exception cref="OutputFileUnwritableException">Thrown when the output file or its folder cannot be created or written.</exception>
     public async Task<int> ExportEntriesAsync(
         IEnumerable<NetworkAuditEntry> entries,
         string outputNdjsonFilePath,
@@ -36,13 +37,15 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputNdjsonFilePath);
 
-        EnsureDirectoryExists(outputNdjsonFilePath);
-
-        await using var fileStream = new FileStream(outputNdjsonFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
+        await using var fileStream = CreateOutputStream(outputNdjsonFilePath);
         await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
-        var count = await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false);
-        await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        var count = 0;
+        await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, async () =>
+        {
+            count = await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false);
+            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        }).ConfigureAwait(false);
         return count;
     }
 
@@ -79,6 +82,7 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
     /// <returns>The total number of entries written across all input files.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="inputFilePaths"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="outputNdjsonFilePath"/> is null or white-space.</exception>
+    /// <exception cref="OutputFileUnwritableException">Thrown when the output file or its folder cannot be created or written.</exception>
     public async Task<int> ExportAuditLogsToNdjsonAsync(
         IReadOnlyList<string> inputFilePaths,
         string outputNdjsonFilePath,
@@ -88,9 +92,7 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         ArgumentNullException.ThrowIfNull(inputFilePaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputNdjsonFilePath);
 
-        EnsureDirectoryExists(outputNdjsonFilePath);
-
-        await using var fileStream = new FileStream(outputNdjsonFilePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
+        await using var fileStream = CreateOutputStream(outputNdjsonFilePath);
         await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
         var totalCount = 0;
@@ -101,19 +103,31 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
                 ? await _ndjsonParser.ParseHistoryAsync(inputFilePath, cancellationToken: cancellationToken).ConfigureAwait(false)
                 : await _csvHistoryParser.ParseHistoryAsync(inputFilePath, maxRows: null, delimiter: delimiter, cancellationToken: cancellationToken).ConfigureAwait(false);
 
-            totalCount += await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false);
+            // Guarded apart from the read above: a full disk names the output, an unreadable log keeps naming the log.
+            await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, async () =>
+                totalCount += await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
         }
 
-        await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
+        await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, () => writer.FlushAsync(cancellationToken)).ConfigureAwait(false);
         return totalCount;
     }
 
-    private static void EnsureDirectoryExists(string filePath)
+    // Only the creation of the output is guarded: an error while reading a log must keep naming that log.
+    private static FileStream CreateOutputStream(string filePath)
     {
-        var directory = Path.GetDirectoryName(filePath);
-        if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory))
+        try
         {
-            Directory.CreateDirectory(directory);
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            return new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            throw OutputFileUnwritableException.Naming(filePath, ex);
         }
     }
 

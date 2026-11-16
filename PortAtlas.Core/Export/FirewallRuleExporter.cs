@@ -37,6 +37,7 @@ public sealed class FirewallRuleExporter(
     /// <param name="options">Consolidation and filtering options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Execution report detailing processed files, row counts, and exported rule counts.</returns>
+    /// <exception cref="OutputFileUnwritableException">Thrown when a matrix file or its folder cannot be created or written.</exception>
     public async Task<FirewallRuleExportReport> ExportRulesAsync(
         IReadOnlyList<string> auditFiles,
         string outputPath,
@@ -106,21 +107,25 @@ public sealed class FirewallRuleExporter(
             pairs.Count);
     }
 
-    private static async Task WriteCsvAsync(string path, string header, IEnumerable<string> rows, CancellationToken cancellationToken)
-    {
-        var outputDir = Path.GetDirectoryName(path);
-        if (!string.IsNullOrWhiteSpace(outputDir) && !Directory.Exists(outputDir))
+    private static Task WriteCsvAsync(string path, string header, IEnumerable<string> rows, CancellationToken cancellationToken)
+        => OutputFileUnwritableException.GuardAsync(path, async () =>
         {
-            Directory.CreateDirectory(outputDir);
-        }
+            var outputDir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(outputDir))
+            {
+                Directory.CreateDirectory(outputDir);
+            }
 
-        await using var writer = new StreamWriter(path, append: false);
-        await writer.WriteLineAsync(header.AsMemory(), cancellationToken).ConfigureAwait(false);
-        foreach (var row in rows)
-        {
-            await writer.WriteLineAsync(row.AsMemory(), cancellationToken).ConfigureAwait(false);
-        }
-    }
+            var writer = new StreamWriter(path, append: false);
+            await using (writer.ConfigureAwait(false))
+            {
+                await writer.WriteLineAsync(header.AsMemory(), cancellationToken).ConfigureAwait(false);
+                foreach (var row in rows)
+                {
+                    await writer.WriteLineAsync(row.AsMemory(), cancellationToken).ConfigureAwait(false);
+                }
+            }
+        });
 
     /// <summary>
     /// Resolves file paths, directories, or wildcards, aggregates rules, and exports the CSV matrix.

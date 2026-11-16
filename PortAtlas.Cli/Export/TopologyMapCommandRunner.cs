@@ -47,25 +47,25 @@ public sealed class TopologyMapCommandRunner(AuditTopologyMapper? topologyMapper
 
         if (htmlPath is not null)
         {
-            await _topologyMapper.WriteHtmlMapAsync(
+            await OutputFileUnwritableException.GuardAsync(htmlPath, () => _topologyMapper.WriteHtmlMapAsync(
                 graph,
                 htmlPath,
                 TopologyMapConfigurationBuilder.BuildRenderingOptions(config),
                 "Network Flow & Server Topology Map",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken)).ConfigureAwait(false);
             Console.WriteLine($"Topology map generated: {Path.GetFullPath(htmlPath)} ({graph.Nodes.Count} servers, {graph.Edges.Count} flows)");
         }
 
         if (drawioPath is not null)
         {
-            await AuditTopologyMapper.ExportToDrawioAsync(
+            await OutputFileUnwritableException.GuardAsync(drawioPath, () => AuditTopologyMapper.ExportToDrawioAsync(
                 graph,
                 drawioPath,
                 "PortAtlas Network Topology",
                 TopologyMapConfigurationBuilder.BuildDrawioEdgeMode(config),
                 TopologyMapConfigurationBuilder.BuildDrawioTheme(config),
                 TopologyMapConfigurationBuilder.BuildDrawioLayoutOptions(config),
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken)).ConfigureAwait(false);
             Console.WriteLine($"Draw.io diagram generated: {Path.GetFullPath(drawioPath)} ({graph.Nodes.Count} servers, {graph.Edges.Count} flows)");
         }
 
