@@ -64,6 +64,7 @@ public sealed class OfflineAuditEnricher(
         // 1. Consolidate input caches
         var cacheReport = _consolidator.Consolidate(initialCaches, masterCache);
         var activeCache = new Dictionary<string, DnsCacheEntry>(cacheReport.MergedEntries, StringComparer.OrdinalIgnoreCase);
+        var namingPolicy = new ConfiguredAddressNamingPolicy(options);
 
         // 2. Scan audit files to identify missing IP addresses requiring resolution
         var distinctUnresolvedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -90,6 +91,8 @@ public sealed class OfflineAuditEnricher(
             }
         }
 
+        distinctUnresolvedIps.RemoveWhere(ip => !namingPolicy.AllowsLookup(ip));
+
         // 3. Online resolution of missing IPs if not isolated
         var onlineCount = 0;
         var outcomes = new ResolutionOutcomeCounter();
@@ -113,6 +116,7 @@ public sealed class OfflineAuditEnricher(
         var totalScanned = 0;
         var totalUpdated = 0;
         var enrichedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var namingCache = namingPolicy.WithAliases(activeCache);
 
         foreach (var auditFile in auditFiles)
         {
@@ -126,7 +130,7 @@ public sealed class OfflineAuditEnricher(
 
             var (scanned, updated, outputPath, ipsUpdated) = await EnrichSingleAuditFileAsync(
                 auditFile,
-                activeCache,
+                namingCache,
                 options,
                 cancellationToken).ConfigureAwait(false);
 

@@ -71,11 +71,17 @@ public sealed class ResolveCommand : Command
                 ForceResolve = parseResult.GetValue(_forceResolve),
                 Isolated = parseResult.GetValue(_cacheOnly),
                 RdapThrottleDelay = TimeSpan.FromMilliseconds(parseResult.GetValue(_rdapDelayMs) ?? 200),
-                OutputCachePath = OutputFilePathResolver.Resolve(parseResult.GetValue(_outputCache) ?? config.DnsCacheFilePath)
+                OutputCachePath = OutputFilePathResolver.Resolve(parseResult.GetValue(_outputCache) ?? config.DnsCacheFilePath),
+                DnsExcludedNetworks = config.DnsExcludedNetworks,
+                CustomHostAliases = config.CustomHostAliases
             };
 
             var dnsTimeout = TimeSpan.FromMilliseconds(parseResult.GetValue(_dnsTimeout) ?? config.DnsResolutionTimeoutMs);
-            return await new OfflineResolutionCommandRunner(dnsResolutionTimeout: dnsTimeout).RunAsync(auditFiles, caches, options, cancellationToken).ConfigureAwait(false);
+            var runner = new OfflineResolutionCommandRunner(
+                dnsResolutionTimeout: dnsTimeout,
+                resolveHostNames: config.ResolveRemoteHostNames,
+                resolveIpOwners: config.ResolveIpOwners);
+            return await runner.RunAsync(auditFiles, caches, options, cancellationToken).ConfigureAwait(false);
         });
     }
 }

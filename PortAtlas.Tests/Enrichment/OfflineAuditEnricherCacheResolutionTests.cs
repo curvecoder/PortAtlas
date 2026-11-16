@@ -373,6 +373,85 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         report.Resolution!.KeptAfterFailure.Should().Be(1);
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenAddressIsInAnExcludedNetwork_DoesNotResolveIt()
+    {
+        // Arrange
+        var excludedAudit = await WriteAuditAsync("169.254.10.1");
+        var resolvedAudit = await WriteAuditAsync("10.0.0.5");
+        var resolver = new ScriptedIpResolver();
+        var options = Options() with { DnsExcludedNetworks = ["169.254.0.0/16"] };
+
+        // Act
+        await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([excludedAudit, resolvedAudit], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("10.0.0.5");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNoAuditFileAndAddressIsInAnExcludedNetwork_DoesNotResolveIt()
+    {
+        // Arrange
+        var resolver = new ScriptedIpResolver();
+        var options = Options() with { DnsExcludedNetworks = ["224.0.0.0/4"] };
+
+        // Act
+        await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([], [Cache(("224.0.0.251", ""), ("192.168.1.10", ""))], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("192.168.1.10");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task EnrichFilesAsync_WhenAddressHasAnAlias_WritesTheAliasWithoutResolvingOrCachingIt(bool isolated)
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.20");
+        var resolver = new ScriptedIpResolver();
+        var options = Options() with
+        {
+            Isolated = isolated,
+            CustomHostAliases = new Dictionary<string, string> { ["192.168.1.20"] = "nas.home.arpa" }
+        };
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([auditPath], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEmpty();
+        var lines = await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject);
+        lines[1].Should().Contain(",192.168.1.20,443,nas.home.arpa,");
+        SavedCache(options).Should().NotContainKey("192.168.1.20");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenAliasedAddressIsAlreadyNamedAndForceResolve_ReplacesTheNameWithTheAlias()
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.20");
+        var resolver = new ScriptedIpResolver();
+        var options = Options(forceResolve: true) with
+        {
+            CustomHostAliases = new Dictionary<string, string> { ["192.168.1.20"] = "nas.home.arpa" }
+        };
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([auditPath], [Cache(("192.168.1.20", "old-nas.home.arpa"))], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEmpty();
+        var lines = await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject);
+        lines[1].Should().Contain(",nas.home.arpa,");
+        SavedCache(options)["192.168.1.20"].HostName.Should().Be("old-nas.home.arpa");
+    }
+
     private async Task<string> WriteAuditAsync(string remoteIp)
     {
         var path = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.csv");

@@ -215,6 +215,52 @@ public sealed class OfflineDnsResolverTests
     }
 
     [Fact]
+    public async Task ResolveSingleAsync_WhenHostNameResolutionIsDisabled_SendsNoPtrQueryAndReturnsTheOwner()
+    {
+        // Arrange
+        var ptrQueries = 0;
+        var reverseDns = new ReverseDns(_ =>
+        {
+            ptrQueries++;
+            return Task.FromResult("server.example.net");
+        });
+        var resolver = new OfflineDnsResolver(
+            organizationResolver: OwnerLookup.Returns(Owner),
+            rdapThrottleDelay: TimeSpan.Zero,
+            reverseDnsLookup: reverseDns,
+            resolveHostNames: false);
+
+        // Act
+        var entry = await resolver.ResolveSingleAsync(PublicServer);
+
+        // Assert
+        ptrQueries.Should().Be(0);
+        entry.Should().NotBeNull();
+        entry!.HostName.Should().Be("Example Networks");
+        entry.Source.Should().Be("RDAP");
+    }
+
+    [Fact]
+    public async Task ResolveSingleAsync_WhenHostNameResolutionIsDisabledAndNoOwnerResolver_ReturnsNoEntry()
+    {
+        // Arrange
+        var ptrQueries = 0;
+        var reverseDns = new ReverseDns(_ =>
+        {
+            ptrQueries++;
+            return Task.FromResult("nas.home.arpa");
+        });
+        var resolver = new OfflineDnsResolver(reverseDnsLookup: reverseDns, resolveHostNames: false);
+
+        // Act
+        var entry = await resolver.ResolveSingleAsync(HomeServer);
+
+        // Assert
+        ptrQueries.Should().Be(0);
+        entry.Should().BeNull();
+    }
+
+    [Fact]
     public async Task ResolveSingleAsync_WhenRdapReturnsOrganization_PopulatesEntryWithRdapSource()
     {
         // Arrange

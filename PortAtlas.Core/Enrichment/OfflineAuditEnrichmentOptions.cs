@@ -26,6 +26,19 @@ public sealed record OfflineAuditEnrichmentOptions
     public TimeSpan RdapThrottleDelay { get; init; } = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
+    /// Networks (CIDR ranges or single addresses) that are never sent to a DNS or RDAP server, as for the audit's
+    /// <c>DnsExcludedNetworks</c>. Their host names may still come from the merged caches.
+    /// </summary>
+    public IReadOnlyList<string> DnsExcludedNetworks { get; init; } = [];
+
+    /// <summary>
+    /// Fixed host names by IP address, as for the audit's <c>CustomHostAliases</c>: an aliased address is never resolved,
+    /// its alias names it in the audit logs (under the same rule as a resolved name: it fills a missing name, and replaces
+    /// a known one only with <see cref="ForceResolve"/>), and the alias is not written to the master cache.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CustomHostAliases { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>
     /// Target file path where the consolidated master DNS cache should be written.
     /// </summary>
     public string OutputCachePath { get; init; } = "netflow_dns_cache.json";

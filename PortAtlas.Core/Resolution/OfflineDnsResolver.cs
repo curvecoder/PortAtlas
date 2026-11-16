@@ -12,13 +12,16 @@ namespace PortAtlas.Core.Resolution;
 /// <param name="logThrottlingNotice">Optional notification callback invoked whenever throttling delay is triggered.</param>
 /// <param name="reverseDnsLookup">Reverse DNS query; the resolver of the operating system when omitted.</param>
 /// <param name="timeProvider">Clock stamping the resolution time; the system clock when omitted.</param>
+/// <param name="resolveHostNames">When false, no reverse DNS (PTR) query is sent; the owner lookup still runs when an
+/// <paramref name="organizationResolver"/> is given (the <c>ResolveRemoteHostNames</c> key of the configuration).</param>
 public sealed class OfflineDnsResolver(
     IIpOrganizationResolver? organizationResolver = null,
     TimeSpan? rdapThrottleDelay = null,
     TimeSpan? resolutionTimeout = null,
     Action<string>? logThrottlingNotice = null,
     IReverseDnsLookup? reverseDnsLookup = null,
-    TimeProvider? timeProvider = null) : IOfflineIpResolver
+    TimeProvider? timeProvider = null,
+    bool resolveHostNames = true) : IOfflineIpResolver
 {
     private readonly IIpOrganizationResolver? _organizationResolver = organizationResolver;
     private readonly TimeSpan _rdapThrottleDelay = rdapThrottleDelay ?? TimeSpan.FromMilliseconds(200);
@@ -61,7 +64,10 @@ public sealed class OfflineDnsResolver(
             };
         }
 
-        var (dnsHostName, dnsAnswered) = await LookUpPtrAsync(address, cancellationToken).ConfigureAwait(false);
+        // A PTR query that was not sent has not said that the address has no name: unknown, like a DNS timeout.
+        var (dnsHostName, dnsAnswered) = resolveHostNames
+            ? await LookUpPtrAsync(address, cancellationToken).ConfigureAwait(false)
+            : (null, false);
         var (ownerDetails, ownerAnswered) = await LookUpOwnerAsync(address, dnsHostName, cancellationToken).ConfigureAwait(false);
 
         string hostName;

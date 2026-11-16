@@ -48,7 +48,7 @@ public sealed class CachedHostNameResolver(
     private readonly DnsAddressExclusionEvaluator _exclusionEvaluator = exclusionEvaluator ?? new DnsAddressExclusionEvaluator([]);
     private readonly PersistentDnsCacheStore? _cacheStore = cacheStore;
     private readonly IIpOrganizationResolver? _organizationResolver = organizationResolver;
-    private readonly IReadOnlyDictionary<IPAddress, string> _customAliases = ParseAliases(customHostAliases);
+    private readonly IReadOnlyDictionary<IPAddress, string> _customAliases = HostAliasParser.Parse(customHostAliases);
     private readonly ConcurrentDictionary<IPAddress, DnsCacheEntry> _cache = LoadCache(cacheStore);
     private readonly ConcurrentDictionary<IPAddress, byte> _queuedAddresses = new();
     // Addresses whose last resolution got no answer (DNS timeout or RDAP unavailable), with the time before which they
@@ -98,25 +98,6 @@ public sealed class CachedHostNameResolver(
     private static bool IsConfigurationSource(string source) =>
         string.Equals(source, CustomSource, StringComparison.OrdinalIgnoreCase) ||
         string.Equals(source, ExcludedSource, StringComparison.OrdinalIgnoreCase);
-
-    private static Dictionary<IPAddress, string> ParseAliases(IReadOnlyDictionary<string, string>? customHostAliases)
-    {
-        var aliases = new Dictionary<IPAddress, string>();
-        if (customHostAliases is null)
-        {
-            return aliases;
-        }
-
-        foreach (var (ipStr, hostName) in customHostAliases)
-        {
-            if (IPAddress.TryParse(ipStr, out var address) && !string.IsNullOrWhiteSpace(hostName))
-            {
-                aliases[address] = hostName.Trim();
-            }
-        }
-
-        return aliases;
-    }
 
     private void EnsureWorkerStarted()
     {

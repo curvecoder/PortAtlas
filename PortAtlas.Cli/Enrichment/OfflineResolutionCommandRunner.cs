@@ -9,16 +9,23 @@ namespace PortAtlas.Cli.Enrichment;
 /// </summary>
 /// <param name="enricher">Enricher orchestrating offline analysis and file updates.</param>
 /// <param name="dnsResolutionTimeout">Reverse DNS timeout of the default enricher (<c>DnsResolutionTimeoutMs</c>); ignored when <paramref name="enricher"/> is given.</param>
-public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enricher = null, TimeSpan? dnsResolutionTimeout = null)
+/// <param name="resolveHostNames">When false, the default enricher sends no reverse DNS query (<c>ResolveRemoteHostNames</c>).</param>
+/// <param name="resolveIpOwners">When false, the default enricher sends no RDAP query (<c>ResolveIpOwners</c>).</param>
+public sealed class OfflineResolutionCommandRunner(
+    OfflineAuditEnricher? enricher = null,
+    TimeSpan? dnsResolutionTimeout = null,
+    bool resolveHostNames = true,
+    bool resolveIpOwners = true)
 {
     // 128 + SIGINT, the exit code shells report for a command stopped by Ctrl+C.
     private const int InterruptedExitCode = 130;
 
     private readonly OfflineAuditEnricher _enricher = enricher ?? new OfflineAuditEnricher(
         offlineResolver: new OfflineDnsResolver(
-            organizationResolver: new RdapIpOrganizationResolver(),
+            organizationResolver: resolveIpOwners ? new RdapIpOrganizationResolver() : null,
             resolutionTimeout: dnsResolutionTimeout,
-            logThrottlingNotice: Console.WriteLine),
+            logThrottlingNotice: Console.WriteLine,
+            resolveHostNames: resolveHostNames),
         logger: Console.WriteLine);
 
     /// <summary>
@@ -43,7 +50,7 @@ public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enriche
         Console.WriteLine("========================================================================");
         Console.WriteLine("  PortAtlas - Offline DNS Resolution & Cache Consolidation (resolve)");
         Console.WriteLine("========================================================================");
-        Console.WriteLine($"Execution mode: {(options.Isolated ? "Cache only, no DNS or RDAP query (--cache-only)" : "Active enrichment with DNS & RDAP")}");
+        Console.WriteLine($"Execution mode: {(options.Isolated ? "Cache only, no DNS or RDAP query (--cache-only)" : DescribeActiveLookups())}");
         Console.WriteLine(auditFiles.Count == 0
             ? "Audit log updates: none (cache only, no audit log given)"
             : $"Audit log updates: {(options.InPlace ? "Direct in-place overwrite (--in-place)" : "Generate new '*_enriched' files")}");
@@ -111,4 +118,7 @@ public sealed class OfflineResolutionCommandRunner(OfflineAuditEnricher? enriche
 
         return 0;
     }
+
+    private string DescribeActiveLookups() =>
+        $"Active enrichment, reverse DNS {(resolveHostNames ? "on" : "off (ResolveRemoteHostNames)")}, RDAP {(resolveIpOwners ? "on" : "off (ResolveIpOwners)")}";
 }
