@@ -10,6 +10,7 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
 {
     private readonly AuditNdjsonFormatter _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
     private readonly IAuditCsvHistoryParser _csvHistoryParser = csvHistoryParser ?? throw new ArgumentNullException(nameof(csvHistoryParser));
+    private readonly AuditNdjsonParser _ndjsonParser = new();
 
     /// <summary>
     /// Initializes an exporter with default formatter and CSV parser components.
@@ -61,26 +62,30 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(inputCsvFilePath);
-        return ExportCsvFilesToNdjsonAsync([inputCsvFilePath], outputNdjsonFilePath, delimiter, cancellationToken);
+        return ExportAuditLogsToNdjsonAsync([inputCsvFilePath], outputNdjsonFilePath, delimiter, cancellationToken);
     }
 
     /// <summary>
-    /// Reads multiple CSV audit files sequentially and exports all valid entries into a single NDJSON file.
+    /// Reads audit logs one after the other and writes every entry they hold into a single NDJSON file.
     /// </summary>
-    /// <param name="inputCsvFilePaths">Source CSV file paths to read in sequential order.</param>
+    /// <remarks>
+    /// A log whose path ends in <c>.ndjson</c> or <c>.jsonl</c> is read as NDJSON, any other as CSV. Each entry read
+    /// gives one line: a flow held by two logs is written twice.
+    /// </remarks>
+    /// <param name="inputFilePaths">Audit log paths, read in this order.</param>
     /// <param name="outputNdjsonFilePath">Target NDJSON file path.</param>
-    /// <param name="delimiter">CSV delimiter character (default: ',').</param>
+    /// <param name="delimiter">Field separator of the CSV logs (default: ',').</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    /// <returns>The total number of entries converted and written across all input files.</returns>
-    /// <exception cref="ArgumentNullException">Thrown when <paramref name="inputCsvFilePaths"/> is null.</exception>
+    /// <returns>The total number of entries written across all input files.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="inputFilePaths"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="outputNdjsonFilePath"/> is null or white-space.</exception>
-    public async Task<int> ExportCsvFilesToNdjsonAsync(
-        IReadOnlyList<string> inputCsvFilePaths,
+    public async Task<int> ExportAuditLogsToNdjsonAsync(
+        IReadOnlyList<string> inputFilePaths,
         string outputNdjsonFilePath,
         char delimiter = ',',
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(inputCsvFilePaths);
+        ArgumentNullException.ThrowIfNull(inputFilePaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputNdjsonFilePath);
 
         EnsureDirectoryExists(outputNdjsonFilePath);
@@ -89,14 +94,12 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
 
         var totalCount = 0;
-        foreach (var inputCsvFilePath in inputCsvFilePaths)
+        foreach (var inputFilePath in inputFilePaths)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var entries = await _csvHistoryParser.ParseHistoryAsync(
-                inputCsvFilePath,
-                maxRows: null,
-                delimiter: delimiter,
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            var entries = AuditLogRecognizer.IsNdjsonPath(inputFilePath)
+                ? await _ndjsonParser.ParseHistoryAsync(inputFilePath, cancellationToken: cancellationToken).ConfigureAwait(false)
+                : await _csvHistoryParser.ParseHistoryAsync(inputFilePath, maxRows: null, delimiter: delimiter, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             totalCount += await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false);
         }

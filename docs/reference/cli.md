@@ -13,7 +13,7 @@ PortAtlas <command> [options]
 | [`audit`](#audit) | Scan sockets continuously and record deduplicated flows |
 | [`map`](#map) | Render an HTML topology map and/or a Draw.io diagram from audit logs |
 | [`export rules`](#export-rules) | Consolidate audit logs into a firewall rule matrix |
-| [`export ndjson`](#export-ndjson) | Convert CSV audit logs into one NDJSON file |
+| [`export ndjson`](#export-ndjson) | Convert CSV and NDJSON audit logs into one NDJSON file |
 | [`resolve`](#resolve) | Merge DNS caches and write host names into audit logs |
 | [`lookup`](#lookup) | Diagnose the name resolution of one IP address |
 | [`config init`](#config-init) | Write a configuration file with the default values |
@@ -58,9 +58,9 @@ Read by `map`, `export rules`, `export ndjson` and `resolve`.
 | :--- | :--- | :--- | :--- |
 | `-i`, `--input` | `<path>`, repeatable | `OutputCsvPath` of the configuration | A file, a directory or a wildcard pattern on the file name (`audits/nas-*.csv`) |
 
-A directory or a wildcard pattern contributes its files with the extensions read by the command (`.csv` for `map` and `export ndjson`; `.csv`, `.ndjson`, `.jsonl` for `export rules` and `resolve`). Subdirectories are not read. When no file matches, the command prints `No audit log found for: …` and exits with code 1.
+A directory or a wildcard pattern contributes its files with the extensions read by the command (`.csv` for `map`; `.csv`, `.ndjson`, `.jsonl` for `export rules`, `export ndjson` and `resolve`). Subdirectories are not read. When no file matches, the command prints `No audit log found for: …` and exits with code 1.
 
-Among the files of a directory or of a wildcard pattern, the command reads the audit logs only: a CSV whose first line names the `ServerName` or `LocalPort` column, an NDJSON whose first record carries one of these two properties. A matrix written by `export rules`, a log without header line, an empty file or a file that cannot be opened (held by another program, access denied) is left out. When several files of a directory hold the same audit, the command keeps one: `map`, `export rules` and `export ndjson` read the copy written by `resolve` (`<name>_enriched.<ext>`) rather than the original, and `export rules` reads the CSV rather than the NDJSON of the same name; `resolve` enriches each original, CSV and NDJSON alike, and leaves out an enriched copy whose original is present. Each file left out is named on the console with its reason. A file whose own path is given to `--input` is always read, whatever it contains; if it cannot be opened, the command stops with `The audit log '<path>' cannot be read: …` and exit code 1. The enriched copy does not receive the flows observed after `resolve` ran: run `resolve` again, or name the original, to read them.
+Among the files of a directory or of a wildcard pattern, the command reads the audit logs only: a CSV whose first line names the `ServerName` or `LocalPort` column, an NDJSON whose first record carries one of these two properties. A matrix written by `export rules`, a log without header line, an empty file or a file that cannot be opened (held by another program, access denied) is left out. When several files of a directory hold the same audit, the command keeps one: `map`, `export rules` and `export ndjson` read the copy written by `resolve` (`<name>_enriched.<ext>`) rather than the original, and `export rules` and `export ndjson` read the CSV rather than the NDJSON of the same name; `resolve` enriches each original, CSV and NDJSON alike, and leaves out an enriched copy whose original is present. Each file left out is named on the console with its reason. A file whose own path is given to `--input` is always read, whatever it contains; if it cannot be opened, the command stops with `The audit log '<path>' cannot be read: …` and exit code 1. The enriched copy does not receive the flows observed after `resolve` ran: run `resolve` again, or name the original, to read them.
 
 ### Flow filters
 
@@ -190,7 +190,7 @@ A CSV log is read with the separator found on its own first line (`,`, `;`, tab 
 
 ## export ndjson
 
-Converts CSV audit logs into a single NDJSON file, one JSON object per flow.
+Converts CSV and NDJSON audit logs into a single NDJSON file, one JSON object per flow.
 
 ```text
 PortAtlas export ndjson [-i <path>]... [-o <path>]
@@ -200,7 +200,7 @@ PortAtlas export ndjson [-i <path>]... [-o <path>]
 | :--- | :--- | :--- | :--- |
 | `-o`, `--output` | `<path>` | `netflow_audit.ndjson` | NDJSON file ([fields](output-formats.md#ndjson)) |
 
-Family read: inputs (`.csv`). Input files are read sequentially and only the current file is held in memory.
+Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). A `.ndjson` or `.jsonl` file is read as NDJSON, any other file as CSV. Input files are read sequentially and only the current file is held in memory. Each flow read gives one line: a flow held by two logs, such as the logs of two days, or a log and its enriched copy both given by their own path to `--input`, is written twice. An output given by its own path to `--input` stops the command with `The output '<path>' is also an audit log to read: choose another --output.` and exit code 1. An output of an earlier run found in a directory or a pattern is not read, and the command prints `Skipped <path>: it is the output of this command.`
 
 ## resolve
 

@@ -13,7 +13,7 @@ PortAtlas <command> [options]
 | [`audit`](#audit) | Balayer les sockets en continu et enregistrer les flux dédupliqués |
 | [`map`](#map) | Produire une carte topologique HTML et/ou un diagramme Draw.io à partir des journaux |
 | [`export rules`](#export-rules) | Consolider les journaux en matrice de règles de pare-feu |
-| [`export ndjson`](#export-ndjson) | Convertir des journaux CSV en un fichier NDJSON |
+| [`export ndjson`](#export-ndjson) | Convertir des journaux CSV et NDJSON en un fichier NDJSON |
 | [`resolve`](#resolve) | Fusionner des caches DNS et écrire les noms d'hôtes dans les journaux |
 | [`lookup`](#lookup) | Diagnostiquer la résolution de nom d'une adresse IP |
 | [`config init`](#config-init) | Écrire un fichier de configuration avec les valeurs par défaut |
@@ -58,9 +58,9 @@ Lues par `map`, `export rules`, `export ndjson` et `resolve`.
 | :--- | :--- | :--- | :--- |
 | `-i`, `--input` | `<path>`, répétable | `OutputCsvPath` de la configuration | Un fichier, un dossier ou un motif sur le nom de fichier (`audits/nas-*.csv`) |
 
-Un dossier ou un motif apporte ses fichiers portant les extensions lues par la commande (`.csv` pour `map` et `export ndjson` ; `.csv`, `.ndjson`, `.jsonl` pour `export rules` et `resolve`). Les sous-dossiers ne sont pas lus. Quand aucun fichier ne correspond, la commande affiche `No audit log found for: …` et sort avec le code 1.
+Un dossier ou un motif apporte ses fichiers portant les extensions lues par la commande (`.csv` pour `map` ; `.csv`, `.ndjson`, `.jsonl` pour `export rules`, `export ndjson` et `resolve`). Les sous-dossiers ne sont pas lus. Quand aucun fichier ne correspond, la commande affiche `No audit log found for: …` et sort avec le code 1.
 
-Parmi les fichiers d'un dossier ou d'un motif, la commande ne lit que les journaux d'audit : un CSV dont la première ligne nomme la colonne `ServerName` ou `LocalPort`, un NDJSON dont le premier enregistrement porte l'une de ces deux propriétés. Une matrice écrite par `export rules`, un journal sans ligne d'en-tête, un fichier vide ou un fichier qui ne peut pas être ouvert (tenu par un autre programme, accès refusé) est écarté. Quand plusieurs fichiers d'un dossier portent le même audit, la commande n'en garde qu'un : `map`, `export rules` et `export ndjson` lisent la copie écrite par `resolve` (`<name>_enriched.<ext>`) plutôt que l'original, et `export rules` lit le CSV plutôt que le NDJSON de même nom ; `resolve` enrichit chaque original, CSV comme NDJSON, et écarte une copie enrichie dont l'original est présent. Chaque fichier écarté est nommé à l'écran avec sa raison. Un fichier dont le chemin est donné tel quel à `--input` est toujours lu, quel que soit son contenu ; s'il ne peut pas être ouvert, la commande s'arrête avec `The audit log '<path>' cannot be read: …` et le code de sortie 1. La copie enrichie ne reçoit pas les flux observés après le passage de `resolve` : relancez `resolve`, ou nommez l'original, pour les lire.
+Parmi les fichiers d'un dossier ou d'un motif, la commande ne lit que les journaux d'audit : un CSV dont la première ligne nomme la colonne `ServerName` ou `LocalPort`, un NDJSON dont le premier enregistrement porte l'une de ces deux propriétés. Une matrice écrite par `export rules`, un journal sans ligne d'en-tête, un fichier vide ou un fichier qui ne peut pas être ouvert (tenu par un autre programme, accès refusé) est écarté. Quand plusieurs fichiers d'un dossier portent le même audit, la commande n'en garde qu'un : `map`, `export rules` et `export ndjson` lisent la copie écrite par `resolve` (`<name>_enriched.<ext>`) plutôt que l'original, et `export rules` et `export ndjson` lisent le CSV plutôt que le NDJSON de même nom ; `resolve` enrichit chaque original, CSV comme NDJSON, et écarte une copie enrichie dont l'original est présent. Chaque fichier écarté est nommé à l'écran avec sa raison. Un fichier dont le chemin est donné tel quel à `--input` est toujours lu, quel que soit son contenu ; s'il ne peut pas être ouvert, la commande s'arrête avec `The audit log '<path>' cannot be read: …` et le code de sortie 1. La copie enrichie ne reçoit pas les flux observés après le passage de `resolve` : relancez `resolve`, ou nommez l'original, pour les lire.
 
 ### Filtres de flux
 
@@ -190,7 +190,7 @@ Un journal CSV est lu avec le séparateur trouvé sur sa propre première ligne 
 
 ## export ndjson
 
-Convertit des journaux CSV en un seul fichier NDJSON, un objet JSON par flux.
+Convertit des journaux CSV et NDJSON en un seul fichier NDJSON, un objet JSON par flux.
 
 ```text
 PortAtlas export ndjson [-i <path>]... [-o <path>]
@@ -200,7 +200,7 @@ PortAtlas export ndjson [-i <path>]... [-o <path>]
 | :--- | :--- | :--- | :--- |
 | `-o`, `--output` | `<path>` | `netflow_audit.ndjson` | Fichier NDJSON ([champs](output-formats.fr.md#ndjson)) |
 
-Famille lue : entrées (`.csv`). Les fichiers sont lus l'un après l'autre et seul le fichier en cours est gardé en mémoire.
+Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Un fichier `.ndjson` ou `.jsonl` est lu comme NDJSON, tout autre fichier comme CSV. Les fichiers sont lus l'un après l'autre et seul le fichier en cours est gardé en mémoire. Chaque flux lu donne une ligne : un flux présent dans deux journaux, comme les journaux de deux jours, ou un journal et sa copie enrichie tous deux donnés par leur chemin à `--input`, est écrit deux fois. Une sortie donnée par son chemin à `--input` arrête la commande avec `The output '<path>' is also an audit log to read: choose another --output.` et le code de sortie 1. La sortie d'une exécution précédente trouvée dans un dossier ou un motif n'est pas lue, et la commande affiche `Skipped <path>: it is the output of this command.`
 
 ## resolve
 

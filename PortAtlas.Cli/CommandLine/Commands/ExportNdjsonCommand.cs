@@ -6,12 +6,10 @@ using PortAtlas.Core.Export;
 namespace PortAtlas.Cli.CommandLine.Commands;
 
 /// <summary>
-/// <c>portatlas export ndjson</c>: conversion of CSV audit logs into a single NDJSON (JSON Lines) file.
+/// <c>portatlas export ndjson</c>: conversion of CSV and NDJSON audit logs into a single NDJSON (JSON Lines) file.
 /// </summary>
 public sealed class ExportNdjsonCommand : Command
 {
-    private static readonly string[] CsvExtension = [".csv"];
-
     private readonly AuditInputOptionSet _inputs = new();
     private readonly Option<string?> _output = OptionFactory.CreatePath("--output", "NDJSON file to write. Tokens {ServerName}, {HostName}, {Date}, {Timestamp} are expanded. Default: netflow_audit.ndjson.", "-o");
     private readonly Option<string?> _configFile;
@@ -21,7 +19,7 @@ public sealed class ExportNdjsonCommand : Command
     /// </summary>
     /// <param name="configFile">Global <c>--config</c> option.</param>
     public ExportNdjsonCommand(Option<string?> configFile)
-        : base("ndjson", "Convert CSV audit logs into one NDJSON (JSON Lines) file.")
+        : base("ndjson", "Convert CSV and NDJSON audit logs into one NDJSON (JSON Lines) file.")
     {
         _configFile = configFile;
         _inputs.AddTo(this);
@@ -30,7 +28,25 @@ public sealed class ExportNdjsonCommand : Command
         SetAction(async (parseResult, cancellationToken) =>
         {
             var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
-            var files = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, CsvExtension, AuditDuplicatePolicy.OneFilePerAudit, cancellationToken).ConfigureAwait(false);
+            var outputPath = Path.GetFullPath(OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? "netflow_audit.ndjson"));
+
+            // The output is emptied before the logs are read: written over a log named by its path, it would lose that log.
+            if (_inputs.NamesFile(parseResult, config.OutputCsvPath, outputPath))
+            {
+                await Console.Error.WriteLineAsync($"The output '{outputPath}' is also an audit log to read: choose another --output.").ConfigureAwait(false);
+                return 1;
+            }
+
+            var selected = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.OneFilePerAudit, cancellationToken).ConfigureAwait(false);
+
+            // An earlier output found in a directory or a pattern holds flows of the logs next to it: read again, it
+            // would repeat them.
+            var files = selected.Where(file => !string.Equals(file, outputPath, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (files.Count < selected.Count)
+            {
+                Console.WriteLine($"Skipped {outputPath}: it is the output of this command.");
+            }
+
             if (files.Count == 0)
             {
                 await Console.Error.WriteLineAsync($"No audit log found for: {_inputs.Describe(parseResult, config.OutputCsvPath)}").ConfigureAwait(false);
@@ -38,9 +54,9 @@ public sealed class ExportNdjsonCommand : Command
             }
 
             var delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',';
-            var outputPath = OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? "netflow_audit.ndjson");
-            var count = await new AuditNdjsonExporter().ExportCsvFilesToNdjsonAsync(files, outputPath, delimiter, cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"Exported {count} audit flow entries from {files.Count} file(s) to NDJSON: {Path.GetFullPath(outputPath)}");
+
+            var count = await new AuditNdjsonExporter().ExportAuditLogsToNdjsonAsync(files, outputPath, delimiter, cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"Exported {count} audit flow entries from {files.Count} file(s) to NDJSON: {outputPath}");
             return 0;
         });
     }

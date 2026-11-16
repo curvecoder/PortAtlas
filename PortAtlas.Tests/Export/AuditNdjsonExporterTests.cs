@@ -107,7 +107,7 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
     private const string CsvHeader = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName";
 
     [Fact]
-    public async Task ExportCsvFilesToNdjsonAsync_WhenTwoCsvFilesSupplied_WritesEveryEntryInInputOrder()
+    public async Task ExportAuditLogsToNdjsonAsync_WhenTwoCsvFilesSupplied_WritesEveryEntryInInputOrder()
     {
         // Arrange
         var tempCsv1 = Path.Combine(Path.GetTempPath(), $"stream_src1_{Guid.NewGuid():N}.csv");
@@ -131,7 +131,7 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
             await File.WriteAllTextAsync(tempCsv2, content2);
 
             // Act
-            var exportedCount = await _exporter.ExportCsvFilesToNdjsonAsync([tempCsv1, tempCsv2], tempNdjson);
+            var exportedCount = await _exporter.ExportAuditLogsToNdjsonAsync([tempCsv1, tempCsv2], tempNdjson);
 
             // Assert
             exportedCount.Should().Be(3);
@@ -177,7 +177,7 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
     }
 
     [Fact]
-    public async Task ExportCsvFilesToNdjsonAsync_WhenOutputAlreadyExists_ReplacesItsContent()
+    public async Task ExportAuditLogsToNdjsonAsync_WhenOutputAlreadyExists_ReplacesItsContent()
     {
         // Arrange
         var tempCsv = Path.Combine(Path.GetTempPath(), $"stream_src_replace_{Guid.NewGuid():N}.csv");
@@ -194,7 +194,7 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
             await File.WriteAllTextAsync(tempNdjson, "{\"preexisting\":\"data\"}\n{\"preexisting\":\"second_line\"}");
 
             // Act
-            var exportedCount = await _exporter.ExportCsvFilesToNdjsonAsync([tempCsv], tempNdjson);
+            var exportedCount = await _exporter.ExportAuditLogsToNdjsonAsync([tempCsv], tempNdjson);
 
             // Assert
             exportedCount.Should().Be(1);
@@ -222,7 +222,7 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
     }
 
     [Fact]
-    public async Task ExportCsvFilesToNdjsonAsync_WhenInputListIsEmpty_WritesEmptyFileAndReturnsZero()
+    public async Task ExportAuditLogsToNdjsonAsync_WhenInputListIsEmpty_WritesEmptyFileAndReturnsZero()
     {
         // Arrange
         var tempNdjson = Path.Combine(Path.GetTempPath(), $"stream_empty_{Guid.NewGuid():N}.ndjson");
@@ -230,7 +230,7 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
         try
         {
             // Act
-            var exportedCount = await _exporter.ExportCsvFilesToNdjsonAsync(Array.Empty<string>(), tempNdjson);
+            var exportedCount = await _exporter.ExportAuditLogsToNdjsonAsync(Array.Empty<string>(), tempNdjson);
 
             // Assert
             exportedCount.Should().Be(0);
@@ -248,13 +248,13 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
     }
 
     [Fact]
-    public Task ExportCsvFilesToNdjsonAsync_WhenInputListIsNull_ThrowsArgumentNullException()
+    public Task ExportAuditLogsToNdjsonAsync_WhenInputListIsNull_ThrowsArgumentNullException()
     {
         // Arrange
         var tempNdjson = Path.Combine(Path.GetTempPath(), $"stream_null_{Guid.NewGuid():N}.ndjson");
 
         // Act
-        var act = () => _exporter.ExportCsvFilesToNdjsonAsync(null!, tempNdjson);
+        var act = () => _exporter.ExportAuditLogsToNdjsonAsync(null!, tempNdjson);
 
         // Assert
         return act.Should().ThrowAsync<ArgumentNullException>();

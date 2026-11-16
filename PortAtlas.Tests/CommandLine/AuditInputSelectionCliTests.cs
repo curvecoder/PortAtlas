@@ -209,6 +209,92 @@ public sealed class AuditInputSelectionCliTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportNdjson_WhenAnNdjsonLogIsNamed_WritesItsFlowsAsTheyAre()
+    {
+        // Arrange
+        var log = Path.Combine(_root, "audit_nas.ndjson");
+        await File.WriteAllLinesAsync(log, [NdjsonRow]);
+        var ndjson = Path.Combine(_root, "export.ndjson");
+
+        // Act
+        await RunAsync("export", "ndjson", "-i", log, "-o", ndjson);
+
+        // Assert
+        (await File.ReadAllLinesAsync(ndjson)).Should().Equal(NdjsonRow);
+    }
+
+    [Fact]
+    public async Task ExportNdjson_WhenInputDirectoryHoldsOnlyAnNdjsonLog_WritesItsFlows()
+    {
+        // Arrange
+        var directory = Directory.CreateDirectory(Path.Combine(_root, "ndjson-only")).FullName;
+        await File.WriteAllLinesAsync(Path.Combine(directory, "audit_nas.ndjson"), [NdjsonRow]);
+        var ndjson = Path.Combine(_root, "export.ndjson");
+
+        // Act
+        await RunAsync("export", "ndjson", "-i", directory, "-o", ndjson);
+
+        // Assert
+        (await File.ReadAllLinesAsync(ndjson)).Should().Equal(NdjsonRow);
+    }
+
+    [Fact]
+    public async Task ExportNdjson_WhenTheOutputIsAlsoAnInputLog_ReturnsExitCodeOneAndKeepsTheLog()
+    {
+        // Arrange
+        var log = Path.Combine(_root, "audit_nas.ndjson");
+        await File.WriteAllLinesAsync(log, [NdjsonRow]);
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main(["export", "ndjson", "-i", log, "-o", log, "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain($"The output '{log}' is also an audit log to read");
+        (await File.ReadAllLinesAsync(log)).Should().Equal(NdjsonRow);
+    }
+
+    [Fact]
+    public async Task ExportNdjson_WhenTheInputDirectoryHoldsTheOutputOfAnEarlierRun_SkipsItAndWritesEachFlowOnce()
+    {
+        // Arrange
+        var ndjson = Path.Combine(_collected, "all.ndjson");
+        await RunAsync("export", "ndjson", "-i", _collected, "-o", ndjson);
+
+        // Act
+        var output = await RunAsync("export", "ndjson", "-i", _collected, "-o", ndjson);
+
+        // Assert
+        output.Should().Contain($"Skipped {ndjson}: it is the output of this command.");
+        (await File.ReadAllLinesAsync(ndjson)).Should().ContainSingle().Which.Should().Contain("\"remoteIp\":\"192.168.1.30\"");
+    }
+
+    [Fact]
+    public async Task ExportNdjson_WhenInputDirectoryHoldsCsvAndNdjsonOfTheSameAudit_WritesEachFlowOnce()
+    {
+        // Arrange
+        await File.WriteAllLinesAsync(Path.Combine(_collected, "audit_nas.ndjson"), [NdjsonRow]);
+        var ndjson = Path.Combine(_root, "export.ndjson");
+
+        // Act
+        await RunAsync("export", "ndjson", "-i", _collected, "-o", ndjson);
+
+        // Assert
+        (await File.ReadAllLinesAsync(ndjson)).Should().ContainSingle().Which.Should().Contain("\"remoteIp\":\"192.168.1.30\"");
+    }
+
+    [Fact]
     public async Task Map_WhenInputDirectoryHoldsALogItsEnrichedCopyAndAMatrix_ReadsTheEnrichedCopyOnly()
     {
         // Arrange

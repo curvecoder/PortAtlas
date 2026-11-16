@@ -23,6 +23,18 @@ internal sealed class AuditInputOptionSet
     public bool HasExplicitInput(ParseResult parseResult) => parseResult.GetValue(_input) is { Length: > 0 };
 
     /// <summary>
+    /// Tells whether a file is given by its own path to the inputs, rather than found in a directory or a pattern.
+    /// </summary>
+    /// <param name="parseResult">Parsed command line.</param>
+    /// <param name="defaultInput">Input used when <c>--input</c> is absent.</param>
+    /// <param name="fullPath">Full path of the file.</param>
+    public bool NamesFile(ParseResult parseResult, string defaultInput, string fullPath)
+    {
+        var requested = parseResult.GetValue(_input) is { Length: > 0 } given ? given : [defaultInput];
+        return requested.Any(item => File.Exists(item) && string.Equals(Path.GetFullPath(item), fullPath, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Expands the inputs into the audit logs to read, and names on the console each file of a directory or of a
     /// pattern that is left out.
     /// </summary>
