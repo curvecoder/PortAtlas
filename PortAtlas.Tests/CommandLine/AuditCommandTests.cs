@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using PortAtlas.Cli.CommandLine;
 using PortAtlas.Cli.Configuration;
 using Xunit;
 
@@ -53,6 +54,37 @@ public sealed class AuditCommandTests
         updated.CustomHostAliases["192.168.1.10"].Should().Be("srv-db");
         updated.CustomHostAliases["10.0.0.1"].Should().Be("router.corp");
         updated.CustomHostAliases["10.0.0.2"].Should().Be("gateway.corp");
+    }
+
+    [Fact]
+    public void BuildConfiguration_WhenIpv6AliasProvided_KeepsTheWholeAddress()
+    {
+        // Act
+        var updated = AuditCommandConfiguration.Build(new AppConfiguration(), "audit", "--alias", "fe80::10=nas.home.arpa");
+
+        // Assert
+        updated.CustomHostAliases.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>("fe80::10", "nas.home.arpa"));
+    }
+
+    [Theory]
+    [InlineData("nas")]
+    [InlineData("=nas")]
+    [InlineData("192.168.1.5=")]
+    [InlineData("192.168.1.5:")]
+    [InlineData("nas.home.arpa=192.168.1.5")]
+    [InlineData("fe80::10:nas")]
+    [InlineData("2001:db8::1")]
+    [InlineData("10:nas")]
+    [InlineData("10=nas")]
+    public void Parse_WhenAliasIsMalformed_ReportsErrorNamingThePair(string pair)
+    {
+        // Act
+        var parseResult = PortAtlasCommandLine.CreateRootCommand().Parse(["audit", "--alias", $"192.168.1.20=pi.home.arpa,{pair}"]);
+
+        // Assert
+        parseResult.Errors.Should().ContainSingle()
+            .Which.Message.Should().Contain($"'{pair}'");
     }
 
     [Fact]

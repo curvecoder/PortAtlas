@@ -125,7 +125,7 @@ PortAtlas audit [options]
 | `--no-rdap` | none | `ResolveIpOwners` | RDAP on | No RDAP query to Internet registries; reverse DNS stays active |
 | `--dns-timeout-ms` | milliseconds, at least 1 | `DnsResolutionTimeoutMs` | `3000` | Time to wait for a reverse DNS answer |
 | `--exclude-remote-ips` | addresses or CIDR | `ExcludedRemoteIps` | none | Remote addresses that are not recorded |
-| `--alias` | `ip=host` or `ip:host`, repeatable | `CustomHostAliases` | none | Host name used instead of reverse DNS |
+| `--alias` | `ip=host` (IPv4 or IPv6), or `ip:host` for IPv4, repeatable | `CustomHostAliases` | none | Host name used instead of reverse DNS; a pair without an IP address or a name is refused |
 | `--mask-server` | `<name>` | `MaskServerName` | none | Server name shown by the dashboard |
 | `--mask-ip` | `<address>` | `MaskLocalIp` | none | Local address shown by the dashboard |
 | `--obfuscate` | none | none | off | Shows `HOMELAB-01` and `192.168.1.10` unless `--mask-server` or `--mask-ip` is given |

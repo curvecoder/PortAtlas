@@ -26,7 +26,7 @@ public sealed class AuditCommand : Command
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
     private readonly Option<bool> _noRdap = new("--no-rdap") { Description = "Do not query RDAP registries (Internet) for address owners; reverse DNS stays active." };
     private readonly Option<string[]> _excludeRemoteIps = OptionFactory.CreateList("--exclude-remote-ips", "addresses", "Remote IP addresses or CIDR subnets that are not recorded.");
-    private readonly Option<string[]> _alias = OptionFactory.CreateList("--alias", "ip=host", "Host name used for an IP address instead of reverse DNS (ip=host or ip:host). Repeatable.");
+    private readonly Option<string[]> _alias = OptionFactory.CreateList("--alias", "ip=host", "Host name used for an IP address instead of reverse DNS (ip=host, or ip:host for IPv4). Repeatable.");
     private readonly Option<string?> _maskServer = new("--mask-server") { Description = "Server name displayed by the dashboard instead of the real one (screenshots).", HelpName = "name" };
     private readonly Option<string?> _maskIp = new("--mask-ip") { Description = "Local IP address displayed by the dashboard instead of the real one (screenshots).", HelpName = "address" };
     private readonly Option<bool> _obfuscate = new("--obfuscate") { Description = "Display HOMELAB-01 and 192.168.1.10 unless --mask-server or --mask-ip is given." };
@@ -53,6 +53,16 @@ public sealed class AuditCommand : Command
         Options.Add(_noRdap);
         Options.Add(_dnsTimeout);
         Options.Add(_excludeRemoteIps);
+        _alias.Validators.Add(result =>
+        {
+            foreach (var pair in result.GetValueOrDefault<string[]>() ?? [])
+            {
+                if (!HostAliasArgument.TryParse(pair, out _, out var error))
+                {
+                    result.AddError(error);
+                }
+            }
+        });
         Options.Add(_alias);
         Options.Add(_maskServer);
         Options.Add(_maskIp);
@@ -109,17 +119,10 @@ public sealed class AuditCommand : Command
         var aliases = new Dictionary<string, string>(configured, StringComparer.OrdinalIgnoreCase);
         foreach (var pair in pairs)
         {
-            var separatorIndex = pair.IndexOfAny(['=', ':']);
-            if (separatorIndex <= 0 || separatorIndex >= pair.Length - 1)
+            // The option's validator has refused a malformed pair before the command runs.
+            if (HostAliasArgument.TryParse(pair, out var alias, out _))
             {
-                continue;
-            }
-
-            var ip = pair[..separatorIndex].Trim();
-            var host = pair[(separatorIndex + 1)..].Trim();
-            if (ip.Length > 0 && host.Length > 0)
-            {
-                aliases[ip] = host;
+                aliases[alias.Ip] = alias.Host;
             }
         }
 
