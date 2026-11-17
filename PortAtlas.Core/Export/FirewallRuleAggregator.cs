@@ -142,9 +142,7 @@ public sealed class FirewallRuleAggregator
                     DestinationIp = destIp,
                     DestinationPort = destPort,
                     Protocol = protocolStr,
-                    ProcessName = processName,
-                    ExecutablePath = entry.Socket.Process.ExecutablePath,
-                    UserName = entry.Socket.Process.UserName
+                    ProcessName = processName
                 };
                 groups[key] = acc;
             }
@@ -330,8 +328,10 @@ public sealed class FirewallRuleAggregator
 
     private sealed class AggregationAccumulator
     {
-        private readonly MostRecentlySeenName _serverHostName = new();
-        private readonly MostRecentlySeenName _remoteHostName = new();
+        private readonly MostRecentlySeenValue _serverHostName = new();
+        private readonly MostRecentlySeenValue _remoteHostName = new();
+        private readonly MostRecentlySeenValue _executablePath = new();
+        private readonly MostRecentlySeenValue _userName = new();
 
         public required bool IsOutbound { get; init; }
         public required bool IsListener { get; init; }
@@ -340,8 +340,8 @@ public sealed class FirewallRuleAggregator
         public required int DestinationPort { get; init; }
         public required string Protocol { get; init; }
         public required string ProcessName { get; init; }
-        public required string ExecutablePath { get; init; }
-        public required string UserName { get; init; }
+        public string ExecutablePath => _executablePath.Value;
+        public string UserName => _userName.Value;
         public string Direction => IsOutbound ? "Outbound" : "Inbound";
         public string ServerHostName => _serverHostName.Value;
         public string RemoteHostName => _remoteHostName.Value;
@@ -378,32 +378,35 @@ public sealed class FirewallRuleAggregator
 
             _serverHostName.Offer(entry.Server.HostName, entry.LastSeenUtc);
             _remoteHostName.Offer(entry.RemoteHostName, entry.LastSeenUtc);
+            _executablePath.Offer(entry.Socket.Process.ExecutablePath, entry.LastSeenUtc);
+            _userName.Offer(entry.Socket.Process.UserName, entry.LastSeenUtc);
         }
 
         private string RemoteHostNameOr(string remoteIp) => RemoteHostName.Length > 0 ? RemoteHostName : remoteIp;
     }
 
-    // The first row of a flow is written before the DNS answer comes back, and a server can be renamed during an
-    // audit: a rule takes each name from whichever row carries it. The most recently seen name wins and the ordinal
-    // order settles a tie, so that the matrix does not depend on the order in which the audit files are read.
-    private sealed class MostRecentlySeenName
+    // The first row of a flow is written before the DNS answer comes back, a server can be renamed and a program updated
+    // or run under another account during an audit: a rule takes each name, path and account from whichever row
+    // carries one. The most recently seen value wins and the ordinal order settles a tie, so that the matrix does not
+    // depend on the order in which the audit files are read.
+    private sealed class MostRecentlySeenValue
     {
         private DateTimeOffset _seenUtc = DateTimeOffset.MinValue;
 
         public string Value { get; private set; } = string.Empty;
 
-        public void Offer(string name, DateTimeOffset seenUtc)
+        public void Offer(string value, DateTimeOffset seenUtc)
         {
-            if (string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(value))
             {
                 return;
             }
 
             var isMoreRecent = seenUtc > _seenUtc;
-            var settlesTie = seenUtc == _seenUtc && string.CompareOrdinal(name, Value) < 0;
+            var settlesTie = seenUtc == _seenUtc && string.CompareOrdinal(value, Value) < 0;
             if (Value.Length == 0 || isMoreRecent || settlesTie)
             {
-                Value = name;
+                Value = value;
                 _seenUtc = seenUtc;
             }
         }

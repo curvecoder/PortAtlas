@@ -184,7 +184,7 @@ Families read: inputs (`.csv`, `.ndjson`, `.jsonl`) and flow filters, with two d
 
 A destination is `Internal` when it is a loopback address, an address of a private range, or `0.0.0.0` / `::`; otherwise it is `Public`.
 
-A rule carries the server name and the remote name found on any of its log rows, the most recently seen one when several rows disagree. `--include-hosts` and `--exclude-hosts` are tested on the consolidated rule, against both of its ends, by name and by the address the rule shows: one match is enough, to keep the rule as to remove it. The `Any` source of a listener is not tested.
+A rule carries the server name, the remote name, the executable path and the account found on any of its log rows, the most recently seen one when several rows disagree, whatever the order of the inputs. `--include-hosts` and `--exclude-hosts` are tested on the consolidated rule, against both of its ends, by name and by the address the rule shows: one match is enough, to keep the rule as to remove it. The `Any` source of a listener is not tested.
 
 `--include-ips` and `--exclude-ips` follow the same rule on the two addresses the rule shows, whatever the direction of the flow: one match is enough, to keep the rule as to remove it. Excluding a remote address removes the flows it receives and the flows it opens; including the subnet of the server keeps all of its flows, excluding it removes them all. A listening socket is tested on the address it is bound to only: a listener bound to `0.0.0.0` or `::` is not in the subnet of its server.
 

@@ -443,6 +443,58 @@ public sealed class FirewallRuleAggregatorTests
         rules.Should().ContainSingle().Which.DestinationHost.Should().Be("new-name.home.arpa");
     }
 
+    // A program updated or run under another account during the audit: the rule must not take the path or the
+    // account of the first file read.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenRowsCarryDifferentExecutablesAndAccounts_KeepsTheMostRecentlySeenOnes(bool recentRowFirst)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var old = CreateRemoteNamedEntry(
+            SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen,
+            executablePath: "/opt/dnsproxy-0.9/dnsproxy", userName: "root");
+        var recent = CreateRemoteNamedEntry(
+            SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen.AddMinutes(5),
+            executablePath: "/opt/dnsproxy-1.0/dnsproxy", userName: "dnsproxy");
+        NetworkAuditEntry[] entries = recentRowFirst ? [recent, old] : [old, recent];
+
+        // Act
+        var rules = aggregator.Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        var rule = rules.Should().ContainSingle().Subject;
+        rule.ExecutablePath.Should().Be("/opt/dnsproxy-1.0/dnsproxy");
+        rule.UserName.Should().Be("dnsproxy");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenTheMostRecentRowHasNoExecutableOrAccount_KeepsTheOnesOfAnotherRow(bool recentRowFirst)
+    {
+        // Arrange
+        var aggregator = new FirewallRuleAggregator();
+        var seen = DateTimeOffset.UtcNow.AddHours(-2);
+        var known = CreateRemoteNamedEntry(
+            SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen,
+            executablePath: "/opt/dnsproxy/dnsproxy", userName: "dnsproxy");
+        var unknown = CreateRemoteNamedEntry(
+            SocketFlowDirection.Outbound, remoteHost: "pihole.home.arpa", lastSeen: seen.AddMinutes(5),
+            executablePath: "", userName: "  ");
+        NetworkAuditEntry[] entries = recentRowFirst ? [unknown, known] : [known, unknown];
+
+        // Act
+        var rules = aggregator.Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        var rule = rules.Should().ContainSingle().Subject;
+        rule.ExecutablePath.Should().Be("/opt/dnsproxy/dnsproxy");
+        rule.UserName.Should().Be("dnsproxy");
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -886,7 +938,9 @@ public sealed class FirewallRuleAggregatorTests
         string remoteHost,
         DateTimeOffset lastSeen,
         long observationCount = 10,
-        string serverHost = "nas.home.arpa")
+        string serverHost = "nas.home.arpa",
+        string executablePath = "/usr/bin/dnsproxy",
+        string userName = "root")
     {
         var isOutbound = direction == SocketFlowDirection.Outbound;
         return CreateSampleEntry(
@@ -900,7 +954,9 @@ public sealed class FirewallRuleAggregatorTests
             processName: "dnsproxy",
             observationCount: observationCount,
             firstSeen: lastSeen.AddMinutes(-1),
-            lastSeen: lastSeen);
+            lastSeen: lastSeen,
+            executablePath: executablePath,
+            userName: userName);
     }
 
     private static NetworkAuditEntry CreateSampleEntry(
@@ -916,7 +972,9 @@ public sealed class FirewallRuleAggregatorTests
         DateTimeOffset? firstSeen = null,
         DateTimeOffset? lastSeen = null,
         string state = "Established",
-        SocketTransportProtocol protocol = SocketTransportProtocol.Tcp)
+        SocketTransportProtocol protocol = SocketTransportProtocol.Tcp,
+        string? executablePath = null,
+        string userName = "root")
     {
         var now = DateTimeOffset.UtcNow;
         var socket = new ActiveSocketConnection(
@@ -925,7 +983,8 @@ public sealed class FirewallRuleAggregatorTests
             new SocketEndpoint(IPAddress.Parse(localIp), localPort),
             new SocketEndpoint(IPAddress.Parse(remoteIp), remotePort),
             state,
-            new ProcessMetadata(1234, processName, $"/usr/bin/{processName}", $"{processName} --run", "", "root"));
+            new ProcessMetadata(
+                1234, processName, executablePath ?? $"/usr/bin/{processName}", $"{processName} --run", "", userName));
 
         return new NetworkAuditEntry(
             FirstSeenUtc: firstSeen ?? now.AddHours(-1),
