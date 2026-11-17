@@ -82,7 +82,7 @@ These keys are read by the map of `audit`, by `map`, and for the filters by `exp
 
 The topology map (not the rule matrix) also removes the ports of `ExcludedLocalPorts` and `ExcludedRemotePorts` and the addresses of `ExcludedRemoteIps`.
 
-Values of these keys are not checked when the file is read: an unknown layout, sort, routing, spacing, edge mode or theme falls back to the default. The command-line options reject unknown values.
+A value that `MapDirection`, `MapLayoutMode`, `MapSortMethod`, `MapRoutingMode`, `MapSpacingProfile`, `MapEdgeLabels`, `DrawioEdgeMode`, `DrawioSubnets` or `DrawioTheme` does not take (see the table above), compared without case, stops the command with an error naming the file, the key, the value and the accepted values, and exit code 1, as the matching option does: the default is not used in its place.
 
 ## Removed key
 

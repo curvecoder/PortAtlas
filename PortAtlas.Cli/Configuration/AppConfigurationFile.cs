@@ -37,8 +37,9 @@ public static class AppConfigurationFile
     /// </returns>
     /// <exception cref="ConfigurationFileException">
     /// When a requested path is empty or missing from both directories, or when the file exists but is locked, denied
-    /// to the user, not valid JSON, holds a key that is not a setting, a value of the wrong type, a <c>null</c> where
-    /// a value is needed, or still sets the removed <c>IsolatedMode</c> key to <see langword="true"/>.
+    /// to the user, not valid JSON, holds a key that is not a setting, a value of the wrong type, a value that a closed
+    /// setting such as <c>MapDirection</c> does not take, a <c>null</c> where a value is needed, or still sets the
+    /// removed <c>IsolatedMode</c> key to <see langword="true"/>.
     /// </exception>
     public static LoadedAppConfiguration Load(string? path) =>
         Load(path, Directory.GetCurrentDirectory(), AppContext.BaseDirectory);
@@ -132,9 +133,11 @@ public static class AppConfigurationFile
                 ConfigurationKeyValidator.Validate(document.RootElement, configPath);
             }
 
-            return JsonSerializer.Deserialize<AppConfiguration>(json)
+            var configuration = JsonSerializer.Deserialize<AppConfiguration>(json)
                 ?? throw new ConfigurationFileException(
                     $"{configPath}: the configuration file holds null instead of a JSON object. {DefaultsNotApplied}");
+            ClosedSettingValidator.Validate(configuration, configPath);
+            return configuration;
         }
         catch (JsonException ex)
         {

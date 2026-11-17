@@ -69,34 +69,16 @@ public static class TopologyMapConfigurationBuilder
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        var layoutMode = config.MapLayoutMode.Trim().ToUpperInvariant() switch
-        {
-            "ORGANIC" or "FORCE" or "FORCEDIRECTED" => TopologyLayoutMode.ForceDirectedOrganic,
-            "CIRCULAR" or "RING" => TopologyLayoutMode.Circular,
-            "GRID" or "MATRIX" => TopologyLayoutMode.Grid,
-            "TREE" or "TOPDOWN" or "ARBRE" => TopologyLayoutMode.Tree,
-            "HORIZONTALTREE" or "HORIZONTAL-TREE" or "HORIZONTAL" or "LEFTTORIGHT" => TopologyLayoutMode.HorizontalTree,
-            _ => TopologyLayoutMode.Layered
-        };
-
-        var routingMode = config.MapRoutingMode.Trim().ToUpperInvariant() switch
-        {
-            "ORTHOGONAL" or "ORTHOGONALCORRIDORS" => TopologyEdgeRoutingMode.OrthogonalCorridors,
-            "STRAIGHT" or "DIRECT" or "DIRECTSTRAIGHT" => TopologyEdgeRoutingMode.DirectStraight,
-            "BUS" => TopologyEdgeRoutingMode.Bus,
-            _ => TopologyEdgeRoutingMode.BezierCurved
-        };
+        // The configuration file is checked when it is read (ClosedSettingValidator) and the options take closed sets,
+        // so a default below only stands in for a value of a configuration built in code.
+        var layoutMode = ParseLayoutMode(config.MapLayoutMode) ?? TopologyLayoutMode.Layered;
+        var routingMode = ParseRoutingMode(config.MapRoutingMode) ?? TopologyEdgeRoutingMode.BezierCurved;
 
         var edgeLabelMode = config.MapEdgeLabels.Equals("none", StringComparison.OrdinalIgnoreCase)
             ? TopologyEdgeLabelMode.None
             : TopologyEdgeLabelMode.Ports;
 
-        var spacingProfile = config.MapSpacingProfile.Trim().ToUpperInvariant() switch
-        {
-            "COMPACT" => TopologySpacingProfile.Compact,
-            "SPACIOUS" or "LARGE" or "WIDE" => TopologySpacingProfile.Spacious,
-            _ => TopologySpacingProfile.Balanced
-        };
+        var spacingProfile = ParseSpacingProfile(config.MapSpacingProfile) ?? TopologySpacingProfile.Balanced;
 
         var initialIncludePorts = config.MapIncludedPorts.Count > 0 ? string.Join(", ", config.MapIncludedPorts) : string.Empty;
         var initialExcludePorts = config.MapExcludedPorts.Count > 0 ? string.Join(", ", config.MapExcludedPorts) : string.Empty;
@@ -112,7 +94,7 @@ public static class TopologyMapConfigurationBuilder
         return new TopologyRenderingOptions
         {
             DefaultLayoutMode = layoutMode,
-            DefaultSortMethod = ParseSortMethod(config.MapSortMethod),
+            DefaultSortMethod = ParseSortMethod(config.MapSortMethod) ?? TopologyNodeSortMethod.BarycentricSugiyama,
             DefaultRoutingMode = routingMode,
             DefaultSpacingProfile = spacingProfile,
             DefaultEdgeLabelMode = edgeLabelMode,
@@ -145,13 +127,7 @@ public static class TopologyMapConfigurationBuilder
     {
         ArgumentNullException.ThrowIfNull(config);
 
-        return config.DrawioEdgeMode.Trim().ToUpperInvariant() switch
-        {
-            "DIRECTION" => EdgeAggregationMode.ByDirection,
-            "PAIR" => EdgeAggregationMode.ByServerPair,
-            "NONE" => EdgeAggregationMode.None,
-            _ => EdgeAggregationMode.AdaptiveThreshold
-        };
+        return ParseDrawioEdgeMode(config.DrawioEdgeMode) ?? EdgeAggregationMode.AdaptiveThreshold;
     }
 
     /// <summary>
@@ -180,17 +156,57 @@ public static class TopologyMapConfigurationBuilder
         return new TopologyDrawioLayoutOptions
         {
             GroupBySubnets = !config.DrawioSubnets.Trim().Equals("off", StringComparison.OrdinalIgnoreCase),
-            SortMethod = ParseSortMethod(config.MapSortMethod)
+            SortMethod = ParseSortMethod(config.MapSortMethod) ?? TopologyNodeSortMethod.BarycentricSugiyama
         };
     }
 
-    private static TopologyNodeSortMethod ParseSortMethod(string value) => value.Trim().ToUpperInvariant() switch
+    // Each reading takes the values of the matching option, without case, and the spellings of earlier versions that
+    // configuration files may still hold; any other value gives null.
+    internal static TopologyLayoutMode? ParseLayoutMode(string value) => value.Trim().ToUpperInvariant() switch
     {
+        "LAYERED" => TopologyLayoutMode.Layered,
+        "ORGANIC" or "FORCE" or "FORCEDIRECTED" => TopologyLayoutMode.ForceDirectedOrganic,
+        "CIRCULAR" or "RING" => TopologyLayoutMode.Circular,
+        "GRID" or "MATRIX" => TopologyLayoutMode.Grid,
+        "TREE" or "TOPDOWN" or "ARBRE" => TopologyLayoutMode.Tree,
+        "HORIZONTALTREE" or "HORIZONTAL-TREE" or "HORIZONTAL" or "LEFTTORIGHT" => TopologyLayoutMode.HorizontalTree,
+        _ => null
+    };
+
+    internal static TopologyEdgeRoutingMode? ParseRoutingMode(string value) => value.Trim().ToUpperInvariant() switch
+    {
+        "BEZIER" => TopologyEdgeRoutingMode.BezierCurved,
+        "ORTHOGONAL" or "ORTHOGONALCORRIDORS" => TopologyEdgeRoutingMode.OrthogonalCorridors,
+        "STRAIGHT" or "DIRECT" or "DIRECTSTRAIGHT" => TopologyEdgeRoutingMode.DirectStraight,
+        "BUS" => TopologyEdgeRoutingMode.Bus,
+        _ => null
+    };
+
+    internal static TopologySpacingProfile? ParseSpacingProfile(string value) => value.Trim().ToUpperInvariant() switch
+    {
+        "BALANCED" => TopologySpacingProfile.Balanced,
+        "COMPACT" => TopologySpacingProfile.Compact,
+        "SPACIOUS" or "LARGE" or "WIDE" => TopologySpacingProfile.Spacious,
+        _ => null
+    };
+
+    internal static EdgeAggregationMode? ParseDrawioEdgeMode(string value) => value.Trim().ToUpperInvariant() switch
+    {
+        "ADAPTIVE" => EdgeAggregationMode.AdaptiveThreshold,
+        "DIRECTION" => EdgeAggregationMode.ByDirection,
+        "PAIR" => EdgeAggregationMode.ByServerPair,
+        "NONE" => EdgeAggregationMode.None,
+        _ => null
+    };
+
+    internal static TopologyNodeSortMethod? ParseSortMethod(string value) => value.Trim().ToUpperInvariant() switch
+    {
+        "BARYCENTRIC" => TopologyNodeSortMethod.BarycentricSugiyama,
         "DEGREE" or "CONNECTIONDEGREE" => TopologyNodeSortMethod.ConnectionDegree,
         "ALPHA" or "ALPHABETICAL" or "NAME" => TopologyNodeSortMethod.Alphabetical,
         "TIERS" or "TIER" or "FUNCTIONALTIER" => TopologyNodeSortMethod.FunctionalTier,
         "CLUSTER" or "SUBNETCLUSTER" or "ZONE" or "ZONES" or "SUBNET" => TopologyNodeSortMethod.SubnetCluster,
         "IP" or "SUBNETIP" => TopologyNodeSortMethod.SubnetIp,
-        _ => TopologyNodeSortMethod.BarycentricSugiyama
+        _ => null
     };
 }

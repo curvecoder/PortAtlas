@@ -17,7 +17,7 @@ internal sealed class FlowFilterOptionSet
     private readonly Option<string[]> _excludeIps = OptionFactory.CreateList("--exclude-ips", "addresses", "Remove these IP addresses or CIDR subnets.");
     private readonly Option<string[]> _includeProcesses = OptionFactory.CreateList("--include-processes", "names", "Keep only these process names or application targets.");
     private readonly Option<string[]> _excludeProcesses = OptionFactory.CreateList("--exclude-processes", "names", "Remove these process names or application targets.");
-    private readonly Option<string?> _direction = OptionFactory.CreateChoice("--direction", "Flow direction to keep. Default: all.", "all", "in", "out");
+    private readonly Option<string?> _direction = OptionFactory.CreateChoice("--direction", "Flow direction to keep. Default: all.", [.. ClosedSettingValues.MapDirection]);
     private readonly Option<bool> _listenersOnly = new("--listeners-only") { Description = "Keep only listening sockets." };
     public Option<bool> IncludeEphemeralPorts { get; } = new("--include-ephemeral-ports") { Description = "Keep ephemeral ports (49152-65535), excluded by default." };
 

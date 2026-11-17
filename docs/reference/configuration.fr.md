@@ -82,7 +82,7 @@ Ces clés sont lues par la carte de `audit`, par `map`, et pour les filtres par 
 
 La carte topologique (pas la matrice de règles) retire aussi les ports de `ExcludedLocalPorts` et `ExcludedRemotePorts` et les adresses de `ExcludedRemoteIps`.
 
-Les valeurs de ces clés ne sont pas vérifiées à la lecture du fichier : une disposition, un tri, un routage, un espacement, un mode de flèches ou un thème inconnu prend la valeur par défaut. Les options de la ligne de commande refusent les valeurs inconnues.
+Une valeur que `MapDirection`, `MapLayoutMode`, `MapSortMethod`, `MapRoutingMode`, `MapSpacingProfile`, `MapEdgeLabels`, `DrawioEdgeMode`, `DrawioSubnets` ou `DrawioTheme` n'accepte pas (voir le tableau ci-dessus), comparée sans tenir compte de la casse, arrête la commande avec une erreur nommant le fichier, la clé, la valeur et les valeurs acceptées, et le code de sortie 1, comme le fait l'option correspondante : la valeur par défaut ne s'applique pas à sa place.
 
 ## Clé supprimée
 
