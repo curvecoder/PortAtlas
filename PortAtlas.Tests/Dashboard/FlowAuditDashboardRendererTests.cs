@@ -563,6 +563,9 @@ public sealed class FlowAuditDashboardRendererTests
         renderer.SelectedColumn.Should().Be(InteractiveExclusionColumn.Remote);
 
         renderer.MoveSelectionRight();
+        renderer.SelectedColumn.Should().Be(InteractiveExclusionColumn.RemotePort);
+
+        renderer.MoveSelectionRight();
         renderer.SelectedColumn.Should().Be(InteractiveExclusionColumn.Process);
 
         renderer.MoveSelectionRight();
@@ -607,6 +610,7 @@ public sealed class FlowAuditDashboardRendererTests
             // Act - Select Process column and apply
             renderer.MoveSelectionDown();
             renderer.MoveSelectionRight(); // Remote
+            renderer.MoveSelectionRight(); // Remote port
             renderer.MoveSelectionRight(); // Process
             renderer.SelectedColumn.Should().Be(InteractiveExclusionColumn.Process);
 
@@ -628,6 +632,137 @@ public sealed class FlowAuditDashboardRendererTests
                 try { File.Delete(tempFile); } catch (IOException) { }
             }
         }
+    }
+
+    [Fact]
+    public void ApplyExclusionAtSelection_WhenRemotePortSelected_ExcludesThePortAndRemovesItsRows()
+    {
+        // Arrange
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_render_port_{Guid.NewGuid():N}.json");
+        try
+        {
+            var flowFilter = new NetworkFlowFilter(new NetworkFlowFilterOptions());
+            var procFilter = new ProcessExclusionFilter(new ProcessExclusionOptions());
+            var configurator = new FlowExclusionConfigurator(new AppConfiguration(), tempFile, flowFilter, procFilter);
+            var renderer = new FlowAuditDashboardRenderer(5, "output.csv", flowFilter, procFilter, null);
+
+            var dnsOverTls = CreateOutboundEntry("192.168.1.53", 853, 50001);
+            var https = CreateOutboundEntry("192.168.1.20", 443, 50002);
+            var otherDnsOverTls = CreateOutboundEntry("192.168.1.54", 853, 50003);
+            renderer.Render(new FlowAuditCycleResult(DateTimeOffset.UtcNow, 2, 0, 2, 2, [dnsOverTls, https], [dnsOverTls.Socket, https.Socket]), SampleHost);
+            var lastCycle = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 1, 0, 1, 3, [otherDnsOverTls], [otherDnsOverTls.Socket]);
+            renderer.Render(lastCycle, SampleHost);
+
+            // The newest row, 192.168.1.54:853, is first.
+            renderer.MoveSelectionDown();
+            renderer.MoveSelectionRight();
+            renderer.MoveSelectionRight();
+            renderer.SelectedColumn.Should().Be(InteractiveExclusionColumn.RemotePort);
+
+            // Act
+            var applied = renderer.ApplyExclusionAtSelection(configurator);
+
+            // Assert
+            applied.Should().BeTrue();
+            configurator.CurrentConfiguration.ExcludedRemotePorts.Should().Equal(853);
+            configurator.CurrentConfiguration.ExcludedRemoteIps.Should().BeEmpty();
+            var frame = StripAnsi(renderer.BuildDashboardFrame(lastCycle, SampleHost));
+            frame.Should().Contain("Excluded remote port 853");
+            frame.Should().NotContain("192.168.1.53:853").And.NotContain("192.168.1.54:853");
+            frame.Should().Contain("192.168.1.20:443");
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                try { File.Delete(tempFile); }
+                catch (IOException)
+                {
+                    // A temporary file still held by the antivirus must not fail the test; it stays in %TEMP%.
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void ApplyExclusionAtSelection_WhenRemotePortIsZero_WritesNoRuleAndShowsWarning()
+    {
+        // Arrange
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test_render_port0_{Guid.NewGuid():N}.json");
+        try
+        {
+            var flowFilter = new NetworkFlowFilter(new NetworkFlowFilterOptions());
+            var procFilter = new ProcessExclusionFilter(new ProcessExclusionOptions());
+            var configurator = new FlowExclusionConfigurator(new AppConfiguration(), tempFile, flowFilter, procFilter);
+            var renderer = new FlowAuditDashboardRenderer(5, "output.csv", flowFilter, procFilter, null);
+            var socket = new ActiveSocketConnection(
+                SocketTransportProtocol.Udp,
+                SocketFlowDirection.Listening,
+                new SocketEndpoint(IPAddress.Any, 5353),
+                new SocketEndpoint(IPAddress.Any, 0),
+                string.Empty,
+                new ProcessMetadata(100, "mdns", "", "", "", "user"));
+            var entry = new NetworkAuditEntry(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 1, SampleHost, socket);
+            var result = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 1, 0, 1, 1, [entry], [socket]);
+            renderer.Render(result, SampleHost);
+
+            renderer.MoveSelectionDown();
+            renderer.MoveSelectionRight();
+            renderer.MoveSelectionRight();
+
+            // Act
+            var applied = renderer.ApplyExclusionAtSelection(configurator);
+
+            // Assert
+            applied.Should().BeFalse();
+            configurator.CurrentConfiguration.ExcludedRemotePorts.Should().BeEmpty();
+            File.Exists(tempFile).Should().BeFalse();
+            var frame = StripAnsi(renderer.BuildDashboardFrame(result, SampleHost));
+            frame.Should().Contain("No remote port to exclude");
+            frame.Should().Contain("0.0.0.0:5353");
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                try { File.Delete(tempFile); }
+                catch (IOException)
+                {
+                    // A temporary file still held by the antivirus must not fail the test; it stays in %TEMP%.
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public void BuildDashboardFrame_WhenRemotePortSelectedUnderALongHostName_HighlightsTheWholePortAndKeepsTheRowWidth()
+    {
+        // Arrange
+        var renderer = new FlowAuditDashboardRenderer(5, "output.csv");
+        var socket = new ActiveSocketConnection(
+            SocketTransportProtocol.Tcp,
+            SocketFlowDirection.Outbound,
+            new SocketEndpoint(IPAddress.Parse("192.168.1.10"), 50001),
+            new SocketEndpoint(IPAddress.Parse("192.168.1.30"), 8443),
+            "Established",
+            new ProcessMetadata(100, "rclone", "", "", "", "user"));
+        var entry = new NetworkAuditEntry(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 1, SampleHost, socket, "backup-target-with-a-long-name.home.arpa");
+        var result = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 1, 0, 1, 1, [entry], [socket]);
+        renderer.Render(result, SampleHost);
+        renderer.MoveSelectionDown();
+        renderer.MoveSelectionRight();
+        renderer.MoveSelectionRight();
+
+        // Act
+        var frame = renderer.BuildDashboardFrame(result, SampleHost);
+
+        // Assert
+        frame.Should().Contain("\x1b[30;43;1m8443");
+        var lines = frame.Split(["\r\n", "\n"], StringSplitOptions.None);
+        var row = lines.Single(line => StripAnsi(line).Contains(":8443", StringComparison.Ordinal));
+        StripAnsi(row).Should().Contain("backup-target");
+        FlowAuditDashboardRenderer.GetVisibleWidth(row).Should().Be(102);
+        StripAnsi(frame).Should().Contain("[REMOTE PORT]").And.Contain("Exclude REMOTE PORT");
     }
 
     [Fact]
@@ -778,8 +913,9 @@ public sealed class FlowAuditDashboardRendererTests
 
             renderer.Render(result, SampleHost);
 
-            // Select Target column (Col index 3)
+            // Select Target column (Col index 4)
             renderer.MoveSelectionDown();
+            renderer.MoveSelectionRight();
             renderer.MoveSelectionRight();
             renderer.MoveSelectionRight();
             renderer.MoveSelectionRight();
@@ -1100,6 +1236,18 @@ public sealed class FlowAuditDashboardRendererTests
         renderer.ToggleViewMode();
         renderer.IsFilterBypassed.Should().BeFalse();
         renderer.IsActiveSocketsView.Should().BeFalse();
+    }
+
+    private static NetworkAuditEntry CreateOutboundEntry(string remoteAddress, int remotePort, int localPort)
+    {
+        var socket = new ActiveSocketConnection(
+            SocketTransportProtocol.Tcp,
+            SocketFlowDirection.Outbound,
+            new SocketEndpoint(IPAddress.Parse("192.168.1.10"), localPort),
+            new SocketEndpoint(IPAddress.Parse(remoteAddress), remotePort),
+            "Established",
+            new ProcessMetadata(100, "client", "", "", "", "user"));
+        return new NetworkAuditEntry(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, 1, SampleHost, socket);
     }
 
     private static string StripAnsi(string text)

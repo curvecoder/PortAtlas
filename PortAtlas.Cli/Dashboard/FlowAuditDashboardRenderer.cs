@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Text;
@@ -547,6 +548,21 @@ public sealed partial class FlowAuditDashboardRenderer
                     _recentDiscoveries.RemoveAll(e => AddressesEqual(e.Socket.RemoteEndpoint.Address, remoteAddress) || IsEntryExcluded(e));
                     break;
 
+                case InteractiveExclusionColumn.RemotePort:
+                    var remotePort = entry.Socket.RemoteEndpoint.Port;
+                    if (remotePort == 0)
+                    {
+                        // As for the address: a listening or UDP socket has no peer, and a rule on port 0 would hide
+                        // every listener.
+                        SetStatusBanner("No remote port to exclude on a listening or UDP row: select LOCAL or PROCESS", WarningBannerDuration, isWarning: true);
+                        RenderInternal(forceClear: false);
+                        return false;
+                    }
+
+                    actionDescription = configurator.ExcludeRemotePort(remotePort);
+                    _recentDiscoveries.RemoveAll(e => e.Socket.RemoteEndpoint.Port == remotePort || IsEntryExcluded(e));
+                    break;
+
                 case InteractiveExclusionColumn.Process:
                     var procName = entry.Socket.Process.ProcessName;
                     actionDescription = configurator.ExcludeProcess(procName);
@@ -1084,7 +1100,12 @@ public sealed partial class FlowAuditDashboardRenderer
         var rawLocalHeader = _isSelectionActive && _selectedColumn == InteractiveExclusionColumn.Local ? $"{AnsiYellow}{AnsiBold}[LOCAL]{AnsiReset}" : "LOCAL";
         var headerColLocal = PadRightVisible(rawLocalHeader, localWidth);
 
-        var rawRemoteHeader = _isSelectionActive && _selectedColumn == InteractiveExclusionColumn.Remote ? $"{AnsiYellow}{AnsiBold}[REMOTE]{AnsiReset}" : "REMOTE";
+        var rawRemoteHeader = (_isSelectionActive, _selectedColumn) switch
+        {
+            (true, InteractiveExclusionColumn.Remote) => $"{AnsiYellow}{AnsiBold}[REMOTE]{AnsiReset}",
+            (true, InteractiveExclusionColumn.RemotePort) => $"{AnsiYellow}{AnsiBold}[REMOTE PORT]{AnsiReset}",
+            _ => "REMOTE"
+        };
         var headerColRemote = PadRightVisible(rawRemoteHeader, remoteWidth);
 
         var rawProcHeader = _isSelectionActive && _selectedColumn == InteractiveExclusionColumn.Process ? $"{AnsiYellow}{AnsiBold}[PROCESS]{AnsiReset}" : "PROCESS";
@@ -1141,6 +1162,17 @@ public sealed partial class FlowAuditDashboardRenderer
                 {
                     remoteText = $"{AnsiSelectedCell}{remoteText}{AnsiReset}";
                 }
+                else if (isRowSelected && _selectedColumn == InteractiveExclusionColumn.RemotePort)
+                {
+                    // The name or address gives way so that the port being excluded is always shown whole.
+                    var portText = entry.Socket.RemoteEndpoint.Port.ToString(CultureInfo.InvariantCulture);
+                    var remoteHost = !string.IsNullOrWhiteSpace(entry.RemoteHostName)
+                        ? entry.RemoteHostName
+                        : entry.Socket.RemoteEndpoint.Address.ToString();
+                    var hostText = Truncate(remoteHost, remoteWidth - (portText.Length + 1));
+                    var padding = new string(' ', remoteWidth - (hostText.Length + 1 + portText.Length));
+                    remoteText = $"{hostText}:{AnsiSelectedCell}{portText}{AnsiReset}{padding}";
+                }
 
                 var procText = proc.PadRight(procWidth);
                 if (isRowSelected && _selectedColumn == InteractiveExclusionColumn.Process)
@@ -1184,6 +1216,7 @@ public sealed partial class FlowAuditDashboardRenderer
             {
                 InteractiveExclusionColumn.Local => "LOCAL",
                 InteractiveExclusionColumn.Remote => "REMOTE",
+                InteractiveExclusionColumn.RemotePort => "REMOTE PORT",
                 InteractiveExclusionColumn.Process => "PROCESS",
                 InteractiveExclusionColumn.Target => "TARGET",
                 _ => "FLOW"

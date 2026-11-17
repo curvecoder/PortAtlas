@@ -41,6 +41,8 @@ Excluding a cell adds its value to the configuration file given by `--config` (o
 | Process | `ExcludedExactNames` |
 | Target | `ExcludedExactNames` |
 
+The REMOTE cell has two stops: `→` first selects the address, then its port, shown highlighted alone as `[REMOTE PORT]`. A listening or UDP row has no peer: its remote address and port cannot be excluded, and the banner says to select LOCAL or PROCESS instead.
+
 The new version is first written beside the file, under its name followed by `.tmp` and then `.pending`, and only then replaces it: a program reading the file gets the earlier version or the new one, never a mix of both, and an interruption leaves the earlier file intact. Windows refuses the replacement while another program holds the file open; the save then counts as not saved, and the `.pending` file stays until the next save replaces it. If the file itself is missing while a `.pending` file is present, the next save starts from the `.pending` version.
 
 When the file cannot be written (in use, read-only, access denied) or no longer holds a valid configuration, it is left as it is and the banner ends with `not saved to …` and the cause. The exclusion still applies until the audit stops, and the next exclusion that can be saved writes the earlier ones too.

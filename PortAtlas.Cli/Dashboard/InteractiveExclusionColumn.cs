@@ -11,17 +11,22 @@ public enum InteractiveExclusionColumn
     Local = 0,
 
     /// <summary>
-    /// Remote communication IP address or port.
+    /// Remote IP address.
     /// </summary>
     Remote = 1,
 
     /// <summary>
+    /// Remote port, selected within the same cell as the remote address.
+    /// </summary>
+    RemotePort = 2,
+
+    /// <summary>
     /// Exact owning process name.
     /// </summary>
-    Process = 2,
+    Process = 3,
 
     /// <summary>
     /// Application target executable or payload command line.
     /// </summary>
-    Target = 3
+    Target = 4
 }

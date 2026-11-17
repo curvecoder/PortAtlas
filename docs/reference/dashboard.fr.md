@@ -41,6 +41,8 @@ Exclure une cellule ajoute sa valeur au fichier de configuration donné par `--c
 | Processus | `ExcludedExactNames` |
 | Cible | `ExcludedExactNames` |
 
+La cellule REMOTE a deux arrêts : `→` sélectionne d'abord l'adresse, puis son port, seul mis en évidence, sous l'en-tête `[REMOTE PORT]`. Une ligne d'écoute ou UDP n'a pas de pair : son adresse et son port distants ne peuvent pas être exclus, et le bandeau invite à sélectionner LOCAL ou PROCESS.
+
 La nouvelle version est d'abord écrite à côté du fichier, sous son nom suivi de `.tmp` puis de `.pending`, et ne le remplace qu'ensuite : un programme qui lit le fichier obtient l'ancienne version ou la nouvelle, jamais un mélange des deux, et une interruption laisse l'ancien fichier intact. Windows refuse le remplacement tant qu'un autre programme tient le fichier ouvert ; l'enregistrement compte alors comme non fait, et le fichier `.pending` reste jusqu'à ce que l'enregistrement suivant le remplace. Si le fichier lui-même manque alors qu'un fichier `.pending` est présent, l'enregistrement suivant part de la version `.pending`.
 
 Quand le fichier ne peut pas être écrit (en cours d'utilisation, en lecture seule, accès refusé) ou ne contient plus une configuration valide, il est laissé tel quel et le bandeau se termine par `not saved to …` et la cause. L'exclusion s'applique quand même jusqu'à l'arrêt de l'audit, et la prochaine exclusion qui peut être enregistrée écrit aussi les précédentes.
