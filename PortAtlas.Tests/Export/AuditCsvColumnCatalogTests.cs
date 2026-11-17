@@ -1,3 +1,4 @@
+using System.Globalization;
 using AwesomeAssertions;
 using PortAtlas.Core.Export;
 using Xunit;
@@ -21,6 +22,19 @@ public sealed class AuditCsvColumnCatalogTests
             desc.Description.Should().NotBeNullOrWhiteSpace();
             desc.Example.Should().NotBeNullOrWhiteSpace();
         }
+    }
+
+    [Theory]
+    [InlineData(AuditCsvColumn.FirstSeenUtc)]
+    [InlineData(AuditCsvColumn.LastSeenUtc)]
+    public void GetAllDescriptors_WhenColumnIsATimestamp_GivesAnExampleWrittenAsTheAuditLogWritesIt(AuditCsvColumn column)
+    {
+        // Act
+        var example = AuditCsvColumnCatalog.GetAllDescriptors().Single(descriptor => descriptor.Column == column).Example;
+
+        // Assert
+        var written = DateTimeOffset.Parse(example, CultureInfo.InvariantCulture).ToString("o", CultureInfo.InvariantCulture);
+        example.Should().Be(written);
     }
 
     [Fact]

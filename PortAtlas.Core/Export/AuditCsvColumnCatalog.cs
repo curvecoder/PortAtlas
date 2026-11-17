@@ -27,13 +27,13 @@ public static class AuditCsvColumnCatalog
             nameof(AuditCsvColumn.FirstSeenUtc),
             "Timestamp",
             "UTC date and time when the network flow was first observed.",
-            "2026-10-23T07:15:00.0000000Z"),
+            "2026-10-23T07:15:00.0000000+00:00"),
         new(
             AuditCsvColumn.LastSeenUtc,
             nameof(AuditCsvColumn.LastSeenUtc),
             "Timestamp",
             "UTC date and time when the network flow was most recently observed.",
-            "2026-10-23T07:20:00.0000000Z"),
+            "2026-10-23T07:20:00.0000000+00:00"),
         new(
             AuditCsvColumn.ObservationCount,
             nameof(AuditCsvColumn.ObservationCount),
