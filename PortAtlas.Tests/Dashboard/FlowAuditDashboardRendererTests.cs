@@ -1,4 +1,5 @@
 using System.Net;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using PortAtlas.Cli.Configuration;
@@ -30,6 +31,25 @@ public sealed class FlowAuditDashboardRendererTests
 
         // Assert
         visibleLen.Should().Be(13);
+    }
+
+    [Fact]
+    public void BuildDashboardFrame_WhenRendered_ShowsTheVersionOfTheExecutableWithoutItsBuildMetadata()
+    {
+        // Arrange
+        var informationalVersion = typeof(FlowAuditDashboardRenderer).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        informationalVersion.Should().NotBeNullOrWhiteSpace();
+        var expectedVersion = informationalVersion!.Split('+')[0];
+        var renderer = new FlowAuditDashboardRenderer(5, "output.csv");
+        var result = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 0, 0, 0, 0, [], []);
+
+        // Act
+        var frame = renderer.BuildDashboardFrame(result, SampleHost);
+
+        // Assert
+        var headerLine = StripAnsi(frame.Split(["\r\n", "\n"], StringSplitOptions.None)[0]);
+        headerLine.Should().Contain($"PortAtlas v{expectedVersion} ");
     }
 
     [Fact]

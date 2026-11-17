@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using PortAtlas.Cli.Configuration;
@@ -38,6 +39,11 @@ public sealed partial class FlowAuditDashboardRenderer
 
     // Long enough to be read between two scans at the default interval; a failure that repeats renews it.
     private static readonly TimeSpan WarningBannerDuration = TimeSpan.FromSeconds(15);
+
+    // MinVer sets the informational version from the Git tag; the build metadata after '+' is the commit hash, too wide
+    // for the header and shown by --version anyway.
+    private static readonly string HeaderTitle = "PortAtlas v" + (typeof(FlowAuditDashboardRenderer).Assembly
+        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "?");
 
     private static readonly IReadOnlySet<IPAddress> NoLocalHostAddresses = new HashSet<IPAddress>();
 
@@ -969,9 +975,9 @@ public sealed partial class FlowAuditDashboardRenderer
         const int metricsColWidth = 30;
         var infoColWidth = interiorWidth - (metricsColWidth + 1);
 
-        var headerDashesCount = Math.Max(1, infoColWidth - 19);
+        var headerDashesCount = Math.Max(1, infoColWidth - (HeaderTitle.Length + 3));
 
-        sb.AppendLine($"{AnsiCyan}┌─ {AnsiBold}{AnsiWhite}PortAtlas v1.0.0{AnsiReset}{AnsiCyan} {new string('─', headerDashesCount)}┬─ {AnsiBold}{AnsiWhite}METRICS{AnsiReset}{AnsiCyan} {new string('─', metricsColWidth - 10)}┐{AnsiReset}{AnsiClearLine}");
+        sb.AppendLine($"{AnsiCyan}┌─ {AnsiBold}{AnsiWhite}{HeaderTitle}{AnsiReset}{AnsiCyan} {new string('─', headerDashesCount)}┬─ {AnsiBold}{AnsiWhite}METRICS{AnsiReset}{AnsiCyan} {new string('─', metricsColWidth - 10)}┐{AnsiReset}{AnsiClearLine}");
 
         const int subCol1W = 21;
         const int subCol3W = 20;
