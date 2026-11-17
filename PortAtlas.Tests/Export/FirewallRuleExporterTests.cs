@@ -194,6 +194,71 @@ public sealed class FirewallRuleExporterTests : IDisposable
         lines[1].Should().StartWith("PAIR-001,192.168.1.10,desktop,192.168.1.50,nas.home.arpa,2,\"443/TCP, 873/TCP\",35,");
     }
 
+    // Spreadsheet programs need the byte order mark to show accented process or host names.
+    [Fact]
+    public async Task ExportRulesAsync_WhenMatricesAreWritten_StartsEachWithAUtf8ByteOrderMark()
+    {
+        // Arrange
+        var auditCsv = await WriteNasAuditAsync();
+        var targetMatrixCsv = Path.Combine(_tempDirectory, "firewall_matrix.csv");
+        var pairsCsv = Path.Combine(_tempDirectory, "firewall_pairs.csv");
+        var options = new FirewallRuleExportOptions { PairsOutputPath = pairsCsv };
+
+        // Act
+        await new FirewallRuleExporter().ExportRulesAsync([auditCsv], targetMatrixCsv, options);
+
+        // Assert
+        byte[] byteOrderMark = [0xEF, 0xBB, 0xBF];
+        (await File.ReadAllBytesAsync(targetMatrixCsv)).Take(3).Should().Equal(byteOrderMark);
+        (await File.ReadAllBytesAsync(pairsCsv)).Take(3).Should().Equal(byteOrderMark);
+    }
+
+    // Stopped between the two matrices (Ctrl+C), the export used to open the pair matrix, emptying it, before it
+    // noticed the cancellation.
+    [Fact]
+    public async Task ExportRulesAsync_WhenCancelledBeforeThePairMatrixIsWritten_KeepsThePreviousPairMatrix()
+    {
+        // Arrange
+        var auditCsv = await WriteNasAuditAsync();
+        var targetMatrixCsv = Path.Combine(_tempDirectory, "firewall_matrix.csv");
+        var pairsCsv = Path.Combine(_tempDirectory, "firewall_pairs.csv");
+        const string previousPairs = "PairId,SourceIp\r\nPAIR-001,192.168.1.10\r\n";
+        await File.WriteAllTextAsync(pairsCsv, previousPairs);
+        using var interruption = new CancellationTokenSource();
+        var cancellation = Task.CompletedTask;
+        var exporter = new FirewallRuleExporter(logger: message =>
+        {
+            if (message.StartsWith("Firewall rule matrix", StringComparison.Ordinal))
+            {
+                cancellation = interruption.CancelAsync();
+            }
+        });
+        var options = new FirewallRuleExportOptions { PairsOutputPath = pairsCsv };
+
+        // Act
+        var act = () => exporter.ExportRulesAsync([auditCsv], targetMatrixCsv, options, interruption.Token);
+
+        // Assert
+        await act.Should().ThrowAsync<OperationCanceledException>();
+        await cancellation;
+        (await File.ReadAllTextAsync(pairsCsv)).Should().Be(previousPairs);
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenTheOutputIsAnExistingFolder_ThrowsNamingItAndLeavesNoFileBesideIt()
+    {
+        // Arrange
+        var auditCsv = await WriteNasAuditAsync();
+        var output = Directory.CreateDirectory(Path.Combine(_tempDirectory, "folder-output")).FullName;
+
+        // Act
+        var act = () => new FirewallRuleExporter().ExportRulesAsync([auditCsv], output, new FirewallRuleExportOptions());
+
+        // Assert
+        await act.Should().ThrowAsync<OutputFileUnwritableException>().WithMessage($"The output '{output}' cannot be written: *");
+        Directory.GetFiles(_tempDirectory, "folder-output*").Should().BeEmpty();
+    }
+
     [Fact]
     public async Task ExportRulesAsync_WhenTheSameAuditsAreGivenInAnotherOrder_WritesTheSameMatrix()
     {
@@ -237,5 +302,16 @@ public sealed class FirewallRuleExporterTests : IDisposable
 
         // Assert
         messages.Should().Contain("Consolidating 2 raw flow(s) from 1 file(s)...");
+    }
+
+    // Two flows from desktop (192.168.1.10) to nas.home.arpa (192.168.1.50): HTTPS and rsync.
+    private async Task<string> WriteNasAuditAsync()
+    {
+        var auditCsv = Path.Combine(_tempDirectory, "audit.csv");
+        var header = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName";
+        var https = "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,desktop,Windows,192.168.1.10,Tcp,Outbound,Established,192.168.1.10,50000,192.168.1.50,443,nas.home.arpa,1234,curl,C:\\curl.exe,curl,,user";
+        var rsync = "2026-10-24T07:01:00Z,2026-10-24T07:06:00Z,25,desktop,Windows,192.168.1.10,Tcp,Outbound,Established,192.168.1.10,50002,192.168.1.50,873,nas.home.arpa,1235,rsync,C:\\rsync.exe,rsync,,user";
+        await File.WriteAllLinesAsync(auditCsv, [header, https, rsync]);
+        return auditCsv;
     }
 }

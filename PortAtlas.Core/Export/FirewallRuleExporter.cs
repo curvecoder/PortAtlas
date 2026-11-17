@@ -1,3 +1,5 @@
+using System.Text;
+using FileForge.IO;
 using PortAtlas.Core.Models;
 
 namespace PortAtlas.Core.Export;
@@ -107,24 +109,34 @@ public sealed class FirewallRuleExporter(
             pairs.Count);
     }
 
+    // UTF-8 with a byte order mark, as the CSV audit log: spreadsheet programs need it to show accented names. The
+    // matrix replaces the previous one only once complete, so that an interrupted export does not leave it truncated.
     private static Task WriteCsvAsync(string path, string header, IEnumerable<string> rows, CancellationToken cancellationToken)
-        => OutputFileUnwritableException.GuardAsync(path, async () =>
+        => OutputFileUnwritableException.GuardAsync(path, () =>
         {
-            var outputDir = Path.GetDirectoryName(path);
-            if (!string.IsNullOrWhiteSpace(outputDir))
+            // AtomicFileWriter would write the whole matrix beside the folder before failing to replace it, and leave
+            // it there as <path>.pending.
+            if (Directory.Exists(path))
             {
-                Directory.CreateDirectory(outputDir);
+                throw new IOException("A folder has this name.");
             }
 
-            var writer = new StreamWriter(path, append: false);
-            await using (writer.ConfigureAwait(false))
-            {
-                await writer.WriteLineAsync(header.AsMemory(), cancellationToken).ConfigureAwait(false);
-                foreach (var row in rows)
+            return AtomicFileWriter.WriteAsync(
+                path,
+                async (stream, token) =>
                 {
-                    await writer.WriteLineAsync(row.AsMemory(), cancellationToken).ConfigureAwait(false);
-                }
-            }
+                    // The stream stays open for AtomicFileWriter, which flushes it to disk.
+                    var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true);
+                    await using (writer.ConfigureAwait(false))
+                    {
+                        await writer.WriteLineAsync(header.AsMemory(), token).ConfigureAwait(false);
+                        foreach (var row in rows)
+                        {
+                            await writer.WriteLineAsync(row.AsMemory(), token).ConfigureAwait(false);
+                        }
+                    }
+                },
+                cancellationToken);
         });
 
     /// <summary>

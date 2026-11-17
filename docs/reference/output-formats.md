@@ -62,7 +62,7 @@ Written by `audit --ndjson` and by `export ndjson`. One JSON object per line, wi
 
 ## Firewall rule matrix
 
-Written by `export rules`. One row per direction, source address, destination address, destination port, protocol and process, sorted by direction, zone, port, destination, source, protocol and process: the numbering does not depend on the order of the audit logs given to `--input`. A value that starts with `=`, `+`, `-`, `@` (or their full-width forms), a tab or a carriage return is written with a leading apostrophe, so that a spreadsheet shows it as text, apostrophe included, instead of running it as a formula: a process name or a host name can be chosen by a third party. The audit log keeps its values as they are, since PortAtlas reads it back.
+Written by `export rules`. One row per direction, source address, destination address, destination port, protocol and process, sorted by direction, zone, port, destination, source, protocol and process: the numbering does not depend on the order of the audit logs given to `--input`. The matrix is written in UTF-8 with a byte order mark, so that a spreadsheet shows accented names, and replaces the previous file only once complete: an interrupted export leaves the previous matrix. A value that starts with `=`, `+`, `-`, `@` (or their full-width forms), a tab or a carriage return is written with a leading apostrophe, so that a spreadsheet shows it as text, apostrophe included, instead of running it as a formula: a process name or a host name can be chosen by a third party. The audit log keeps its values as they are, since PortAtlas reads it back.
 
 | Column | Content |
 | :--- | :--- |
@@ -85,7 +85,7 @@ Written by `export rules`. One row per direction, source address, destination ad
 
 ## Pair matrix
 
-Written by `export rules --pairs-output`, from the rows of the firewall rule matrix after filtering. One row per source address and destination address: the two directions between two servers stay on two rows, as firewall rules do. Sorted by source then destination address. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Written by `export rules --pairs-output`, from the rows of the firewall rule matrix after filtering. One row per source address and destination address: the two directions between two servers stay on two rows, as firewall rules do. Sorted by source then destination address. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix; the encoding and the replacement of the previous file are the same too.
 
 | Column | Content |
 | :--- | :--- |
