@@ -29,7 +29,7 @@ Moving a self-hosted service to another machine, writing firewall rules for a ho
 
 Download the archive for your system from the [releases page](https://github.com/curvecoder/PortAtlas/releases) (`PortAtlas-<version>-win-x64.zip` or `PortAtlas-<version>-linux-x64.tar.gz`) and extract it. The executable includes the .NET runtime.
 
-On Windows, `PortAtlas.Gui-<version>-win-x64.zip` contains a graphical interface that builds the command line of every command from a form and runs it; see [Graphical interface](docs/explanation/gui-architecture.md).
+On Windows, `PortAtlas.Gui-<version>-win-x64.zip` contains a graphical interface that builds the command line of every command except `audit` from a form and runs it; see [Graphical interface](docs/explanation/gui-architecture.md). The archive does not contain the `PortAtlas` executable: extract `PortAtlas-<version>-win-x64.zip` and `PortAtlas.Gui-<version>-win-x64.zip` into the same folder. The Linux releases do not include the interface; it can be built from source, as shown below.
 
 To build from source (.NET 8 SDK):
 
@@ -38,6 +38,12 @@ dotnet publish PortAtlas.Cli/PortAtlas.Cli.csproj -c Release -r linux-x64 --self
 ```
 
 Use `-r win-x64` for Windows.
+
+The graphical interface builds the same way; put the `PortAtlas` executable in the same folder:
+
+```bash
+dotnet publish PortAtlas.Gui/PortAtlas.Gui.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/gui-linux-x64
+```
 
 ## Use
 

@@ -29,7 +29,7 @@ Déplacer un service auto-hébergé vers une autre machine, écrire des règles 
 
 Téléchargez l'archive de votre système sur la [page des versions](https://github.com/curvecoder/PortAtlas/releases) (`PortAtlas-<version>-win-x64.zip` ou `PortAtlas-<version>-linux-x64.tar.gz`) et décompressez-la. L'exécutable embarque le runtime .NET.
 
-Sous Windows, `PortAtlas.Gui-<version>-win-x64.zip` contient une interface graphique qui construit la ligne de commande de chaque commande à partir d'un formulaire et l'exécute ; voir [Interface graphique](docs/explanation/gui-architecture.fr.md).
+Sous Windows, `PortAtlas.Gui-<version>-win-x64.zip` contient une interface graphique qui construit la ligne de commande de chaque commande, sauf `audit`, à partir d'un formulaire et l'exécute ; voir [Interface graphique](docs/explanation/gui-architecture.fr.md). Cette archive ne contient pas l'exécutable `PortAtlas` : décompressez `PortAtlas-<version>-win-x64.zip` et `PortAtlas.Gui-<version>-win-x64.zip` dans le même dossier. Les versions Linux ne contiennent pas l'interface ; elle peut être compilée depuis les sources, comme indiqué ci-dessous.
 
 Pour compiler depuis les sources (SDK .NET 8) :
 
@@ -38,6 +38,12 @@ dotnet publish PortAtlas.Cli/PortAtlas.Cli.csproj -c Release -r linux-x64 --self
 ```
 
 Utilisez `-r win-x64` pour Windows.
+
+L'interface graphique se compile de la même façon ; placez l'exécutable `PortAtlas` dans le même dossier :
+
+```bash
+dotnet publish PortAtlas.Gui/PortAtlas.Gui.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish/gui-linux-x64
+```
 
 ## Utiliser
 
