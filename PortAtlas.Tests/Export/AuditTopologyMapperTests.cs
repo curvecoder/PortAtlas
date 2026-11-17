@@ -365,6 +365,41 @@ public sealed class AuditTopologyMapperTests
     }
 
     [Fact]
+    public async Task ReadGraphFromFilesAsync_WhenLogsUseDifferentSeparators_MapsTheFlowsOfEachLog()
+    {
+        // Arrange
+        var mapper = new AuditTopologyMapper();
+        var commaLog = Path.Combine(Path.GetTempPath(), $"netflow_comma_{Guid.NewGuid():N}.csv");
+        var semicolonLog = Path.Combine(Path.GetTempPath(), $"netflow_semicolon_{Guid.NewGuid():N}.csv");
+
+        try
+        {
+            await File.WriteAllLinesAsync(commaLog,
+            [
+                "ServerName,ServerPrimaryIp,Protocol,Direction,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessName,TargetExecutable,ObservationCount",
+                "nas.home.arpa,192.168.1.10,Tcp,Outbound,192.168.1.10,55100,192.168.1.20,5432,pve.home.arpa,dotnet,App.dll,20"
+            ]);
+            await File.WriteAllLinesAsync(semicolonLog,
+            [
+                "ServerName;ServerPrimaryIp;Protocol;Direction;LocalIp;LocalPort;RemoteIp;RemotePort;RemoteHostName;ProcessName;TargetExecutable;ObservationCount",
+                "pi.home.arpa;192.168.1.30;Tcp;Outbound;192.168.1.30;55200;192.168.1.40;53;pihole.home.arpa;unbound;unbound;5"
+            ]);
+
+            // Act
+            var result = await mapper.ReadGraphFromFilesAsync([commaLog, semicolonLog], new TopologyFilterOptions(), csvDelimiter: ',');
+
+            // Assert
+            result.Graph.Edges.Select(e => e.TargetPort).Should().BeEquivalentTo([5432, 53]);
+            result.RejectedLines.Should().BeEmpty();
+        }
+        finally
+        {
+            File.Delete(commaLog);
+            File.Delete(semicolonLog);
+        }
+    }
+
+    [Fact]
     public void Describe_WhenMoreThanTenLinesAreRejected_ListsTheFirstTenAndTheCount()
     {
         // Arrange

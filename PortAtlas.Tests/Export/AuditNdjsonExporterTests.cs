@@ -107,6 +107,37 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
     private const string CsvHeader = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName";
 
     [Fact]
+    public async Task ExportAuditLogsToNdjsonAsync_WhenALogUsesAnotherSeparator_ExportsItsFlows()
+    {
+        // Arrange
+        var semicolonLog = Path.Combine(Path.GetTempPath(), $"stream_semicolon_{Guid.NewGuid():N}.csv");
+        var tempNdjson = Path.Combine(Path.GetTempPath(), $"stream_target_{Guid.NewGuid():N}.ndjson");
+
+        try
+        {
+            await File.WriteAllLinesAsync(semicolonLog,
+            [
+                CsvHeader.Replace(',', ';'),
+                "2026-10-25T10:00:00.0000000Z;2026-10-25T10:00:00.0000000Z;3;pi.home.arpa;Linux;192.168.1.30;Tcp;Outbound;ESTABLISHED;192.168.1.30;50002;192.168.1.40;53;pihole.home.arpa;1026;unbound;/usr/sbin/unbound;unbound;unbound;unbound"
+            ]);
+
+            // Act
+            var exportedCount = await _exporter.ExportAuditLogsToNdjsonAsync([semicolonLog], tempNdjson, delimiter: ',');
+
+            // Assert
+            exportedCount.Should().Be(1);
+            var entry = new AuditNdjsonParser().ParseLine((await File.ReadAllLinesAsync(tempNdjson)).Single());
+            entry.Should().NotBeNull();
+            entry!.Socket.RemoteEndpoint.Port.Should().Be(53);
+        }
+        finally
+        {
+            File.Delete(semicolonLog);
+            File.Delete(tempNdjson);
+        }
+    }
+
+    [Fact]
     public async Task ExportAuditLogsToNdjsonAsync_WhenTwoCsvFilesSupplied_WritesEveryEntryInInputOrder()
     {
         // Arrange

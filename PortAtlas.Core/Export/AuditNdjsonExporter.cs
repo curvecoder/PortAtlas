@@ -77,7 +77,7 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
     /// </remarks>
     /// <param name="inputFilePaths">Audit log paths, read in this order.</param>
     /// <param name="outputNdjsonFilePath">Target NDJSON file path.</param>
-    /// <param name="delimiter">Field separator of the CSV logs (default: ',').</param>
+    /// <param name="delimiter">Separator kept when the first line of a CSV log does not tell its own (default: ','); each log is read with the separator of its first line.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>The total number of entries written across all input files.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="inputFilePaths"/> is null.</exception>
@@ -101,7 +101,7 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
             cancellationToken.ThrowIfCancellationRequested();
             var entries = AuditLogRecognizer.IsNdjsonPath(inputFilePath)
                 ? await _ndjsonParser.ParseHistoryAsync(inputFilePath, cancellationToken: cancellationToken).ConfigureAwait(false)
-                : await _csvHistoryParser.ParseHistoryAsync(inputFilePath, maxRows: null, delimiter: delimiter, cancellationToken: cancellationToken).ConfigureAwait(false);
+                : await ReadCsvLogAsync(inputFilePath, delimiter, cancellationToken).ConfigureAwait(false);
 
             // Guarded apart from the read above: a full disk names the output, an unreadable log keeps naming the log.
             await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, async () =>
@@ -110,6 +110,16 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
 
         await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, () => writer.FlushAsync(cancellationToken)).ConfigureAwait(false);
         return totalCount;
+    }
+
+    // Logs gathered from several servers may have been written with different CsvDelimiter settings. A missing log is
+    // left to the parser, which reads it as empty, as before the separator was detected.
+    private async Task<IReadOnlyList<NetworkAuditEntry>> ReadCsvLogAsync(string filePath, char configuredDelimiter, CancellationToken cancellationToken)
+    {
+        var delimiter = File.Exists(filePath)
+            ? await AuditCsvDelimiterDetector.DetectAsync(filePath, configuredDelimiter, cancellationToken).ConfigureAwait(false)
+            : configuredDelimiter;
+        return await _csvHistoryParser.ParseHistoryAsync(filePath, maxRows: null, delimiter: delimiter, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     // Only the creation of the output is guarded: an error while reading a log must keep naming that log.

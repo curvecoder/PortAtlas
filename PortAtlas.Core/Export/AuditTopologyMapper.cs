@@ -94,7 +94,7 @@ public sealed class AuditTopologyMapper(
     /// </summary>
     /// <param name="csvFilePath">Source audit CSV file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated network topology graph.</returns>
     /// <remarks>
@@ -110,7 +110,11 @@ public sealed class AuditTopologyMapper(
         ArgumentException.ThrowIfNullOrWhiteSpace(csvFilePath);
         ArgumentNullException.ThrowIfNull(filterOptions);
 
-        var read = await _csvParser.ReadFileAsync(csvFilePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
+        // Same reading as ReadGraphFromFilesAsync: the file is read with the separator of its first line.
+        var fileDelimiter = File.Exists(csvFilePath)
+            ? await AuditCsvDelimiterDetector.DetectAsync(csvFilePath, csvDelimiter, cancellationToken).ConfigureAwait(false)
+            : csvDelimiter;
+        var read = await _csvParser.ReadFileAsync(csvFilePath, fileDelimiter, cancellationToken).ConfigureAwait(false);
         var evaluator = new TopologyFlowEvaluator(filterOptions);
         var builder = new TopologyGraphBuilder(evaluator);
         return builder.BuildGraph(read.Records);
@@ -121,7 +125,7 @@ public sealed class AuditTopologyMapper(
     /// </summary>
     /// <param name="csvFilePaths">Collection of source audit CSV file paths.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated consolidated network topology graph.</returns>
     public async Task<NetworkTopologyGraph> BuildGraphFromFilesAsync(
@@ -140,7 +144,7 @@ public sealed class AuditTopologyMapper(
     /// </summary>
     /// <param name="csvFilePaths">Collection of source audit CSV file paths; a missing file is left out.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>The consolidated graph and, for each file that had any, the line numbers left out.</returns>
     /// <exception cref="ArgumentNullException">When <paramref name="csvFilePaths"/> or <paramref name="filterOptions"/> is null.</exception>
@@ -162,7 +166,9 @@ public sealed class AuditTopologyMapper(
                 continue;
             }
 
-            var read = await _csvParser.ReadFileAsync(filePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
+            // Logs gathered from several servers may have been written with different CsvDelimiter settings.
+            var fileDelimiter = await AuditCsvDelimiterDetector.DetectAsync(filePath, csvDelimiter, cancellationToken).ConfigureAwait(false);
+            var read = await _csvParser.ReadFileAsync(filePath, fileDelimiter, cancellationToken).ConfigureAwait(false);
             allFlowRecords.AddRange(read.Records);
             if (read.RejectedLineNumbers.Count > 0)
             {
@@ -181,7 +187,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="directoryPath">Directory path containing audit CSV files.</param>
     /// <param name="searchPattern">File search pattern (e.g. "*.csv").</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated consolidated network topology graph.</returns>
     public Task<NetworkTopologyGraph> BuildGraphFromDirectoryAsync(
@@ -260,7 +266,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="csvFilePath">Source audit CSV file path.</param>
     /// <param name="outputHtmlPath">Output HTML file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="title">Map document title.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated network topology graph.</returns>
@@ -280,7 +286,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="outputHtmlPath">Output HTML file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
     /// <param name="renderingOptions">Sorting, routing, and spacing rendering options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="title">Map document title.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated network topology graph.</returns>
@@ -304,7 +310,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="csvFilePaths">Collection of source audit CSV file paths.</param>
     /// <param name="outputHtmlPath">Output HTML file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="title">Map document title.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated consolidated network topology graph.</returns>
@@ -324,7 +330,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="outputHtmlPath">Output HTML file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
     /// <param name="renderingOptions">Sorting, routing, and spacing rendering options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="title">Map document title.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated consolidated network topology graph.</returns>
@@ -349,7 +355,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="searchPattern">File search pattern (e.g. "*.csv").</param>
     /// <param name="outputHtmlPath">Output HTML file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="title">Map document title.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated consolidated network topology graph.</returns>
@@ -371,7 +377,7 @@ public sealed class AuditTopologyMapper(
     /// <param name="outputHtmlPath">Output HTML file path.</param>
     /// <param name="filterOptions">Inclusion and exclusion filter options.</param>
     /// <param name="renderingOptions">Sorting, routing, and spacing rendering options.</param>
-    /// <param name="csvDelimiter">CSV delimiter character (comma by default).</param>
+    /// <param name="csvDelimiter">Separator kept when the first line of a file does not tell its own (comma by default); each file is read with the separator of its first line.</param>
     /// <param name="title">Map document title.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Generated consolidated network topology graph.</returns>
