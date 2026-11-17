@@ -537,6 +537,30 @@ public sealed class FlowAuditDashboardRendererTests
         renderer.MaxStoredDiscoveries.Should().BeGreaterThanOrEqualTo(10000);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LoadNextBatchOrShowAll_WhenMoreThan50000FlowsWereReloaded_KeepsTheLimitAtTheReloadedCount(bool showAll)
+    {
+        // Arrange
+        const int reloadedCount = 50_050;
+        var renderer = new FlowAuditDashboardRenderer(5, "output.csv");
+        renderer.HydrateDiscoveries(Enumerable.Repeat(CreateOutboundEntry("192.168.1.20", 443, 50001), reloadedCount).ToList());
+
+        // Act
+        if (showAll)
+        {
+            renderer.ShowAllDiscoveries();
+        }
+        else
+        {
+            renderer.LoadNextBatch();
+        }
+
+        // Assert
+        renderer.MaxStoredDiscoveries.Should().Be(reloadedCount);
+    }
+
     [Fact]
     public void MoveSelectionRight_WhenTriggered_CyclesThroughInteractiveColumns()
     {

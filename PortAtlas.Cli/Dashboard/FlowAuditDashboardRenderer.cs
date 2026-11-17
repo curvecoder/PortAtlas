@@ -390,8 +390,15 @@ public sealed partial class FlowAuditDashboardRenderer
         lock (_syncLock)
         {
             var increment = Math.Max(10, batchSize);
-            _maxStoredDiscoveries = Math.Min(UnlimitedDiscoveriesCapacity, _maxStoredDiscoveries + increment);
-            SetStatusBanner($"Buffer capacity increased to {_maxStoredDiscoveries} flows", TimeSpan.FromSeconds(3));
+            // Never below the current limit: flows reloaded from the log can already exceed the cap, and lowering the
+            // limit would drop the oldest of them at the next scan.
+            var previousLimit = _maxStoredDiscoveries;
+            _maxStoredDiscoveries = Math.Max(_maxStoredDiscoveries, Math.Min(UnlimitedDiscoveriesCapacity, _maxStoredDiscoveries + increment));
+            SetStatusBanner(
+                _maxStoredDiscoveries > previousLimit
+                    ? $"Buffer capacity increased to {_maxStoredDiscoveries} flows"
+                    : $"Buffer capacity already at {_maxStoredDiscoveries} flows",
+                TimeSpan.FromSeconds(3));
             RenderInternal(forceClear: false);
         }
     }
@@ -421,7 +428,7 @@ public sealed partial class FlowAuditDashboardRenderer
     {
         lock (_syncLock)
         {
-            _maxStoredDiscoveries = UnlimitedDiscoveriesCapacity;
+            _maxStoredDiscoveries = Math.Max(_maxStoredDiscoveries, UnlimitedDiscoveriesCapacity);
             SetStatusBanner("Buffer capacity set to ALL flows", TimeSpan.FromSeconds(3));
             RenderInternal(forceClear: false);
         }
