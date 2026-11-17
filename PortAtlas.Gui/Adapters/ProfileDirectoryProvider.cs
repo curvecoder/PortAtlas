@@ -13,6 +13,7 @@ public sealed class ProfileDirectoryProvider(string applicationDirectory, string
     private const string DataFolderName = "Data";
     private const string ProfilesFolderName = "profiles";
     private const string PreferencesFileName = "preferences.json";
+    private const string MigrationSuffix = ".migrating";
 
     /// <summary>
     /// Per-user folder of the earlier versions, kept as fallback and as migration source.
@@ -41,9 +42,7 @@ public sealed class ProfileDirectoryProvider(string applicationDirectory, string
 
         try
         {
-            var firstUse = !Directory.Exists(profileDirectory);
-            Directory.CreateDirectory(profileDirectory);
-            if (firstUse)
+            if (!Directory.Exists(profileDirectory))
             {
                 CopyLegacyData(legacyProfiles, profileDirectory, dataDirectory);
             }
@@ -58,20 +57,55 @@ public sealed class ProfileDirectoryProvider(string applicationDirectory, string
         }
     }
 
+    // The copy is made beside its destination and renamed into place only once complete: a copy stopped half-way
+    // (a profile held open, a full disk) leaves no profile folder, so the next start copies everything again instead of
+    // using a folder that lacks some profiles. A staging folder left by such a stop is discarded first.
     private void CopyLegacyData(string legacyProfiles, string profileDirectory, string dataDirectory)
     {
+        var stagingDirectory = profileDirectory + MigrationSuffix;
+        if (Directory.Exists(stagingDirectory))
+        {
+            foreach (var file in Directory.EnumerateFiles(stagingDirectory))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(stagingDirectory, recursive: true);
+        }
+
+        Directory.CreateDirectory(stagingDirectory);
         if (Directory.Exists(legacyProfiles))
         {
             foreach (var file in Directory.EnumerateFiles(legacyProfiles))
             {
-                File.Copy(file, Path.Combine(profileDirectory, Path.GetFileName(file)), overwrite: false);
+                CopyWritable(file, Path.Combine(stagingDirectory, Path.GetFileName(file)));
             }
         }
 
+        // A preferences file already in place came whole from an earlier start that stopped before the profiles were
+        // renamed: it is kept.
         var legacyPreferences = Path.Combine(legacyDataDirectory, PreferencesFileName);
-        if (File.Exists(legacyPreferences))
+        var preferences = Path.Combine(dataDirectory, PreferencesFileName);
+        if (File.Exists(legacyPreferences) && !File.Exists(preferences))
         {
-            File.Copy(legacyPreferences, Path.Combine(dataDirectory, PreferencesFileName), overwrite: false);
+            var stagingPreferences = preferences + MigrationSuffix;
+            if (File.Exists(stagingPreferences))
+            {
+                File.SetAttributes(stagingPreferences, FileAttributes.Normal);
+            }
+
+            CopyWritable(legacyPreferences, stagingPreferences);
+            File.Move(stagingPreferences, preferences);
         }
+
+        Directory.Move(stagingDirectory, profileDirectory);
+    }
+
+    // File.Copy keeps the read-only attribute: the application could not save a profile copied that way, and a copy
+    // stopped half-way would leave a staging file that the next start cannot delete.
+    private static void CopyWritable(string source, string destination)
+    {
+        File.Copy(source, destination, overwrite: true);
+        File.SetAttributes(destination, FileAttributes.Normal);
     }
 }
