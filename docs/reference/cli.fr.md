@@ -234,7 +234,7 @@ Affiche un diagnostic en six étapes de la résolution d'une adresse : classific
 PortAtlas lookup <ip> [--dns-timeout-ms <milliseconds>]
 ```
 
-`<ip>` doit être une adresse IPv4 ou IPv6. La commande lit `ExcludedRemoteIps`, `DnsCacheFilePath` et `DnsResolutionTimeoutMs` dans la configuration. Elle envoie la requête DNS inverse avec le même délai que `audit`, si bien qu'un `SUCCESS` ici signifie que l'audit nomme aussi l'adresse, et la requête RDAP pour les adresses publiques uniquement ; `ResolveIpOwners` et `--no-rdap` ne s'y appliquent pas.
+`<ip>` doit être une adresse IPv4 ou IPv6. La commande lit `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath` et `DnsResolutionTimeoutMs` dans la configuration. Comme dans l'audit, une adresse nommée par `CustomHostAliases` prend ce nom, et une adresse de `DnsExcludedNetworks` ne reçoit aucun nom : pour les deux, les étapes DNS inverse et RDAP affichent `SKIPPED` et n'envoient aucune requête. L'étape 1 dit aussi si `ExcludedRemoteIps` fait écarter par l'audit les flux de l'adresse. Sinon, la commande envoie la requête DNS inverse avec le même délai que `audit`, si bien qu'un `SUCCESS` ici signifie que l'audit nomme aussi l'adresse, et la requête RDAP pour les adresses publiques uniquement ; `ResolveIpOwners` et `--no-rdap` ne s'y appliquent pas.
 
 ## config init
 

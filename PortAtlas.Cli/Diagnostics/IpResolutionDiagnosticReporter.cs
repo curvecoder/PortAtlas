@@ -63,15 +63,23 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
         var isAny = address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
         var isNone = address.Equals(IPAddress.None);
         var isPublic = RdapIpOrganizationResolver.IsPublicRoutable(address);
-        var exclusionEvaluator = new DnsAddressExclusionEvaluator(config.ExcludedRemoteIps);
-        var isConfigExcluded = exclusionEvaluator.ShouldExclude(address);
+        // The same three settings as the audit: an alias names the address and DnsExcludedNetworks stops its queries,
+        // while ExcludedRemoteIps drops its flows before any resolution.
+        var alias = HostAliasParser.Parse(config.CustomHostAliases).GetValueOrDefault(address);
+        var isDnsExcluded = new DnsAddressExclusionEvaluator(config.DnsExcludedNetworks).ShouldExclude(address);
+        var areFlowsDropped = new DnsAddressExclusionEvaluator(config.ExcludedRemoteIps).ShouldExclude(address);
+        var auditSkipReason = alias is not null
+            ? "CustomHostAliases names the address; the audit sends no query"
+            : isDnsExcluded ? "DnsExcludedNetworks; the audit sends no query" : null;
 
         await _output.WriteLineAsync($"  * Normalized IP          : {address} ({address.AddressFamily})").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Loopback / Local       : {(isLoopback ? "YES (127.0.0.1 / ::1)" : "NO")}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Unspecified / Any      : {(isAny ? "YES (0.0.0.0 / ::)" : "NO")}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Broadcast / None       : {(isNone ? "YES (255.255.255.255)" : "NO")}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Publicly routable      : {(isPublic ? "YES (Public WAN / Internet)" : "NO (Private RFC 1918 / CGNAT / Link-Local / Reserved)")}").ConfigureAwait(false);
-        await _output.WriteLineAsync($"  * Excluded by config     : {(isConfigExcluded ? "YES (--exclude-remote-ips)" : "NO")}").ConfigureAwait(false);
+        await _output.WriteLineAsync($"  * Alias in config        : {(alias is null ? "NO" : $"{alias} (CustomHostAliases)")}").ConfigureAwait(false);
+        await _output.WriteLineAsync($"  * Excluded from DNS      : {(isDnsExcluded ? "YES (DnsExcludedNetworks)" : "NO")}").ConfigureAwait(false);
+        await _output.WriteLineAsync($"  * Flows dropped by audit : {(areFlowsDropped ? "YES (ExcludedRemoteIps)" : "NO")}").ConfigureAwait(false);
 
         // [2/6] Cache inspection
         await _output.WriteLineAsync($"\n[2/6] Local Cache Inspection (File: {config.DnsCacheFilePath})").ConfigureAwait(false);
@@ -150,6 +158,11 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
             await _output.WriteLineAsync("  * Query Dns.GetHostEntryAsync skipped (unspecified or non-resolvable address).").ConfigureAwait(false);
             await _output.WriteLineAsync("  * Status                 : SKIPPED (Defensive guard)").ConfigureAwait(false);
         }
+        else if (auditSkipReason is not null)
+        {
+            dnsSw.Stop();
+            await _output.WriteLineAsync($"  * Status                 : SKIPPED ({auditSkipReason})").ConfigureAwait(false);
+        }
         else
         {
             try
@@ -209,7 +222,12 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
         IpOwnerMetadata? rdapDetails = null;
         var rdapSw = Stopwatch.StartNew();
 
-        if (!isPublic)
+        if (auditSkipReason is not null)
+        {
+            rdapSw.Stop();
+            await _output.WriteLineAsync($"  * Status                 : SKIPPED ({auditSkipReason})").ConfigureAwait(false);
+        }
+        else if (!isPublic)
         {
             rdapSw.Stop();
             await _output.WriteLineAsync("  * RDAP query skipped     : Address is not a publicly routable Internet address.").ConfigureAwait(false);
@@ -272,12 +290,17 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
         string synthesizedHostName;
         string synthesizedSource;
 
-        if (isLoopback)
+        if (alias is not null)
+        {
+            synthesizedHostName = alias;
+            synthesizedSource = "Custom";
+        }
+        else if (isLoopback)
         {
             synthesizedHostName = address.ToString();
             synthesizedSource = "Local";
         }
-        else if (isAny || isNone || isConfigExcluded)
+        else if (isAny || isNone || isDnsExcluded)
         {
             synthesizedHostName = string.Empty;
             synthesizedSource = "Excluded";

@@ -234,7 +234,7 @@ Prints a six-step diagnostic of the resolution of one address: classification, l
 PortAtlas lookup <ip> [--dns-timeout-ms <milliseconds>]
 ```
 
-`<ip>` must be an IPv4 or IPv6 address. The command reads `ExcludedRemoteIps`, `DnsCacheFilePath` and `DnsResolutionTimeoutMs` from the configuration. It sends the reverse DNS query with the same timeout as `audit`, so that a `SUCCESS` here means the audit names the address too, and the RDAP query for public addresses only; `ResolveIpOwners` and `--no-rdap` do not apply to it.
+`<ip>` must be an IPv4 or IPv6 address. The command reads `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath` and `DnsResolutionTimeoutMs` from the configuration. As in the audit, an address named by `CustomHostAliases` takes that name, and an address of `DnsExcludedNetworks` gets no name: for both, the reverse DNS and RDAP steps print `SKIPPED` and send no query. Step 1 also says whether `ExcludedRemoteIps` makes the audit drop the flows of the address. Otherwise the command sends the reverse DNS query with the same timeout as `audit`, so that a `SUCCESS` here means the audit names the address too, and the RDAP query for public addresses only; `ResolveIpOwners` and `--no-rdap` do not apply to it.
 
 ## config init
 

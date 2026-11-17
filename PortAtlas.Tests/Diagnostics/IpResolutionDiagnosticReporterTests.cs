@@ -80,6 +80,68 @@ public sealed class IpResolutionDiagnosticReporterTests
     }
 
     [Fact]
+    public async Task RunDiagnosticAsync_WhenTheAddressHasAnAlias_SendsNoQueryAndSynthesizesTheAliasLikeTheAudit()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        var config = new AppConfiguration
+        {
+            CustomHostAliases = new() { ["8.8.8.8"] = "resolver.home.arpa" },
+            DnsResolutionTimeoutMs = 500
+        };
+
+        // Act
+        // A public address, so that the RDAP step is skipped by the alias and not by the private range.
+        await reporter.RunDiagnosticAsync("8.8.8.8", config);
+
+        // Assert
+        var report = output.ToString();
+        report.Should().Contain("Alias in config        : resolver.home.arpa (CustomHostAliases)");
+        report.Split("SKIPPED (CustomHostAliases names the address; the audit sends no query)").Should().HaveCount(3, "the reverse DNS and RDAP steps are both skipped");
+        report.Should().NotContain("HTTP request target");
+        report.Should().Contain("Synthesized HostName   : resolver.home.arpa");
+        report.Should().Contain("Synthesized Source     : Custom");
+    }
+
+    [Fact]
+    public async Task RunDiagnosticAsync_WhenTheAddressIsInDnsExcludedNetworks_SendsNoQueryAndSynthesizesAnExclusion()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        var config = new AppConfiguration { DnsExcludedNetworks = ["8.8.8.0/24"], DnsResolutionTimeoutMs = 500 };
+
+        // Act
+        await reporter.RunDiagnosticAsync("8.8.8.8", config);
+
+        // Assert
+        var report = output.ToString();
+        report.Should().Contain("Excluded from DNS      : YES (DnsExcludedNetworks)");
+        report.Split("SKIPPED (DnsExcludedNetworks; the audit sends no query)").Should().HaveCount(3, "the reverse DNS and RDAP steps are both skipped");
+        report.Should().NotContain("HTTP request target");
+        report.Should().Contain("Synthesized Source     : Excluded");
+    }
+
+    [Fact]
+    public async Task RunDiagnosticAsync_WhenTheAddressIsOnlyInExcludedRemoteIps_ReportsItsFlowsAsDroppedWithoutExcludingItFromDns()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        var config = new AppConfiguration { ExcludedRemoteIps = ["127.0.0.1"], DnsResolutionTimeoutMs = 500 };
+
+        // Act
+        await reporter.RunDiagnosticAsync("127.0.0.1", config);
+
+        // Assert
+        var report = output.ToString();
+        report.Should().Contain("Excluded from DNS      : NO");
+        report.Should().Contain("Flows dropped by audit : YES (ExcludedRemoteIps)");
+        report.Should().NotContain("--exclude-remote-ips");
+    }
+
+    [Fact]
     public async Task RunDiagnosticAsync_WhenUnspecifiedIp_SkipsDnsCallWithDefensiveExclusion()
     {
         // Arrange
