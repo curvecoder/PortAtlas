@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace PortAtlas.Core.Export;
 
 /// <summary>
@@ -26,8 +28,10 @@ public static class OutputFilePathResolver
         var sanitizedMachineName = SanitizeForFileName(effectiveMachineName);
 
         var effectiveNowUtc = nowUtc ?? DateTime.UtcNow;
-        var formattedDate = effectiveNowUtc.ToString("yyyy-MM-dd");
-        var formattedTimestamp = effectiveNowUtc.ToString("yyyyMMdd_HHmmss");
+        // The Gregorian calendar whatever the culture of the account (th-TH counts years from 543 BC): the names must sort
+        // and read the same on every server of the audit.
+        var formattedDate = effectiveNowUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var formattedTimestamp = effectiveNowUtc.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
 
         var result = template;
         result = result.Replace("{ServerName}", sanitizedMachineName, StringComparison.OrdinalIgnoreCase);

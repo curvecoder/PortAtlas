@@ -1,3 +1,4 @@
+using System.Globalization;
 using AwesomeAssertions;
 using PortAtlas.Core.Export;
 using Xunit;
@@ -56,6 +57,28 @@ public sealed class OutputFilePathResolverTests
         var fixedDate = new DateTime(2026, 10, 24, 14, 30, 45, DateTimeKind.Utc);
         var resolved = OutputFilePathResolver.Resolve(template, nowUtc: fixedDate);
         resolved.Should().Be("audit_20261024_143045.csv");
+    }
+
+    [Theory]
+    [InlineData("th-TH")]
+    [InlineData("ar-SA")]
+    public void Resolve_WhenCurrentCultureUsesAnotherCalendar_FormatsDateAndTimestampInTheGregorianCalendar(string cultureName)
+    {
+        // Arrange
+        var previousCulture = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo(cultureName);
+        try
+        {
+            // Act
+            var resolved = OutputFilePathResolver.Resolve("audit_{Date}_{Timestamp}.csv", nowUtc: new DateTime(2026, 11, 17, 8, 30, 5, DateTimeKind.Utc));
+
+            // Assert
+            resolved.Should().Be("audit_2026-11-17_20261117_083005.csv");
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
     }
 
     [Fact]
