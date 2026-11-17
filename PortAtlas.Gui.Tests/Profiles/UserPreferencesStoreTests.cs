@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using AwesomeAssertions;
 using PortAtlas.Gui.Core.Profiles;
 
@@ -60,6 +62,39 @@ public sealed class UserPreferencesStoreTests : IDisposable
 
         // Assert
         preferences.Should().Be(new UserPreferences());
+    }
+
+    [Fact]
+    public void Load_WhenTheUserIsDeniedReadingTheFile_ReturnsTheDefaults()
+    {
+        // Access control lists, and the error they raise, are those of Windows, where the GUI is published.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // Arrange
+        var file = new FileInfo(Path.Combine(_root, "preferences.json"));
+        File.WriteAllText(file.FullName, """{ "Theme": "Dark" }""");
+        var security = file.GetAccessControl();
+        var denyContent = new FileSystemAccessRule(
+            new SecurityIdentifier(WellKnownSidType.WorldSid, domainSid: null), FileSystemRights.ReadData, AccessControlType.Deny);
+        security.AddAccessRule(denyContent);
+        file.SetAccessControl(security);
+
+        try
+        {
+            // Act
+            var preferences = _store.Load();
+
+            // Assert
+            preferences.Should().Be(new UserPreferences());
+        }
+        finally
+        {
+            security.RemoveAccessRule(denyContent);
+            file.SetAccessControl(security);
+        }
     }
 
     [Fact]

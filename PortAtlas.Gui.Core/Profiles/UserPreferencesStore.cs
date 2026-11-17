@@ -33,9 +33,9 @@ public sealed class UserPreferencesStore(IProfileDirectoryProvider directoryProv
             using var stream = File.OpenRead(path);
             return JsonSerializer.Deserialize<UserPreferences>(stream, SerializerOptions) ?? new UserPreferences();
         }
-        catch (Exception ex) when (ex is JsonException or IOException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            // Preferences are a convenience: a damaged or locked file must not stop the GUI from starting, so the defaults apply.
+            // Preferences are a convenience: a damaged, locked or denied file must not stop the GUI from starting, so the defaults apply.
             return new UserPreferences();
         }
     }

@@ -42,7 +42,8 @@ public sealed partial class App : Application
                 new ExecutableViewModel(locator, filePicker));
 
             window.DataContext = viewModel;
-            // InitializeAsync reports its failures through the view models' error messages, so the discarded task cannot fault.
+            // InitializeAsync shows a profile or preferences file that cannot be read in the profile bar instead of
+            // throwing, so the task is not awaited: Opened has no asynchronous form.
             window.Opened += (_, _) => _ = viewModel.InitializeAsync();
 
             desktop.MainWindow = window;

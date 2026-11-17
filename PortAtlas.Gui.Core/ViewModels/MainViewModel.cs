@@ -121,7 +121,7 @@ public sealed partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private Task CycleThemeAsync(CancellationToken cancellationToken = default)
+    private async Task CycleThemeAsync(CancellationToken cancellationToken = default)
     {
         Theme = Theme switch
         {
@@ -131,7 +131,15 @@ public sealed partial class MainViewModel : ObservableObject
         };
 
         var chosen = Theme;
-        return _preferences.UpdateAsync(p => p with { Theme = chosen }, cancellationToken);
+        try
+        {
+            await _preferences.UpdateAsync(p => p with { Theme = chosen }, cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The theme is applied; only reopening with it is lost. The profile bar holds the only error line of the window.
+            Profiles.ErrorMessage = $"The theme could not be remembered: {ex.Message}";
+        }
     }
 
     partial void OnSelectedCommandChanged(CommandDescriptor value)

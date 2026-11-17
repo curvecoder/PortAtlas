@@ -1,3 +1,5 @@
+using System.Security.AccessControl;
+using System.Security.Principal;
 using AwesomeAssertions;
 using PortAtlas.Gui.Core.Catalog;
 using PortAtlas.Gui.Core.Forms;
@@ -185,6 +187,76 @@ public sealed class ProfilesViewModelTests : IDisposable
         // Assert
         applied.Should().BeEmpty();
         vm.ErrorMessage.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Save_WhenTheProfileFolderCannotBeCreated_ShowsAnErrorNamingTheProfile()
+    {
+        // Arrange
+        var blocker = Path.Combine(_root, "blocker");
+        await File.WriteAllTextAsync(blocker, "a file where the profile folder is expected");
+        var store = new ProfileStore(new FixedDirectory(Path.Combine(blocker, "profiles")));
+        var vm = CreateViewModel(store, new StubConfirmation(true), () => new ProfileDocument(), _ => { });
+
+        // Act
+        await vm.SaveCommand.ExecuteAsync("homelab");
+
+        // Assert
+        vm.ErrorMessage.Should().StartWith("The profile \"homelab\" cannot be saved: ");
+        vm.Names.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_WhenTheProfileFileIsLockedByAnotherProgram_ShowsAnErrorAndAppliesNothing()
+    {
+        // Arrange
+        var store = new ProfileStore(new FixedDirectory(_directory));
+        var applied = new List<ProfileDocument>();
+        var vm = CreateViewModel(store, new StubConfirmation(true), () => new ProfileDocument(), applied.Add);
+        await vm.SaveCommand.ExecuteAsync("homelab");
+
+        // Act
+        using (new FileStream(Path.Combine(_directory, "homelab.json"), FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            await vm.LoadCommand.ExecuteAsync("homelab");
+        }
+
+        // Assert
+        vm.ErrorMessage.Should().StartWith("The profile \"homelab\" cannot be loaded: ");
+        applied.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Constructor_WhenTheUserIsDeniedListingTheProfileFolder_ShowsAnErrorAndListsNoProfile()
+    {
+        // Access control lists, and the error they raise, are those of Windows, where the GUI is published.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // Arrange
+        var folder = Directory.CreateDirectory(_directory);
+        var security = folder.GetAccessControl();
+        var denyListing = new FileSystemAccessRule(
+            new SecurityIdentifier(WellKnownSidType.WorldSid, domainSid: null), FileSystemRights.ListDirectory, AccessControlType.Deny);
+        security.AddAccessRule(denyListing);
+        folder.SetAccessControl(security);
+
+        try
+        {
+            // Act
+            var vm = CreateViewModel(new ProfileStore(new FixedDirectory(_directory)), new StubConfirmation(true), () => new ProfileDocument(), _ => { });
+
+            // Assert
+            vm.Names.Should().BeEmpty();
+            vm.ErrorMessage.Should().StartWith("The profiles cannot be listed: ");
+        }
+        finally
+        {
+            security.RemoveAccessRule(denyListing);
+            folder.SetAccessControl(security);
+        }
     }
 
     private ProfilesViewModel CreateViewModel(

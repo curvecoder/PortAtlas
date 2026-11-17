@@ -66,7 +66,19 @@ public sealed partial class ProfilesViewModel : ObservableObject
     public void RefreshNames()
     {
         Names.Clear();
-        foreach (var name in _store.ListNames())
+        IReadOnlyList<string> names;
+        try
+        {
+            names = _store.ListNames();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The window still opens and runs commands; only the saved profiles are out of reach, and the user is told why.
+            ErrorMessage = $"The profiles cannot be listed: {ex.Message}";
+            return;
+        }
+
+        foreach (var name in names)
         {
             Names.Add(name);
         }
@@ -95,13 +107,29 @@ public sealed partial class ProfilesViewModel : ObservableObject
             return;
         }
 
-        var exists = _store.ListNames().Contains(profileName.Value, StringComparer.OrdinalIgnoreCase);
+        RefreshNames();
+        if (ErrorMessage is not null)
+        {
+            // Without the list, an existing profile of this name would be overwritten without asking.
+            return;
+        }
+
+        var exists = Names.Contains(profileName.Value, StringComparer.OrdinalIgnoreCase);
         if (exists && !await _confirmation.ConfirmAsync($"Overwrite the profile \"{profileName.Value}\"?", cancellationToken).ConfigureAwait(true))
         {
             return;
         }
 
-        await _store.SaveAsync(profileName, _readDocument(), cancellationToken).ConfigureAwait(true);
+        try
+        {
+            await _store.SaveAsync(profileName, _readDocument(), cancellationToken).ConfigureAwait(true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ErrorMessage = $"The profile \"{profileName.Value}\" cannot be saved: {ex.Message}";
+            return;
+        }
+
         RefreshNames();
         SelectedProfile = profileName.Value;
         ProfileNameInput = string.Empty;
@@ -134,6 +162,11 @@ public sealed partial class ProfilesViewModel : ObservableObject
         catch (Exception ex) when (ex is ProfileFileException or FileNotFoundException)
         {
             ErrorMessage = ex.Message;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A file locked by another program or denied to the user is left as it is; the form keeps its values.
+            ErrorMessage = $"The profile \"{profileName.Value}\" cannot be loaded: {ex.Message}";
         }
     }
 

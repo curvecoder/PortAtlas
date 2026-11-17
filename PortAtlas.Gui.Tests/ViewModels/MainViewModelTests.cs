@@ -46,6 +46,31 @@ public sealed class MainViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task CycleTheme_WhenThePreferencesCannotBeWritten_KeepsTheThemeAndShowsAnError()
+    {
+        // Arrange
+        // The preferences file sits next to the profile folder; a file in place of that parent folder blocks the write.
+        var blocker = Path.Combine(_root, "blocker");
+        await File.WriteAllTextAsync(blocker, "a file where the preferences folder is expected");
+        var vm = new MainViewModel(
+            CommandCatalog.Build(),
+            new NoOpRunner(),
+            new NullFilePicker(),
+            new ImmediateDispatcher(),
+            new ProfileStore(new FixedDirectory(_directory)),
+            new AlwaysConfirm(),
+            new UserPreferencesStore(new FixedDirectory(Path.Combine(blocker, "profiles"))),
+            new ExecutableViewModel(new PortAtlasExecutableLocator(_root, _ => null), new NullFilePicker()));
+
+        // Act
+        await vm.CycleThemeCommand.ExecuteAsync(null);
+
+        // Assert
+        vm.Theme.Should().Be(ThemeChoice.Light);
+        vm.Profiles.ErrorMessage.Should().StartWith("The theme could not be remembered: ");
+    }
+
+    [Fact]
     public async Task Profile_WhenSavedWithAnExecutablePath_RestoresThePathOnLoad()
     {
         // Arrange
