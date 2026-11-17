@@ -34,7 +34,7 @@ Repeated connections to the same service therefore update one line instead of ad
 | `RemoteHostName` | Network | Name from an alias, reverse DNS or the RDAP owner |
 | `ProcessId` | Process | Process identifier |
 | `ProcessName` | Process | Executable name of the process |
-| `ExecutablePath` | Process | Full path of the executable; empty when the process cannot be opened |
+| `ExecutablePath` | Process | Full path of the executable; empty for the processes without executable file (System Idle, System, Secure System, Registry) and, on Linux, for another user's process when the audit does not run as root |
 | `CommandLine` | Process | Command line of the process |
 | `TargetExecutable` | Process | Application started by a launcher (`.jar`, `.py`, `.ps1`, `.sh`, `.dll`…) |
 | `UserName` | Process | Account of the process: `DOMAIN\account` on Windows (the SID when the account has no name any more), the user name on Linux (the numeric UID when it is not in `/etc/passwd`); empty when the process cannot be opened |

@@ -44,6 +44,14 @@ Mettez à jour les scripts qui lisent ces fichiers par leur nom par défaut.
 
 **Comment le vérifier.** Ouvrez une matrice dans un afficheur hexadécimal : elle commence par `EF BB BF`. Exportez les mêmes journaux deux fois, avec `--input` dans deux ordres : les deux matrices sont identiques.
 
+## Chemins des exécutables sous Windows
+
+**Ce qui change.** `ExecutablePath` est lu sans ouvrir le processus. En 4.x, il restait vide pour un service exécuté sous un autre compte que l'audit et pour les processus protégés, même avec l'audit lancé en administrateur. Il ne reste plus vide que pour les processus sans fichier exécutable : System Idle, System, Secure System et Registry. Un chemin est aussi écrit sans segment `..`, tel que Windows le conserve.
+
+**Ce qu'il faut faire.** Rien pour reprendre un audit. Un flux enregistré par la 4.x sans chemin est identifié par le nom de son processus ; le même flux, relevé par la 5.0 avec son chemin, est un nouveau flux. La ligne de la 4.x reste dans le journal avec ses compteurs, et une nouvelle ligne commence. Pour repartir de compteurs propres, donnez à `audit` un nouveau fichier de sortie.
+
+**Comment le vérifier.** Lancez `audit` en administrateur sur un serveur où un service tourne sous son propre compte, puis ouvrez le journal : les lignes de ce service portent son chemin.
+
 ## Voir aussi
 
 - [Référence de la ligne de commande](../reference/cli.fr.md)

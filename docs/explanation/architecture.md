@@ -60,7 +60,7 @@ The program is split between the application and four frameworks published as Nu
 | Package | Role in PortAtlas |
 | :--- | :--- |
 | SocketForge 2.1.1 | Socket tables (IPv4 and IPv6) on Windows and Linux |
-| ProcessForge 1.3.0 | Process details and account, launcher targets, process exclusion |
+| ProcessForge 1.3.1 | Process details and account, launcher targets, process exclusion |
 | FileForge.Core 1.4.1 | Reading of RFC 4180 records, and replacement of a file only once its new version is complete (audit logs, configuration, profiles, DNS cache) |
 | TopologyForge 1.13.0 | Topology graph, filters, HTML map and Draw.io export |
 

@@ -34,7 +34,7 @@ Les connexions répétées vers un même service mettent donc à jour une seule 
 | `RemoteHostName` | Réseau | Nom issu d'un alias, du DNS inverse ou du propriétaire RDAP |
 | `ProcessId` | Processus | Identifiant du processus |
 | `ProcessName` | Processus | Nom de l'exécutable du processus |
-| `ExecutablePath` | Processus | Chemin complet de l'exécutable ; vide quand le processus ne peut pas être ouvert |
+| `ExecutablePath` | Processus | Chemin complet de l'exécutable ; vide pour les processus sans fichier exécutable (System Idle, System, Secure System, Registry) et, sous Linux, pour le processus d'un autre utilisateur quand l'audit ne tourne pas en root |
 | `CommandLine` | Processus | Ligne de commande du processus |
 | `TargetExecutable` | Processus | Application lancée par un lanceur (`.jar`, `.py`, `.ps1`, `.sh`, `.dll`…) |
 | `UserName` | Processus | Compte du processus : `DOMAINE\compte` sous Windows (le SID quand le compte n'a plus de nom), le nom d'utilisateur sous Linux (l'UID numérique quand il n'est pas dans `/etc/passwd`) ; vide quand le processus ne peut pas être ouvert |

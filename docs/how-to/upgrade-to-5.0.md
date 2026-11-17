@@ -44,6 +44,14 @@ Update the scripts that read these files by their default name.
 
 **How to check.** Open a matrix in a hexadecimal viewer: it starts with `EF BB BF`. Export the same logs twice, with `--input` in two orders: the two matrices are identical.
 
+## Executable paths on Windows
+
+**What changes.** `ExecutablePath` is read without opening the process. In 4.x it stayed empty for a service running under another account than the audit, and for protected processes, even with the audit run as administrator. It now stays empty only for the processes without an executable file: System Idle, System, Secure System and Registry. A path is also written without `..` segments, as Windows stores it.
+
+**What to do.** Nothing to resume an audit. A flow recorded by 4.x without path is identified by its process name; the same flow, scanned by 5.0 with its path, is a new flow. The 4.x row stays in the log with its counters, and a new row starts. To start from clean counters, give `audit` a new output file.
+
+**How to check.** Run `audit` as administrator on a server where a service runs under its own account, then open the log: the rows of that service carry its path.
+
 ## See also
 
 - [Command line reference](../reference/cli.md)
