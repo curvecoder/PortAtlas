@@ -66,6 +66,6 @@ L'unité tourne en root pour que chaque socket soit rattaché à son processus (
 
 ## Vérifier le fonctionnement
 
-Après quelques balayages, le journal CSV (`netflow_audit.csv` dans le dossier de travail, ou `OutputCsvPath`) contient des lignes. Sans tableau de bord, l'agent affiche ses réglages au démarrage et `Graceful shutdown of network flow audit.` à l'arrêt ; avec NSSM ces lignes vont dans `service.log`, avec systemd dans `journalctl -u portatlas`.
+Après quelques balayages, le journal CSV (`portatlas_audit.csv` dans le dossier de travail, ou `OutputCsvPath`) contient des lignes. Sans tableau de bord, l'agent affiche ses réglages au démarrage et `Graceful shutdown of network flow audit.` à l'arrêt ; avec NSSM ces lignes vont dans `service.log`, avec systemd dans `journalctl -u portatlas`.
 
 La commande doit nommer `audit` : lancé sans commande, PortAtlas 2.0 affiche l'aide et sort avec le code 0. Une unité en `Restart=on-failure` reste alors arrêtée.

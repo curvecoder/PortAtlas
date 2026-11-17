@@ -270,7 +270,7 @@ public sealed class CliCharacterizationTests : IDisposable
         // Assert
         var configuration = JsonSerializer.Deserialize<AppConfiguration>(await File.ReadAllTextAsync(target));
         configuration.Should().NotBeNull();
-        configuration!.OutputCsvPath.Should().Be("netflow_audit.csv");
+        configuration!.OutputCsvPath.Should().Be("portatlas_audit.csv");
     }
 
     [Fact]

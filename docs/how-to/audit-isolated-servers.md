@@ -14,7 +14,7 @@ PortAtlas audit --no-tui --no-rdap
 
 Or set `"ResolveIpOwners": false` in the configuration file. Reverse DNS stays active and names the addresses known to the local DNS server. To send no name query at all, use `--no-dns` instead.
 
-Collect the audit logs and the DNS cache files (`netflow_dns_cache.json`, or `DnsCacheFilePath`) of each server.
+Collect the audit logs and the DNS cache files (`portatlas_dns_cache.json`, or `DnsCacheFilePath`) of each server.
 
 ## On a machine with Internet access
 

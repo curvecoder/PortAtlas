@@ -3,6 +3,7 @@ using System.Net;
 using PortAtlas.Cli.Audit;
 using PortAtlas.Cli.CommandLine.OptionSets;
 using PortAtlas.Cli.Configuration;
+using PortAtlas.Core.Export;
 
 namespace PortAtlas.Cli.CommandLine.Commands;
 
@@ -16,7 +17,7 @@ public sealed class AuditCommand : Command
     // Display-only placeholder shown instead of the real local address in screenshots; it never reaches the network code.
     private static readonly string ObfuscatedLocalIp = new IPAddress([192, 168, 1, 10]).ToString();
 
-    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", "CSV audit log to write. Tokens {ServerName}, {HostName}, {Date}, {Timestamp} are expanded. Default: netflow_audit.csv.", "-o");
+    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", $"CSV audit log to write. Tokens {{ServerName}}, {{HostName}}, {{Date}}, {{Timestamp}} are expanded. Default: {DefaultOutputFileNames.AuditCsv}.", "-o");
     private readonly Option<string?> _ndjson = OptionFactory.CreatePath("--ndjson", "NDJSON (JSON Lines) stream written alongside the CSV log. Tokens are expanded as for --output.");
     private readonly Option<int?> _interval = OptionFactory.CreateInteger("--interval", "seconds", "Seconds between two socket scans. Default: 5.", minimum: 1);
     private readonly Option<string[]> _columns = OptionFactory.CreateList("--columns", "names", "Ordered CSV columns to write. Default: all 20 columns.");

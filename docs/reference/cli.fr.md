@@ -117,7 +117,7 @@ PortAtlas audit [options]
 
 | Option | Valeur | Clé de configuration | Défaut | Effet |
 | :--- | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `OutputCsvPath` | `netflow_audit.csv` | Journal d'audit CSV |
+| `-o`, `--output` | `<path>` | `OutputCsvPath` | `portatlas_audit.csv` | Journal d'audit CSV |
 | `--ndjson` | `<path>` | `OutputNdjsonPath` | aucun | Journal NDJSON écrit en plus du CSV |
 | `--interval` | secondes, au moins 1 | `ScanIntervalSeconds` | `5` | Délai entre deux balayages |
 | `--columns` | noms de colonnes | `CsvColumns` | les 20 | Colonnes CSV, dans l'ordre ([liste](output-formats.fr.md#journal-daudit-csv)) |
@@ -155,7 +155,7 @@ PortAtlas map [-i <path>]... [--html <path>] [--drawio <path>] [options]
 Sorties :
 
 - `--html` écrit la carte HTML, `--drawio` le diagramme Draw.io ; les deux peuvent être donnés.
-- Sans `--html` ni `--drawio`, la commande écrit la carte HTML dans `OutputHtmlMapPath` (ou `netflow_topology.html` si la clé est vide), et le diagramme Draw.io quand `OutputDrawioPath` est renseigné.
+- Sans `--html` ni `--drawio`, la commande écrit la carte HTML dans `OutputHtmlMapPath` (ou `portatlas_topology.html` si la clé est vide), et le diagramme Draw.io quand `OutputDrawioPath` est renseigné.
 
 Une ligne de journal sans port local et distant valide est écartée de la carte ; la console nomme le journal et les numéros de ces lignes (les dix premiers).
 
@@ -200,7 +200,7 @@ PortAtlas export ndjson [-i <path>]... [-o <path>]
 
 | Option | Valeur | Défaut | Effet |
 | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `netflow_audit.ndjson` | Fichier NDJSON ([champs](output-formats.fr.md#ndjson)) |
+| `-o`, `--output` | `<path>` | `portatlas_audit.ndjson` | Fichier NDJSON ([champs](output-formats.fr.md#ndjson)) |
 
 Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Un fichier `.ndjson` ou `.jsonl` est lu comme NDJSON, tout autre fichier comme CSV. Les fichiers sont lus l'un après l'autre et seul le fichier en cours est gardé en mémoire. Chaque flux lu donne une ligne : un flux présent dans deux journaux, comme les journaux de deux jours, ou un journal et sa copie enrichie tous deux donnés par leur chemin à `--input`, est écrit deux fois. Une sortie donnée par son chemin à `--input` arrête la commande avec `The output '<path>' is also an audit log to read: choose another --output.` et le code de sortie 1. La sortie d'une exécution précédente trouvée dans un dossier ou un motif n'est pas lue, et la commande affiche `Skipped <path>: it is the output of this command.`
 

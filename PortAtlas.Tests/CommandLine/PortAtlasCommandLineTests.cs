@@ -1,3 +1,4 @@
+using System.CommandLine;
 using AwesomeAssertions;
 using PortAtlas.Cli;
 using PortAtlas.Cli.CommandLine;
@@ -47,6 +48,25 @@ public sealed class PortAtlasCommandLineTests
 
         // Assert
         root.Description.Should().StartWith("PortAtlas");
+    }
+
+    // 4.x wrote netflow_* files; a help text still naming them would send the operator looking for the wrong file.
+    [Fact]
+    public void CreateRootCommand_WhenBuilt_DescribesTheDefaultFilesUnderPortAtlasNames()
+    {
+        // Act
+        var root = PortAtlasCommandLine.CreateRootCommand();
+
+        // Assert
+        var descriptions = WithSubcommands(root)
+            .SelectMany(command => command.Options.Select(option => option.Description).Prepend(command.Description))
+            .OfType<string>()
+            .ToList();
+        descriptions.Should().NotContain(description => description.Contains("netflow_", StringComparison.Ordinal));
+        foreach (var fileName in new[] { "portatlas_audit.csv", "portatlas_audit.ndjson", "portatlas_topology.html", "portatlas_dns_cache.json" })
+        {
+            descriptions.Should().Contain(description => description.Contains(fileName, StringComparison.Ordinal), fileName);
+        }
     }
 
     [Theory]
@@ -142,4 +162,7 @@ public sealed class PortAtlasCommandLineTests
         // Assert
         parseResult.Errors.Should().BeEmpty();
     }
+
+    private static IEnumerable<Command> WithSubcommands(Command command) =>
+        command.Subcommands.SelectMany(WithSubcommands).Prepend(command);
 }

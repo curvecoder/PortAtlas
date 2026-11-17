@@ -106,7 +106,7 @@ Written by `export rules --pairs-output`, from the rows of the firewall rule mat
 
 ## DNS cache
 
-`netflow_dns_cache.json` (`DnsCacheFilePath`) maps each resolved address to its name and to where the name came from, for example:
+`portatlas_dns_cache.json` (`DnsCacheFilePath`) maps each resolved address to its name and to where the name came from, for example:
 
 ```json
 { "198.51.100.20": { "HostName": "app.example.com", "Source": "DNS" } }

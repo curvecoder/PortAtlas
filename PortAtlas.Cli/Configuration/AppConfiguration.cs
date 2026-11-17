@@ -1,3 +1,5 @@
+using PortAtlas.Core.Export;
+
 namespace PortAtlas.Cli.Configuration;
 
 /// <summary>
@@ -19,7 +21,7 @@ public sealed record AppConfiguration
     /// <summary>
     /// Output CSV file path.
     /// </summary>
-    public string OutputCsvPath { get; init; } = "netflow_audit.csv";
+    public string OutputCsvPath { get; init; } = DefaultOutputFileNames.AuditCsv;
 
     /// <summary>
     /// Output NDJSON (newline-delimited JSON) file path (empty if disabled by default).
@@ -162,7 +164,7 @@ public sealed record AppConfiguration
     /// <summary>
     /// Reverse DNS persistent cache file path (JSON format).
     /// </summary>
-    public string DnsCacheFilePath { get; init; } = "netflow_dns_cache.json";
+    public string DnsCacheFilePath { get; init; } = DefaultOutputFileNames.DnsCache;
 
     /// <summary>
     /// List of CIDR subnets or IP addresses excluded from reverse DNS resolution.

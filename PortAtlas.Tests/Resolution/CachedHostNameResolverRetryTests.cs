@@ -92,7 +92,7 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
     public async Task QueueResolution_WhenCacheFileHoldsOldFailedEntry_ResolvesTheAddressAgain()
     {
         // Arrange
-        var cachePath = Path.Combine(_directory, "netflow_dns_cache.json");
+        var cachePath = Path.Combine(_directory, "dns_cache.json");
         await File.WriteAllTextAsync(cachePath, "{\"192.0.2.79\": {\"HostName\": \"\", \"Source\": \"None\", \"ResolvedAtUtc\": \"2026-10-25T07:05:52Z\"}}");
         var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.Now("SVLVBDD67"));
         await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), new PersistentDnsCacheStore(cachePath));

@@ -1,3 +1,5 @@
+using PortAtlas.Core.Export;
+
 namespace PortAtlas.Core.Enrichment;
 
 /// <summary>
@@ -41,5 +43,5 @@ public sealed record OfflineAuditEnrichmentOptions
     /// <summary>
     /// Target file path where the consolidated master DNS cache should be written.
     /// </summary>
-    public string OutputCachePath { get; init; } = "netflow_dns_cache.json";
+    public string OutputCachePath { get; init; } = DefaultOutputFileNames.DnsCache;
 }

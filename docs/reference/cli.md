@@ -117,7 +117,7 @@ PortAtlas audit [options]
 
 | Option | Value | Configuration key | Default | Effect |
 | :--- | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `OutputCsvPath` | `netflow_audit.csv` | CSV audit log |
+| `-o`, `--output` | `<path>` | `OutputCsvPath` | `portatlas_audit.csv` | CSV audit log |
 | `--ndjson` | `<path>` | `OutputNdjsonPath` | none | NDJSON log written alongside the CSV log |
 | `--interval` | seconds, at least 1 | `ScanIntervalSeconds` | `5` | Time between two scans |
 | `--columns` | column names | `CsvColumns` | all 20 | Ordered CSV columns ([list](output-formats.md#csv-audit-log)) |
@@ -155,7 +155,7 @@ PortAtlas map [-i <path>]... [--html <path>] [--drawio <path>] [options]
 Outputs:
 
 - `--html` writes the HTML map, `--drawio` the Draw.io diagram; both can be given.
-- Without `--html` and `--drawio`, the command writes the HTML map to `OutputHtmlMapPath` (or `netflow_topology.html` when the key is empty), plus the Draw.io diagram when `OutputDrawioPath` is set.
+- Without `--html` and `--drawio`, the command writes the HTML map to `OutputHtmlMapPath` (or `portatlas_topology.html` when the key is empty), plus the Draw.io diagram when `OutputDrawioPath` is set.
 
 A log line without a valid local and remote port is left out of the map; the console names the log and the numbers of these lines (the first ten).
 
@@ -200,7 +200,7 @@ PortAtlas export ndjson [-i <path>]... [-o <path>]
 
 | Option | Value | Default | Effect |
 | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `netflow_audit.ndjson` | NDJSON file ([fields](output-formats.md#ndjson)) |
+| `-o`, `--output` | `<path>` | `portatlas_audit.ndjson` | NDJSON file ([fields](output-formats.md#ndjson)) |
 
 Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). A `.ndjson` or `.jsonl` file is read as NDJSON, any other file as CSV. Input files are read sequentially and only the current file is held in memory. Each flow read gives one line: a flow held by two logs, such as the logs of two days, or a log and its enriched copy both given by their own path to `--input`, is written twice. An output given by its own path to `--input` stops the command with `The output '<path>' is also an audit log to read: choose another --output.` and exit code 1. An output of an earlier run found in a directory or a pattern is not read, and the command prints `Skipped <path>: it is the output of this command.`
 

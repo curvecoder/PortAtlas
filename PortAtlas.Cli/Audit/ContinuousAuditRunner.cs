@@ -440,7 +440,7 @@ public static class ContinuousAuditRunner
         CancellationToken cancellationToken)
     {
         var targetHtml = string.IsNullOrWhiteSpace(config.OutputHtmlMapPath)
-            ? "netflow_topology.html"
+            ? DefaultOutputFileNames.TopologyHtml
             : config.OutputHtmlMapPath;
         var graph = await topologyMapper.GenerateHtmlMapFromEntriesAsync(
             entries,

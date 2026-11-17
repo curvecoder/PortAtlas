@@ -39,14 +39,14 @@ public sealed class ConfigurationTemplateGeneratorTests : IDisposable
 
         var json = File.ReadAllText(resultPath);
         json.Should().Contain("\"ScanIntervalSeconds\": 5");
-        json.Should().Contain("\"OutputCsvPath\": \"netflow_audit.csv\"");
+        json.Should().Contain("\"OutputCsvPath\": \"portatlas_audit.csv\"");
         json.Should().Contain("\"LogRewriteIntervalMinutes\": 5");
         json.Should().Contain("\"CustomHostAliases\"");
 
         var parsed = JsonSerializer.Deserialize<AppConfiguration>(json);
         parsed.Should().NotBeNull();
         parsed!.ScanIntervalSeconds.Should().Be(5);
-        parsed.OutputCsvPath.Should().Be("netflow_audit.csv");
+        parsed.OutputCsvPath.Should().Be("portatlas_audit.csv");
         parsed.LogRewriteIntervalMinutes.Should().Be(5);
         parsed.ExcludedPids.Should().Contain([0, 4]);
     }

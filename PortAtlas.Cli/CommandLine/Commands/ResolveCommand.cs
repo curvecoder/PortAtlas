@@ -19,7 +19,7 @@ public sealed class ResolveCommand : Command
         Description = "DNS cache to merge: a file, a directory or a wildcard pattern. Repeatable. Default: the DNS cache of the configuration. Without --input, the audit logs are left alone and only the caches are resolved.",
         HelpName = "path"
     };
-    private readonly Option<string?> _outputCache = OptionFactory.CreatePath("--output-cache", "Merged master cache to write. Default: the DNS cache of the configuration (netflow_dns_cache.json).");
+    private readonly Option<string?> _outputCache = OptionFactory.CreatePath("--output-cache", $"Merged master cache to write. Default: the DNS cache of the configuration ({DefaultOutputFileNames.DnsCache}).");
     private readonly Option<bool> _inPlace = new("--in-place") { Description = "Overwrite the audit logs instead of writing *_enriched files." };
     private readonly Option<bool> _forceResolve = new("--force-resolve") { Description = "Resolve every address again, those that already have a name included, and replace the host names already present in the audit logs. A lookup that finds nothing never erases a known name. Without this option only the addresses without a name are resolved." };
     private readonly Option<int?> _rdapDelayMs = OptionFactory.CreateInteger("--rdap-delay-ms", "milliseconds", "Delay between two RDAP queries. Default: 200.", minimum: 0);

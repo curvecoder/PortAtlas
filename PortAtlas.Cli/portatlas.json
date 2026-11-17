@@ -1,7 +1,7 @@
 {
   "ScanIntervalSeconds": 5,
   "LogRewriteIntervalMinutes": 5,
-  "OutputCsvPath": "netflow_audit.csv",
+  "OutputCsvPath": "portatlas_audit.csv",
   "OutputNdjsonPath": "",
   "OutputHtmlMapPath": "",
   "OutputDrawioPath": "",
@@ -50,7 +50,7 @@
   "ResolveRemoteHostNames": true,
   "DnsResolutionTimeoutMs": 3000,
   "ResolveIpOwners": true,
-  "DnsCacheFilePath": "netflow_dns_cache.json",
+  "DnsCacheFilePath": "portatlas_dns_cache.json",
   "DnsExcludedNetworks": [
     "0.0.0.0",
     "255.255.255.255",

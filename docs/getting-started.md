@@ -32,7 +32,7 @@ sudo ./PortAtlas audit
 
 The dashboard opens. Every five seconds it lists the flows found: the program, the remote address and port, and the name resolved for that address. Open a web page or run `git fetch` in another window: new flows appear within a few seconds.
 
-Leave the audit running for a few minutes, then press `Q`. The flows are now in `netflow_audit.csv`, in the same folder.
+Leave the audit running for a few minutes, then press `Q`. The flows are now in `portatlas_audit.csv`, in the same folder.
 
 ## Render the map
 

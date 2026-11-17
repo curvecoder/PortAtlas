@@ -32,7 +32,7 @@ sudo ./PortAtlas audit
 
 Le tableau de bord s'ouvre. Toutes les cinq secondes, il liste les flux trouvés : le programme, l'adresse et le port distants, et le nom résolu pour cette adresse. Ouvrez une page web ou lancez `git fetch` dans une autre fenêtre : de nouveaux flux apparaissent en quelques secondes.
 
-Laissez l'audit tourner quelques minutes, puis appuyez sur `Q`. Les flux sont maintenant dans `netflow_audit.csv`, dans le même dossier.
+Laissez l'audit tourner quelques minutes, puis appuyez sur `Q`. Les flux sont maintenant dans `portatlas_audit.csv`, dans le même dossier.
 
 ## Dessiner la carte
 

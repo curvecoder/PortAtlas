@@ -11,7 +11,7 @@ namespace PortAtlas.Cli.CommandLine.Commands;
 public sealed class ExportNdjsonCommand : Command
 {
     private readonly AuditInputOptionSet _inputs = new();
-    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", "NDJSON file to write. Tokens {ServerName}, {HostName}, {Date}, {Timestamp} are expanded. Default: netflow_audit.ndjson.", "-o");
+    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", $"NDJSON file to write. Tokens {{ServerName}}, {{HostName}}, {{Date}}, {{Timestamp}} are expanded. Default: {DefaultOutputFileNames.AuditNdjson}.", "-o");
     private readonly Option<string?> _configFile;
 
     /// <summary>
@@ -28,7 +28,7 @@ public sealed class ExportNdjsonCommand : Command
         SetAction(async (parseResult, cancellationToken) =>
         {
             var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
-            var outputPath = Path.GetFullPath(OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? "netflow_audit.ndjson"));
+            var outputPath = Path.GetFullPath(OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.AuditNdjson));
 
             // The output is emptied before the logs are read: written over a log named by its path, it would lose that log.
             if (_inputs.NamesFile(parseResult, config.OutputCsvPath, outputPath))

@@ -14,7 +14,7 @@ Paths accept the [file name tokens](cli.md#file-name-tokens) `{ServerName}`, `{H
 | :--- | :--- | :--- | :--- | :--- |
 | `ScanIntervalSeconds` | integer | `5` | Seconds between two scans, at least 1 | `--interval` |
 | `LogRewriteIntervalMinutes` | integer | `5` | Minutes between two rewrites of the audit logs, which are also written at start and stop; at least 1 | `--rewrite-interval` |
-| `OutputCsvPath` | path | `netflow_audit.csv` | CSV audit log; default input of the other commands | `-o` (`audit`) |
+| `OutputCsvPath` | path | `portatlas_audit.csv` | CSV audit log; default input of the other commands | `-o` (`audit`) |
 | `OutputNdjsonPath` | path | `""` | NDJSON log written alongside the CSV log; empty for none | `--ndjson` |
 | `CsvColumns` | list of names | `[]` | Ordered CSV columns; empty for the 20 columns | `--columns` |
 | `CsvDelimiter` | string | `","` | CSV field separator (first character used) | none |
@@ -48,7 +48,7 @@ These keys decide which sockets are recorded by `audit`. The dashboard adds entr
 | `ResolveRemoteHostNames` | boolean | `true` | Name resolution of remote addresses; `false` also disables RDAP and aliases | `--no-dns` |
 | `DnsResolutionTimeoutMs` | integer | `3000` | Milliseconds to wait for a reverse DNS answer; used by `audit`, `resolve` and `lookup`; at least 1 | `--dns-timeout-ms` |
 | `ResolveIpOwners` | boolean | `true` | RDAP query for the owner of public addresses, used as name when there is no DNS name | `--no-rdap` |
-| `DnsCacheFilePath` | path | `netflow_dns_cache.json` | Persistent DNS cache; default cache of `resolve` and `lookup` | `--cache`, `--output-cache` (`resolve`) |
+| `DnsCacheFilePath` | path | `portatlas_dns_cache.json` | Persistent DNS cache; default cache of `resolve` and `lookup` | `--cache`, `--output-cache` (`resolve`) |
 | `DnsExcludedNetworks` | list of addresses or CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Addresses never resolved | none |
 | `CustomHostAliases` | object `{ "ip": "name" }` | `{}` | Names used instead of reverse DNS | `--alias` |
 

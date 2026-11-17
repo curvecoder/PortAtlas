@@ -18,7 +18,7 @@
 | `Q` | Stop the audit and exit |
 | `C` | Redraw the screen |
 | `V` or `F` | Switch between the two views |
-| `M` | Write the HTML map (`OutputHtmlMapPath`, or `netflow_topology.html`), and the Draw.io diagram when `OutputDrawioPath` is set |
+| `M` | Write the HTML map (`OutputHtmlMapPath`, or `portatlas_topology.html`), and the Draw.io diagram when `OutputDrawioPath` is set |
 | `↑` `↓` `←` `→` | Move the selection in the table |
 | `N` or `Page Down` | Next page |
 | `P` or `Page Up` | Previous page |

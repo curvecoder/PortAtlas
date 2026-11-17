@@ -106,7 +106,7 @@ Corriger ou supprimer la ligne, ou écrire dans un nouveau journal avec `--outpu
 
 ## Cache DNS
 
-`netflow_dns_cache.json` (`DnsCacheFilePath`) associe chaque adresse résolue à son nom et à l'origine de ce nom, par exemple :
+`portatlas_dns_cache.json` (`DnsCacheFilePath`) associe chaque adresse résolue à son nom et à l'origine de ce nom, par exemple :
 
 ```json
 { "198.51.100.20": { "HostName": "app.example.com", "Source": "DNS" } }

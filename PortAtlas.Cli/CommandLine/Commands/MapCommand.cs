@@ -11,7 +11,7 @@ namespace PortAtlas.Cli.CommandLine.Commands;
 /// </summary>
 public sealed class MapCommand : Command
 {
-    private const string DefaultHtmlPath = "netflow_topology.html";
+    private const string DefaultHtmlPath = DefaultOutputFileNames.TopologyHtml;
     private static readonly string[] CsvExtension = [".csv"];
 
     private readonly AuditInputOptionSet _inputs = new();
@@ -24,7 +24,7 @@ public sealed class MapCommand : Command
     /// </summary>
     /// <param name="configFile">Global <c>--config</c> option.</param>
     public MapCommand(Option<string?> configFile)
-        : base("map", "Render an HTML topology map and/or a Draw.io diagram from CSV audit logs. Without --html or --drawio, writes the outputs of the configuration (HTML map, default netflow_topology.html, and Draw.io diagram when OutputDrawioPath is set).")
+        : base("map", $"Render an HTML topology map and/or a Draw.io diagram from CSV audit logs. Without --html or --drawio, writes the outputs of the configuration (HTML map, default {DefaultHtmlPath}, and Draw.io diagram when OutputDrawioPath is set).")
     {
         _configFile = configFile;
         _inputs.AddTo(this);

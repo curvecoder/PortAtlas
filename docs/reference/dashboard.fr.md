@@ -18,7 +18,7 @@
 | `Q` | Arrêter l'audit et quitter |
 | `C` | Redessiner l'écran |
 | `V` ou `F` | Basculer entre les deux vues |
-| `M` | Écrire la carte HTML (`OutputHtmlMapPath`, ou `netflow_topology.html`), et le diagramme Draw.io quand `OutputDrawioPath` est renseigné |
+| `M` | Écrire la carte HTML (`OutputHtmlMapPath`, ou `portatlas_topology.html`), et le diagramme Draw.io quand `OutputDrawioPath` est renseigné |
 | `↑` `↓` `←` `→` | Déplacer la sélection dans le tableau |
 | `N` ou `Page Down` | Page suivante |
 | `P` ou `Page Up` | Page précédente |

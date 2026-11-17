@@ -14,7 +14,7 @@ PortAtlas audit --no-tui --no-rdap
 
 Ou mettez `"ResolveIpOwners": false` dans le fichier de configuration. Le DNS inverse reste actif et nomme les adresses connues du serveur DNS local. Pour n'envoyer aucune requête de nom, utilisez plutôt `--no-dns`.
 
-Collectez les journaux d'audit et les fichiers de cache DNS (`netflow_dns_cache.json`, ou `DnsCacheFilePath`) de chaque serveur.
+Collectez les journaux d'audit et les fichiers de cache DNS (`portatlas_dns_cache.json`, ou `DnsCacheFilePath`) de chaque serveur.
 
 ## Sur une machine connectée à Internet
 
