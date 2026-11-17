@@ -23,7 +23,7 @@ public sealed class AuditCommand : Command
     private readonly Option<string[]> _columns = OptionFactory.CreateList("--columns", "names", "Ordered CSV columns to write. Default: all 20 columns.");
     private readonly Option<int?> _rewriteInterval = OptionFactory.CreateInteger("--rewrite-interval", "minutes", "Minutes between two rewrites of the audit logs, which are also written at start and stop. Default: 5.", minimum: 1);
     private readonly Option<bool> _noTui = new("--no-tui") { Description = "Run without the terminal dashboard (Windows service, systemd unit)." };
-    private readonly Option<bool> _noDns = new("--no-dns") { Description = "Do not resolve remote addresses with reverse DNS." };
+    private readonly Option<bool> _noDns = new("--no-dns") { Description = "Do not name remote addresses: no reverse DNS, no RDAP owner, no alias." };
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
     private readonly Option<bool> _noRdap = new("--no-rdap") { Description = "Do not query RDAP registries (Internet) for address owners; reverse DNS stays active." };
     private readonly Option<string[]> _excludeRemoteIps = OptionFactory.CreateList("--exclude-remote-ips", "addresses", "Remote IP addresses or CIDR subnets that are not recorded.");

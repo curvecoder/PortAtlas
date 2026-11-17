@@ -69,6 +69,17 @@ public sealed class PortAtlasCommandLineTests
         }
     }
 
+    [Fact]
+    public void CreateRootCommand_WhenBuilt_DescribesNoDnsAsTurningOffRdapAndAliasesToo()
+    {
+        // Act
+        var audit = PortAtlasCommandLine.CreateRootCommand().Subcommands.Single(command => command.Name == "audit");
+
+        // Assert
+        var description = audit.Options.Single(option => option.Name == "--no-dns").Description;
+        description.Should().Contain("RDAP").And.Contain("alias");
+    }
+
     [Theory]
     [InlineData("export", "ndjson", "--layout", "grid")]
     [InlineData("export", "rules", "--html", "map.html")]
