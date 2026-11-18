@@ -124,6 +124,10 @@ dotnet publish PortAtlas.Gui/PortAtlas.Gui.csproj `
 if ($LASTEXITCODE -ne 0) { throw "GUI publish failed." }
 
 Get-ChildItem -Path $guiPublishDir -Filter "*.pdb" -Recurse | Remove-Item -Force
+# PortAtlas.Gui.Core references the PortAtlas.Cli project, so the publish copies the runtime configuration of
+# PortAtlas.exe without the executable; the GUI archive is extracted beside the CLI archive, which brings its own.
+$strayCliRuntimeConfig = Join-Path $guiPublishDir "PortAtlas.runtimeconfig.json"
+if (Test-Path $strayCliRuntimeConfig) { Remove-Item $strayCliRuntimeConfig -Force }
 Copy-Item "README.md" (Join-Path $guiPublishDir "README.md") -Force
 Copy-Item "README.fr.md" (Join-Path $guiPublishDir "README.fr.md") -Force
 Copy-Item "LICENSE" (Join-Path $guiPublishDir "LICENSE") -Force
