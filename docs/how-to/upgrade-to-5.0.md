@@ -2,7 +2,7 @@
 
 # Upgrade from 4.x to 5.0
 
-PortAtlas 5.0 names the files it writes by default after the product, and changes how `export rules` writes its matrices. The command names and the configuration keys do not change. An install whose `portatlas.json` sets the file paths keeps its files; one that relied on the default names starts new files. Check each section below before deploying 5.0 to a service or a scheduled task.
+PortAtlas 5.0 names the files it writes by default after the product, changes how `export rules` writes its matrices, and refuses inputs that 4.x skipped without a message. The command names and the configuration keys do not change. An install whose `portatlas.json` sets the file paths keeps its files; one that relied on the default names starts new files. Check each section below before deploying 5.0 to a service or a scheduled task.
 
 ## Before you upgrade
 
@@ -51,6 +51,30 @@ Update the scripts that read these files by their default name.
 **What to do.** Nothing to resume an audit. A flow recorded by 4.x without path is identified by its process name; the same flow, scanned by 5.0 with its path, is a new flow. The 4.x row stays in the log with its counters, and a new row starts. To start from clean counters, give `audit` a new output file.
 
 **How to check.** Run `audit` as administrator on a server where a service runs under its own account, then open the log: the rows of that service carry its path.
+
+## Map settings checked in the configuration file
+
+**What changes.** An unknown value of `MapDirection`, `MapEdgeLabels`, `MapLayoutMode`, `MapSortMethod`, `MapRoutingMode`, `MapSpacingProfile`, `DrawioSubnets`, `DrawioEdgeMode` or `DrawioTheme` was replaced by the default without a message in 4.x. It now stops every command that reads the file, with exit code 1 and `<file>: "<key>" is "<value>", which the setting does not take. Accepted values: …`. Values are matched without case, and the spellings read by earlier versions are still accepted.
+
+**What to do.** Correct the value named in the message, or remove the key to keep the default.
+
+**How to check.** Run `map -i <log>` with the configuration file of each server: a value that is not accepted stops it with the message above.
+
+## `--alias` pairs checked
+
+**What changes.** A pair that `audit --alias` cannot read (`nas`, `=nas`, `192.168.1.5=`) was skipped without a message in 4.x. It is now a command-line error that names the pair, with exit code 1. A pair is split at its first `=`, so an IPv6 alias is written `fe80::10=nas.home.arpa`; the `ip:host` form is accepted for an IPv4 address only, with its four parts.
+
+**What to do.** Check the `--alias` pairs of the services and scheduled tasks that run `audit`.
+
+**How to check.** Start `audit` with the same arguments: it starts instead of printing `'<pair>' is not accepted by --alias: …`.
+
+## `resolve` and `lookup` follow the name resolution keys
+
+**What changes.** In 4.x, `resolve` ignored the name resolution keys of the configuration file. It now reads `ResolveRemoteHostNames`, `ResolveIpOwners`, `DnsExcludedNetworks` and `CustomHostAliases`: `"ResolveIpOwners": false` stops its RDAP queries, `"ResolveRemoteHostNames": false` stops its reverse DNS queries, the addresses of `DnsExcludedNetworks` and those with an alias receive no query, and an alias names its address. `lookup` now applies `CustomHostAliases` and `DnsExcludedNetworks` as the audit does, instead of `ExcludedRemoteIps`.
+
+**What to do.** On the machine that runs `resolve` for [isolated servers](audit-isolated-servers.md), check its `portatlas.json`: a file copied from an isolated server, with `"ResolveIpOwners": false`, now prevents the RDAP queries you run `resolve` for.
+
+**How to check.** Run `resolve` on a log that holds a public address: its RDAP owner appears in the enriched copy.
 
 ## See also
 

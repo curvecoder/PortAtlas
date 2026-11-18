@@ -2,7 +2,7 @@
 
 # Passer de la 4.x à la 5.0
 
-PortAtlas 5.0 donne aux fichiers qu'il écrit par défaut le nom du produit, et change la façon dont `export rules` écrit ses matrices. Les noms des commandes et les clés de configuration ne changent pas. Une installation dont le `portatlas.json` fixe les chemins des fichiers garde ses fichiers ; une installation qui comptait sur les noms par défaut commence de nouveaux fichiers. Vérifiez chaque section ci-dessous avant de déployer la 5.0 sur un service ou une tâche planifiée.
+PortAtlas 5.0 donne aux fichiers qu'il écrit par défaut le nom du produit, change la façon dont `export rules` écrit ses matrices, et refuse des entrées que la 4.x ignorait sans message. Les noms des commandes et les clés de configuration ne changent pas. Une installation dont le `portatlas.json` fixe les chemins des fichiers garde ses fichiers ; une installation qui comptait sur les noms par défaut commence de nouveaux fichiers. Vérifiez chaque section ci-dessous avant de déployer la 5.0 sur un service ou une tâche planifiée.
 
 ## Avant la mise à jour
 
@@ -51,6 +51,30 @@ Mettez à jour les scripts qui lisent ces fichiers par leur nom par défaut.
 **Ce qu'il faut faire.** Rien pour reprendre un audit. Un flux enregistré par la 4.x sans chemin est identifié par le nom de son processus ; le même flux, relevé par la 5.0 avec son chemin, est un nouveau flux. La ligne de la 4.x reste dans le journal avec ses compteurs, et une nouvelle ligne commence. Pour repartir de compteurs propres, donnez à `audit` un nouveau fichier de sortie.
 
 **Comment le vérifier.** Lancez `audit` en administrateur sur un serveur où un service tourne sous son propre compte, puis ouvrez le journal : les lignes de ce service portent son chemin.
+
+## Réglages de la carte contrôlés dans le fichier de configuration
+
+**Ce qui change.** Une valeur inconnue de `MapDirection`, `MapEdgeLabels`, `MapLayoutMode`, `MapSortMethod`, `MapRoutingMode`, `MapSpacingProfile`, `DrawioSubnets`, `DrawioEdgeMode` ou `DrawioTheme` était remplacée par la valeur par défaut sans message en 4.x. Elle arrête désormais toute commande qui lit le fichier, avec le code de sortie 1 et `<file>: "<key>" is "<value>", which the setting does not take. Accepted values: …`. Les valeurs sont reconnues sans tenir compte de la casse, et les orthographes lues par les versions précédentes restent acceptées.
+
+**Que faire.** Corrigez la valeur nommée dans le message, ou retirez la clé pour garder la valeur par défaut.
+
+**Comment vérifier.** Lancez `map -i <journal>` avec le fichier de configuration de chaque serveur : une valeur qui n'est pas acceptée l'arrête avec le message ci-dessus.
+
+## Paires `--alias` contrôlées
+
+**Ce qui change.** Une paire qu'`audit --alias` ne sait pas lire (`nas`, `=nas`, `192.168.1.5=`) était ignorée sans message en 4.x. C'est désormais une erreur de ligne de commande qui nomme la paire, avec le code de sortie 1. Une paire est coupée à son premier `=` : un alias IPv6 s'écrit donc `fe80::10=nas.home.arpa` ; la forme `ip:hôte` n'est acceptée que pour une adresse IPv4, avec ses quatre parties.
+
+**Que faire.** Vérifiez les paires `--alias` des services et des tâches planifiées qui lancent `audit`.
+
+**Comment vérifier.** Lancez `audit` avec les mêmes arguments : il démarre au lieu d'afficher `'<pair>' is not accepted by --alias: …`.
+
+## `resolve` et `lookup` suivent les clés de résolution de noms
+
+**Ce qui change.** En 4.x, `resolve` ignorait les clés de résolution de noms du fichier de configuration. Il lit désormais `ResolveRemoteHostNames`, `ResolveIpOwners`, `DnsExcludedNetworks` et `CustomHostAliases` : `"ResolveIpOwners": false` arrête ses requêtes RDAP, `"ResolveRemoteHostNames": false` arrête ses requêtes DNS inverses, les adresses de `DnsExcludedNetworks` et celles qui ont un alias ne reçoivent aucune requête, et un alias nomme son adresse. `lookup` applique désormais `CustomHostAliases` et `DnsExcludedNetworks` comme l'audit, au lieu d'`ExcludedRemoteIps`.
+
+**Que faire.** Sur la machine qui lance `resolve` pour les [serveurs isolés](audit-isolated-servers.fr.md), vérifiez son `portatlas.json` : un fichier copié d'un serveur isolé, avec `"ResolveIpOwners": false`, empêche désormais les requêtes RDAP pour lesquelles vous lancez `resolve`.
+
+**Comment vérifier.** Lancez `resolve` sur un journal qui contient une adresse publique : son propriétaire RDAP apparaît dans la copie enrichie.
 
 ## Voir aussi
 
