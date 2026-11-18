@@ -28,7 +28,12 @@ A value comes from, in order of precedence:
 2. the configuration file given by `--config`, or `portatlas.json` in the working directory, or `portatlas.json` next to the executable;
 3. the default built into the program.
 
-The key of the configuration file matching each option is listed in the tables below and described in the [configuration reference](configuration.md).
+The key of the configuration file matching each option is listed in the tables below and described in the [configuration reference](configuration.md). Each command reads only some keys of the file; the section of each command lists them.
+
+An option combines with the file as follows:
+
+- An option that takes a value replaces the value of the file. A list option replaces the whole list of the file: `--exclude-ports 53` drops the ports listed in `MapExcludedPorts`. `--alias` is the exception: its pairs are added to `CustomHostAliases` and take precedence over the file for the same address.
+- An option without value that matches a key of the file switches it one way only. `--listeners-only` turns `MapListenersOnly` on but cannot turn it off; `--no-tui`, `--no-dns`, `--no-rdap` and `--include-ephemeral-ports` turn off what the file turns on, never the reverse. To undo such a setting of the file, edit the file or give another file with `--config`. `export rules` does not read `MapExcludeEphemeralPorts`, so there `--include-ephemeral-ports` alone decides. `--obfuscate` replaces `MaskServerName` and `MaskLocalIp`, unless `--mask-server` or `--mask-ip` is given.
 
 ## Global option
 
@@ -39,7 +44,7 @@ The key of the configuration file matching each option is listed in the tables b
 
 ## File name tokens
 
-Output paths, and the paths of the configuration file, accept these tokens:
+These tokens are replaced in the path keys of the configuration file (`OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath`, `DnsCacheFilePath`) and in the output options: `-o`, `--ndjson`, `--html` and `--drawio` of `audit`; `--html` and `--drawio` of `map`; `-o` and `--pairs-output` of `export rules`; `-o` of `export ndjson`; `--output-cache` of `resolve`. They are not replaced in `--input`, `--cache`, `--config` or the path given to `config init`. An `--input` left to its default reads `OutputCsvPath` with its tokens replaced, so `{Date}` names the log of the current day. Tokens are replaced when each command starts: with `{Timestamp}` in `OutputCsvPath`, `map`, `export rules`, `export ndjson` and `resolve` without `-i` look for a log named after their own start time and stop with `No audit log found for: …`, as with `{Date}` on another day: give the log with `-i`. With `{Timestamp}` in `DnsCacheFilePath`, each command starts from an empty cache and writes a new one, instead of reusing the previous cache.
 
 | Token | Replaced by |
 | :--- | :--- |
@@ -47,6 +52,8 @@ Output paths, and the paths of the configuration file, accept these tokens:
 | `{HostName}` | Name of the machine (same value as `{ServerName}`) |
 | `{Date}` | UTC date, `yyyy-MM-dd` |
 | `{Timestamp}` | UTC date and time, `yyyyMMdd_HHmmss` |
+
+Tokens are matched without case (`{date}` works). A character that a file name cannot hold is replaced by `-` in the machine name.
 
 ## Shared option families
 
@@ -144,6 +151,8 @@ With name resolution on, the DNS cache named by `DnsCacheFilePath` is read at st
 
 The `audit` command resumes from the CSV log only. If the NDJSON log (`--ndjson`, `OutputNdjsonPath`) exists and holds at least one record while the CSV log is missing or holds no flow, the audit stops before its first scan with `The NDJSON log '<path>' holds flows but the CSV log '<path>' is missing or holds none: …` and exit code 1, and writes nothing: starting would replace the NDJSON log with the flows of this run alone. Restore the CSV log or move the NDJSON log. An empty or absent NDJSON log does not stop the audit.
 
+Configuration keys read: every key of the [configuration reference](configuration.md).
+
 ## map
 
 Builds the topology graph from CSV audit logs and writes the requested outputs.
@@ -160,6 +169,8 @@ Outputs:
 A log line without a valid local and remote port is left out of the map; the console names the log and the numbers of these lines (the first ten).
 
 Families read: inputs (`.csv`), flow filters, map rendering.
+
+Configuration keys read: `OutputCsvPath` (default input), `CsvDelimiter`, the flow filter and map rendering keys, `ExcludedLocalPorts`, `ExcludedRemotePorts` and `ExcludedRemoteIps`. The other recording filters and the name resolution keys are not read: the names come from the logs.
 
 ## export rules
 
@@ -190,6 +201,8 @@ A rule carries the server name, the remote name, the executable path and the acc
 
 A CSV log is read with the separator found on its own first line (`,`, `;`, tab or `|`), so logs written with different `CsvDelimiter` values can be consolidated together: the separator between the column names of the header or, in a log without header, the one that occurs most often outside the quoted fields. The matrix is written with `CsvDelimiter`.
 
+Configuration keys read: `OutputCsvPath` (default input), `CsvDelimiter` (also the separator of the matrices), and the flow filter keys except `MapExcludeEphemeralPorts`. The map rendering keys, the recording filters and the name resolution keys are not read.
+
 ## export ndjson
 
 Converts CSV and NDJSON audit logs into a single NDJSON file, one JSON object per flow.
@@ -203,6 +216,8 @@ PortAtlas export ndjson [-i <path>]... [-o <path>]
 | `-o`, `--output` | `<path>` | `portatlas_audit.ndjson` | NDJSON file ([fields](output-formats.md#ndjson)) |
 
 Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). A `.ndjson` or `.jsonl` file is read as NDJSON, any other file as CSV. Input files are read sequentially and only the current file is held in memory. Each flow read gives one line: a flow held by two logs, such as the logs of two days, or a log and its enriched copy both given by their own path to `--input`, is written twice. An output given by its own path to `--input` stops the command with `The output '<path>' is also an audit log to read: choose another --output.` and exit code 1. An output of an earlier run found in a directory or a pattern is not read, and the command prints `Skipped <path>: it is the output of this command.`
+
+Configuration keys read: `OutputCsvPath` (default input) and `CsvDelimiter`. No filter applies.
 
 ## resolve
 
@@ -228,6 +243,8 @@ Audit logs are optional. When `--cache` is given without `-i`, the audit logs ar
 
 `Ctrl+C`, and `SIGTERM` on Linux and macOS, stop the lookups: the addresses resolved before the stop are saved to the cache named by `--output-cache`, the audit logs not processed yet are left as they were, and the command ends with exit code `130`. Running it again resumes from that cache.
 
+Configuration keys read: `OutputCsvPath` (default input), `DnsCacheFilePath`, `DnsResolutionTimeoutMs`, `ResolveRemoteHostNames`, `ResolveIpOwners`, `DnsExcludedNetworks` and `CustomHostAliases`. `CsvDelimiter` is not read: each log is read with the separator of its first line, or `,` when that line does not tell. `ResolveRemoteHostNames: false` stops the reverse DNS queries only; RDAP queries still follow `ResolveIpOwners`, whereas in `audit` the same value turns off all naming. An address named by `CustomHostAliases` or within `DnsExcludedNetworks` receives no query, as in the audit, and an alias is not written to the cache. `--cache-only` sends no query whatever these keys say.
+
 ## lookup
 
 Prints a six-step diagnostic of the resolution of one address: classification, local cache, operating system DNS settings, reverse DNS query, RDAP query, resulting cache entry.
@@ -236,7 +253,7 @@ Prints a six-step diagnostic of the resolution of one address: classification, l
 PortAtlas lookup <ip> [--dns-timeout-ms <milliseconds>]
 ```
 
-`<ip>` must be an IPv4 or IPv6 address. The command reads `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath` and `DnsResolutionTimeoutMs` from the configuration. As in the audit, an address named by `CustomHostAliases` takes that name, and an address of `DnsExcludedNetworks` gets no name: for both, the reverse DNS and RDAP steps print `SKIPPED` and send no query. Step 1 also says whether `ExcludedRemoteIps` makes the audit drop the flows of the address. Otherwise the command sends the reverse DNS query with the same timeout as `audit`, so that a `SUCCESS` here means the audit names the address too, and the RDAP query for public addresses only; `ResolveIpOwners` and `--no-rdap` do not apply to it.
+`<ip>` must be an IPv4 or IPv6 address. The command reads `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath` and `DnsResolutionTimeoutMs` from the configuration. As in the audit, an address named by `CustomHostAliases` takes that name, and an address of `DnsExcludedNetworks` gets no name: for both, the reverse DNS and RDAP steps print `SKIPPED` and send no query. Step 1 also says whether `ExcludedRemoteIps` makes the audit drop the flows of the address. Otherwise the command sends the reverse DNS query with the same timeout as `audit`, so that a `SUCCESS` here means the audit names the address too, and the RDAP query for public addresses only; `ResolveIpOwners` and `--no-rdap` do not apply to it, nor does `ResolveRemoteHostNames`. The pairs of `audit --alias` are not known to `lookup`, which reads `CustomHostAliases` from the file only.
 
 ## config init
 
@@ -247,6 +264,8 @@ PortAtlas config init [<path>]
 ```
 
 `<path>` is a file or a directory; the default is `portatlas.json` in the working directory. An existing file is overwritten.
+
+Configuration keys read: none.
 
 ## Option matrix
 

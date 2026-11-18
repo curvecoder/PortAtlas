@@ -39,4 +39,4 @@ On Windows, `ping -a` asks the hosts file, the DNS cache, NetBIOS, LLMNR and the
 
   or on the command line: `PortAtlas audit --alias 192.0.2.25=nas`.
 
-Aliases take precedence over DNS. Addresses that are never resolved (broadcast, multicast, link-local) are listed in `DnsExcludedNetworks`.
+Aliases take precedence over DNS. `lookup` reads the aliases of the configuration file only: a pair given to `audit --alias` does not show in its report. Addresses that are never resolved (broadcast, multicast, link-local by default) are listed in `DnsExcludedNetworks`; for them, and for an address with an alias, `lookup` prints `SKIPPED` at the reverse DNS and RDAP steps.

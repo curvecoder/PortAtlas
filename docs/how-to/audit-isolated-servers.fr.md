@@ -26,6 +26,8 @@ PortAtlas resolve -i "collected/*.csv" --cache "collected/*.json" --output-cache
 
 Chaque `audit_x.csv` donne un `audit_x_enriched.csv` ; `--in-place` remplace plutôt les originaux. Les requêtes RDAP sont espacées de 200 ms (`--rdap-delay-ms`).
 
+`resolve` suit les clés de résolution de noms du fichier de configuration qu'il lit sur cette machine. Un `portatlas.json` copié d'un serveur isolé, avec `"ResolveIpOwners": false`, lui fait n'envoyer aucune requête RDAP : lancez-le avec un fichier qui garde `ResolveIpOwners` actif, ou sans `portatlas.json` dans le dossier de travail ni à côté de l'exécutable. Ses `CustomHostAliases` et `DnsExcludedNetworks` s'appliquent comme dans l'audit.
+
 Relancer la commande enrichit de nouveau les originaux et laisse les copies de côté : un fichier `_enriched` trouvé à côté de son original est nommé à l'écran et n'est pas lu. Le dossier peut ensuite être donné tel quel à `map` ou à `export rules`, qui lisent la copie enrichie de chaque journal.
 
 ## Compléter le cache depuis plusieurs machines

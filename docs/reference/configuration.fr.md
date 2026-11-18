@@ -6,7 +6,7 @@ PortAtlas lit un fichier JSON : celui donné par `--config`, sinon `portatlas.js
 
 `PortAtlas config init` écrit un fichier contenant chaque clé avec sa valeur par défaut. Les options de la ligne de commande passent avant le fichier ([référence de la CLI](cli.fr.md#origine-des-valeurs)).
 
-Les chemins acceptent les [jetons de nom de fichier](cli.fr.md#jetons-de-nom-de-fichier) `{ServerName}`, `{HostName}`, `{Date}` et `{Timestamp}`.
+Les clés de chemin `OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath` et `DnsCacheFilePath` acceptent les [jetons de nom de fichier](cli.fr.md#jetons-de-nom-de-fichier) `{ServerName}`, `{HostName}`, `{Date}` et `{Timestamp}`. Les clés lues par chaque commande sont listées dans la [référence de la ligne de commande](cli.fr.md).
 
 ## Audit
 
@@ -17,7 +17,7 @@ Les chemins acceptent les [jetons de nom de fichier](cli.fr.md#jetons-de-nom-de-
 | `OutputCsvPath` | chemin | `portatlas_audit.csv` | Journal d'audit CSV ; entrée par défaut des autres commandes | `-o` (`audit`) |
 | `OutputNdjsonPath` | chemin | `""` | Journal NDJSON écrit en plus du CSV ; vide pour aucun | `--ndjson` |
 | `CsvColumns` | liste de noms | `[]` | Colonnes CSV, dans l'ordre ; vide pour les 20 colonnes | `--columns` |
-| `CsvDelimiter` | chaîne | `","` | Séparateur des champs CSV (premier caractère utilisé) | aucune |
+| `CsvDelimiter` | chaîne | `","` | Séparateur des champs CSV, premier caractère utilisé. Écrit par `audit` et dans les matrices d'`export rules` ; lu par `audit`, et par `map`, `export rules` et `export ndjson` pour un journal dont la première ligne ne montre pas son séparateur ; c'est aussi le seul moyen pour eux de lire un séparateur autre que `,`, `;`, tabulation ou `|`. `resolve` ne le lit pas. `audit` relit son propre journal avec cette valeur : après l'avoir changée, écrivez dans un nouveau journal (`-o` ou `OutputCsvPath`), sinon `audit` refuse de reprendre l'ancien. | aucune |
 | `EnableDashboard` | booléen | `true` | Tableau de bord du terminal | `--no-tui` |
 | `MaskServerName` | chaîne | `""` | Nom de serveur affiché par le tableau de bord | `--mask-server` |
 | `MaskLocalIp` | chaîne | `""` | Adresse locale affichée par le tableau de bord | `--mask-ip` |
@@ -45,12 +45,12 @@ Ces clés décident quels sockets `audit` enregistre. Le tableau de bord en comp
 
 | Clé | Type | Défaut | Effet | Option |
 | :--- | :--- | :--- | :--- | :--- |
-| `ResolveRemoteHostNames` | booléen | `true` | Résolution de nom des adresses distantes ; `false` désactive aussi RDAP et les alias | `--no-dns` |
+| `ResolveRemoteHostNames` | booléen | `true` | Résolution de nom des adresses distantes. `false` désactive le DNS inverse, RDAP et les alias dans `audit`, mais seulement le DNS inverse dans `resolve`. `lookup` ne la lit pas. | `--no-dns` |
 | `DnsResolutionTimeoutMs` | entier | `3000` | Millisecondes d'attente d'une réponse DNS inverse ; utilisé par `audit`, `resolve` et `lookup` ; au moins 1 | `--dns-timeout-ms` |
-| `ResolveIpOwners` | booléen | `true` | Requête RDAP sur le propriétaire des adresses publiques, utilisé comme nom faute de nom DNS | `--no-rdap` |
+| `ResolveIpOwners` | booléen | `true` | Requête RDAP sur le propriétaire des adresses publiques, utilisé comme nom faute de nom DNS ; lue par `audit` et `resolve`, pas par `lookup` | `--no-rdap` |
 | `DnsCacheFilePath` | chemin | `portatlas_dns_cache.json` | Cache DNS persistant ; cache par défaut de `resolve` et `lookup` | `--cache`, `--output-cache` (`resolve`) |
-| `DnsExcludedNetworks` | liste d'adresses ou CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Adresses jamais résolues | aucune |
-| `CustomHostAliases` | objet `{ "ip": "nom" }` | `{}` | Noms utilisés à la place du DNS inverse | `--alias` |
+| `DnsExcludedNetworks` | liste d'adresses ou CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Adresses jamais résolues par `audit`, `resolve` et `lookup` | aucune |
+| `CustomHostAliases` | objet `{ "ip": "nom" }` | `{}` | Noms utilisés à la place du DNS inverse par `audit`, `resolve` et `lookup` ; jamais écrits dans le cache DNS | `--alias` (`audit`, s'ajoute au fichier) |
 
 ## Carte topologique et matrice de règles
 
@@ -79,6 +79,8 @@ Ces clés sont lues par la carte de `audit`, par `map`, et pour les filtres par 
 | `DrawioEdgeMode` | `adaptive`, `direction`, `pair`, `none` | `adaptive` | `--drawio-edges` |
 | `DrawioSubnets` | `on`, `off` | `on` | `--drawio-subnets` |
 | `DrawioTheme` | `dark`, `light` | `dark` | `--drawio-theme` |
+
+Une entrée de `MapIncludedPorts` ou `MapExcludedPorts` peut contenir plusieurs ports ou plages séparés par `,` ou `;` (`"80,443"`).
 
 La carte topologique (pas la matrice de règles) retire aussi les ports de `ExcludedLocalPorts` et `ExcludedRemotePorts` et les adresses de `ExcludedRemoteIps`.
 

@@ -39,4 +39,4 @@ Sous Windows, `ping -a` interroge le fichier hosts, le cache DNS, NetBIOS, LLMNR
 
   ou en ligne de commande : `PortAtlas audit --alias 192.0.2.25=nas`.
 
-Les alias passent avant le DNS. Les adresses jamais résolues (diffusion, multidiffusion, lien local) sont listées dans `DnsExcludedNetworks`.
+Les alias passent avant le DNS. `lookup` ne lit que les alias du fichier de configuration : une paire donnée à `audit --alias` n'apparaît pas dans son rapport. Les adresses jamais résolues (diffusion, multidiffusion, lien local par défaut) sont listées dans `DnsExcludedNetworks` ; pour elles, et pour une adresse qui a un alias, `lookup` affiche `SKIPPED` aux étapes DNS inverse et RDAP.

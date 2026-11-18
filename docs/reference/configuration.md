@@ -6,7 +6,7 @@ PortAtlas reads a JSON file: the one given by `--config`, otherwise `portatlas.j
 
 `PortAtlas config init` writes a file holding every key with its default value. Command-line options take precedence over the file ([CLI reference](cli.md#sources-of-values)).
 
-Paths accept the [file name tokens](cli.md#file-name-tokens) `{ServerName}`, `{HostName}`, `{Date}` and `{Timestamp}`.
+The path keys `OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath` and `DnsCacheFilePath` accept the [file name tokens](cli.md#file-name-tokens) `{ServerName}`, `{HostName}`, `{Date}` and `{Timestamp}`. The keys read by each command are listed in the [CLI reference](cli.md).
 
 ## Audit
 
@@ -17,7 +17,7 @@ Paths accept the [file name tokens](cli.md#file-name-tokens) `{ServerName}`, `{H
 | `OutputCsvPath` | path | `portatlas_audit.csv` | CSV audit log; default input of the other commands | `-o` (`audit`) |
 | `OutputNdjsonPath` | path | `""` | NDJSON log written alongside the CSV log; empty for none | `--ndjson` |
 | `CsvColumns` | list of names | `[]` | Ordered CSV columns; empty for the 20 columns | `--columns` |
-| `CsvDelimiter` | string | `","` | CSV field separator (first character used) | none |
+| `CsvDelimiter` | string | `","` | CSV field separator, first character used. Written by `audit` and in the matrices of `export rules`; read by `audit`, and by `map`, `export rules` and `export ndjson` for a log whose first line does not show its separator; it is also the only way for them to read a separator other than `,`, `;`, tab or `|`. `resolve` does not read it. `audit` reads its own log back with this value: after changing it, write to a new log (`-o` or `OutputCsvPath`), otherwise `audit` refuses to resume the old one. | none |
 | `EnableDashboard` | boolean | `true` | Terminal dashboard | `--no-tui` |
 | `MaskServerName` | string | `""` | Server name shown by the dashboard | `--mask-server` |
 | `MaskLocalIp` | string | `""` | Local address shown by the dashboard | `--mask-ip` |
@@ -45,12 +45,12 @@ These keys decide which sockets are recorded by `audit`. The dashboard adds entr
 
 | Key | Type | Default | Effect | Option |
 | :--- | :--- | :--- | :--- | :--- |
-| `ResolveRemoteHostNames` | boolean | `true` | Name resolution of remote addresses; `false` also disables RDAP and aliases | `--no-dns` |
+| `ResolveRemoteHostNames` | boolean | `true` | Name resolution of remote addresses. `false` turns off reverse DNS, RDAP and aliases in `audit`, but only reverse DNS in `resolve`. `lookup` does not read it. | `--no-dns` |
 | `DnsResolutionTimeoutMs` | integer | `3000` | Milliseconds to wait for a reverse DNS answer; used by `audit`, `resolve` and `lookup`; at least 1 | `--dns-timeout-ms` |
-| `ResolveIpOwners` | boolean | `true` | RDAP query for the owner of public addresses, used as name when there is no DNS name | `--no-rdap` |
+| `ResolveIpOwners` | boolean | `true` | RDAP query for the owner of public addresses, used as name when there is no DNS name; read by `audit` and `resolve`, not by `lookup` | `--no-rdap` |
 | `DnsCacheFilePath` | path | `portatlas_dns_cache.json` | Persistent DNS cache; default cache of `resolve` and `lookup` | `--cache`, `--output-cache` (`resolve`) |
-| `DnsExcludedNetworks` | list of addresses or CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Addresses never resolved | none |
-| `CustomHostAliases` | object `{ "ip": "name" }` | `{}` | Names used instead of reverse DNS | `--alias` |
+| `DnsExcludedNetworks` | list of addresses or CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Addresses never resolved by `audit`, `resolve` and `lookup` | none |
+| `CustomHostAliases` | object `{ "ip": "name" }` | `{}` | Names used instead of reverse DNS by `audit`, `resolve` and `lookup`; never written to the DNS cache | `--alias` (`audit`, adds to the file) |
 
 ## Topology map and rule matrix
 
@@ -79,6 +79,8 @@ These keys are read by the map of `audit`, by `map`, and for the filters by `exp
 | `DrawioEdgeMode` | `adaptive`, `direction`, `pair`, `none` | `adaptive` | `--drawio-edges` |
 | `DrawioSubnets` | `on`, `off` | `on` | `--drawio-subnets` |
 | `DrawioTheme` | `dark`, `light` | `dark` | `--drawio-theme` |
+
+An entry of `MapIncludedPorts` or `MapExcludedPorts` may hold several ports or ranges separated by `,` or `;` (`"80,443"`).
 
 The topology map (not the rule matrix) also removes the ports of `ExcludedLocalPorts` and `ExcludedRemotePorts` and the addresses of `ExcludedRemoteIps`.
 
