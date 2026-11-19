@@ -41,14 +41,15 @@ A client opens a new local port for each connection. Logging every connection wo
 
 ## Name resolution
 
-Remote addresses are named in the background so that a slow DNS server never delays a scan. `CachedHostNameResolver`:
+Remote addresses are named in the background so that a slow DNS server never delays a scan. `CachedHostNameResolver` looks the name up first in the static aliases (`CustomHostAliases`, `--alias`), then in its memory cache and in the cache file (`DnsCacheFilePath`). It skips the addresses of `DnsExcludedNetworks` (broadcast, multicast, link-local) and queues the others. Ten resolutions run at most at the same time, and each reverse DNS query waits at most `DnsResolutionTimeoutMs` (3 seconds by default).
 
-- answers from the static aliases (`CustomHostAliases`, `--alias`), then from its memory cache and the cache file (`DnsCacheFilePath`);
-- skips the addresses of `DnsExcludedNetworks` (broadcast, multicast, link-local);
-- otherwise queues the address; ten resolutions run at most at the same time, each reverse DNS query waiting at most `DnsResolutionTimeoutMs` (3 seconds by default);
-- keeps apart the two ways a query can fail. A server that does not answer in time is not a missing record: nothing is cached and the address is asked again one minute later. An answer that no record exists is cached as an empty name and asked again 24 hours later, so that a record added later to the DNS zone is eventually found;
-- for a public address, also asks the RDAP service `rdap.org` for the organisation that owns the address block, unless `ResolveIpOwners` is `false` or `--no-rdap` is given; the DNS name is kept when there is one, the organisation is used otherwise. After two consecutive RDAP failures, RDAP queries pause for 60 seconds. An RDAP query without answer is not "no owner": an address without DNS name is not cached, a DNS name is cached without organisation, and the address is asked again 15 minutes later;
-- queues again on its own an address whose query got no answer, once its delay has passed, even when no scan sees the connection any more. It does so three times at most, so that a server cut off from the Internet does not keep querying for flows that are gone; after that, only a scan that sees the address again queues it. The count starts over once the address gets an answer. At startup, a flow reloaded from the audit log without name takes the name held in the cache; when the cache has none, its address is queued like that of a flow seen by a scan.
+For a public address, the resolver also asks the RDAP service `rdap.org` which organisation owns the address block, unless `ResolveIpOwners` is `false` or `--no-rdap` is given. The DNS name comes first: the organisation is shown only for an address without a DNS name. After two consecutive RDAP failures, the resolver pauses RDAP for 60 seconds.
+
+If the DNS server does not answer in time, nothing is cached and the address is asked again one minute later. If it answers that no record exists, the address is cached with an empty name and asked again 24 hours later, so that a record added later to the zone is eventually found. An RDAP query left without answer keeps an address without a DNS name out of the cache, caches an address that has one without organisation, and asks again 15 minutes later.
+
+Once its delay has passed, the resolver queues again an address left without answer, even when no scan sees the connection any more. It does so three times at most, so that a server cut off from the Internet does not keep querying for flows that are gone. After that, the address is queued again only when a scan sees it. The count starts over once it gets an answer.
+
+At startup, a flow reloaded from the audit log without a name takes the one held in the cache, or is queued when the cache has none.
 
 `--no-dns` (`ResolveRemoteHostNames: false`) turns the whole resolver off: neither DNS nor RDAP queries are sent, and aliases are not applied.
 

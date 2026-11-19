@@ -41,14 +41,15 @@ Un client ouvre un nouveau port local à chaque connexion. Journaliser chaque co
 
 ## Résolution de noms
 
-Les adresses distantes sont nommées en arrière-plan, pour qu'un serveur DNS lent ne retarde jamais un balayage. `CachedHostNameResolver` :
+Les adresses distantes sont nommées en arrière-plan, pour qu'un serveur DNS lent ne retarde jamais un balayage. `CachedHostNameResolver` cherche d'abord le nom dans les alias statiques (`CustomHostAliases`, `--alias`), puis dans son cache mémoire et dans le fichier de cache (`DnsCacheFilePath`). Il ignore les adresses de `DnsExcludedNetworks` (diffusion, multidiffusion, lien local) et met les autres en file. Dix résolutions au plus tournent en même temps, et chaque requête DNS inverse attend au plus `DnsResolutionTimeoutMs` (3 secondes par défaut).
 
-- répond depuis les alias statiques (`CustomHostAliases`, `--alias`), puis depuis son cache mémoire et le fichier de cache (`DnsCacheFilePath`) ;
-- ignore les adresses de `DnsExcludedNetworks` (diffusion, multidiffusion, lien local) ;
-- sinon met l'adresse en file ; dix résolutions au plus tournent en même temps, chaque requête DNS inverse attendant au plus `DnsResolutionTimeoutMs` (3 secondes par défaut) ;
-- distingue les deux façons dont une requête peut échouer. Un serveur qui ne répond pas à temps n'est pas un enregistrement absent : rien n'est mis en cache et l'adresse est reposée une minute plus tard. Une réponse indiquant qu'aucun enregistrement n'existe est mise en cache comme nom vide et reposée 24 heures plus tard, pour qu'un enregistrement ajouté ensuite à la zone DNS finisse par être trouvé ;
-- pour une adresse publique, demande aussi au service RDAP `rdap.org` l'organisation propriétaire du bloc d'adresses, sauf si `ResolveIpOwners` vaut `false` ou si `--no-rdap` est donné ; le nom DNS est gardé quand il existe, l'organisation sert sinon. Après deux échecs RDAP consécutifs, les requêtes RDAP sont suspendues 60 secondes. Une requête RDAP sans réponse ne signifie pas « aucun propriétaire » : une adresse sans nom DNS n'est pas mise en cache, un nom DNS est mis en cache sans organisation, et l'adresse est reposée 15 minutes plus tard ;
-- remet d'elle-même en file une adresse dont la requête est restée sans réponse, une fois son délai écoulé, même quand plus aucun balayage ne voit la connexion. Elle le fait trois fois au plus, pour qu'un serveur coupé d'Internet n'interroge pas sans fin pour des flux disparus ; ensuite, seul un balayage qui revoit l'adresse la remet en file. Le compte repart de zéro dès que l'adresse obtient une réponse. Au démarrage, un flux relu du journal d'audit sans nom prend le nom du cache ; quand le cache n'en a pas, son adresse est mise en file comme celle d'un flux vu par un balayage.
+Pour une adresse publique, le résolveur demande aussi au service RDAP `rdap.org` quelle organisation possède le bloc d'adresses, sauf si `ResolveIpOwners` vaut `false` ou si `--no-rdap` est donné. Le nom DNS reste prioritaire : l'organisation ne s'affiche que pour une adresse sans nom DNS. Après deux échecs RDAP consécutifs, le résolveur suspend RDAP pendant 60 secondes.
+
+Si le serveur DNS ne répond pas dans le délai, rien n'est mis en cache et l'adresse est reposée une minute plus tard. S'il répond qu'aucun enregistrement n'existe, l'adresse est mise en cache avec un nom vide et reposée 24 heures plus tard, pour qu'un enregistrement ajouté ensuite à la zone finisse par être trouvé. Une requête RDAP restée sans réponse laisse hors du cache une adresse sans nom DNS, met en cache sans organisation une adresse qui en a un, et repose l'adresse 15 minutes plus tard.
+
+À l'expiration de son délai, le résolveur remet en file une adresse restée sans réponse, même si plus aucun balayage ne voit la connexion. Il le fait trois fois au plus, pour qu'un serveur coupé d'Internet n'interroge pas sans fin pour des flux disparus. Au-delà, l'adresse ne repart en file que si un balayage la revoit. Le compte repart de zéro dès qu'elle obtient une réponse.
+
+Au démarrage, un flux relu du journal d'audit sans nom prend celui du cache, ou part en file s'il n'y en a pas.
 
 `--no-dns` (`ResolveRemoteHostNames: false`) coupe tout le résolveur : aucune requête DNS ni RDAP n'est envoyée et les alias ne s'appliquent pas.
 
