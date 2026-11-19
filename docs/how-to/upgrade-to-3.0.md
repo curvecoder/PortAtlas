@@ -2,7 +2,7 @@
 
 # Upgrade from 2.x to 3.0
 
-PortAtlas 3.0 is the new name of NetFlowAudit. The functional behavior remains identical, but the executable name, the default configuration file name and the repository URL have changed. Update scripts, scheduled tasks, services and units before deploying 3.0.
+PortAtlas 3.0 is the new name of NetFlowAudit. It behaves like 2.x; the executable name, the default configuration file name and the repository URL change. Update scripts, scheduled tasks, services and units before deploying 3.0.
 
 ## Executable name
 
@@ -30,8 +30,8 @@ The project repository has moved:
 - Old: `https://github.com/curvecoder/NetFlowAudit`
 - New: `https://github.com/curvecoder/PortAtlas`
 
-Update your git remotes, documentation bookmarks and download links accordingly.
+Update your git remotes, documentation bookmarks and download links.
 
 ## HTML maps
 
-Maps generated with 2.x proposed a command starting with `NetFlowAudit.Cli map` in their copy box. Regenerating maps with 3.0 generates the `PortAtlas map` command syntax.
+Maps generated with 2.x proposed a command starting with `NetFlowAudit.Cli map` in their copy box. Regenerate them with 3.0 to get the `PortAtlas map` syntax.

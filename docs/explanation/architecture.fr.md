@@ -2,7 +2,7 @@
 
 # Fonctionnement de PortAtlas
 
-PortAtlas répond à une question : avec quels services une machine communique-t-elle, sur des jours ou des semaines, et quel programme en est à l'origine ? Cette page explique comment l'agent obtient cette réponse et pourquoi il est construit ainsi. Les options et formats exacts sont dans la [référence](../reference/cli.fr.md).
+PortAtlas enregistre avec quels services une machine communique, sur des jours ou des semaines, et quel programme en est à l'origine. Cette page explique comment l'agent obtient cette information et pourquoi il est construit ainsi. Les options et formats exacts sont dans la [référence](../reference/cli.fr.md).
 
 ## Lire les sockets plutôt que capturer les paquets
 

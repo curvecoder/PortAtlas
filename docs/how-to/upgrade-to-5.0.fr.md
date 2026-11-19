@@ -40,7 +40,7 @@ Mettez à jour les scripts qui lisent ces fichiers par leur nom par défaut.
 - Chaque matrice ne remplace le fichier précédent qu'une fois complète : un export interrompu laisse la matrice précédente, là où la 4.x pouvait la laisser vide ou tronquée. Un chemin de sortie qui est un dossier est refusé avant toute écriture.
 - Les colonnes `ExecutablePath` et `UserName` d'une règle viennent de la ligne de journal vue le plus récemment qui porte une valeur, comme les noms d'hôte. En 4.x elles venaient de la première ligne lue, et pouvaient donc changer avec l'ordre des journaux donnés à `--input`.
 
-**Ce qu'il faut faire.** Un programme qui lit une matrice comme du texte doit sauter la marque d'ordre des octets au début du fichier. Rien d'autre.
+**Ce qu'il faut faire.** Un programme qui lit une matrice comme du texte doit sauter la marque d'ordre des octets au début du fichier. Aucune autre modification n'est nécessaire.
 
 **Comment le vérifier.** Ouvrez une matrice dans un afficheur hexadécimal : elle commence par `EF BB BF`. Exportez les mêmes journaux deux fois, avec `--input` dans deux ordres : les deux matrices sont identiques.
 

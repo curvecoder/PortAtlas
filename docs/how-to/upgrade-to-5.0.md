@@ -40,7 +40,7 @@ Update the scripts that read these files by their default name.
 - Each matrix replaces the previous file only once complete: an interrupted export leaves the previous matrix, where 4.x could leave it empty or truncated. An output path that is a folder is refused before anything is written.
 - The `ExecutablePath` and `UserName` columns of a rule come from the most recently seen log row that has a value, like the host names. In 4.x they came from the first row read, so they could change with the order of the logs given to `--input`.
 
-**What to do.** A program that reads a matrix as text must skip the byte order mark at the start of the file. Nothing else.
+**What to do.** A program that reads a matrix as text must skip the byte order mark at the start of the file. No other change is needed.
 
 **How to check.** Open a matrix in a hexadecimal viewer: it starts with `EF BB BF`. Export the same logs twice, with `--input` in two orders: the two matrices are identical.
 

@@ -2,7 +2,7 @@
 
 # How PortAtlas works
 
-PortAtlas answers one question: which services does a machine talk to, over days or weeks, and which program is responsible? This page explains how the agent collects that answer and why it is built this way. The exact options and formats are in the [reference](../reference/cli.md).
+PortAtlas records which services a machine talks to, over days or weeks, and which program is responsible. This page explains how the agent collects that information and why it is built this way. The exact options and formats are in the [reference](../reference/cli.md).
 
 ## Reading sockets instead of capturing packets
 

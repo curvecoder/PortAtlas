@@ -2,7 +2,7 @@
 
 # Passer de la 2.x à la 3.0
 
-PortAtlas 3.0 est le nouveau nom de NetFlowAudit. Le comportement fonctionnel reste identique, mais le nom de l'exécutable, le nom par défaut du fichier de configuration et l'adresse du dépôt changent. Mettez à jour scripts, tâches planifiées, services et unités avant de déployer la 3.0.
+PortAtlas 3.0 est le nouveau nom de NetFlowAudit. Il se comporte comme la 2.x ; le nom de l'exécutable, le nom par défaut du fichier de configuration et l'adresse du dépôt changent. Mettez à jour scripts, tâches planifiées, services et unités avant de déployer la 3.0.
 
 ## Nom de l'exécutable
 
@@ -34,4 +34,4 @@ Mettez à jour vos remotes Git, favoris de documentation et liens de télécharg
 
 ## Cartes HTML
 
-Les cartes générées avec la 2.x proposaient une commande commençant par `NetFlowAudit.Cli map` dans leur zone de copie. Régénérer les cartes avec la 3.0 produit la syntaxe de commande `PortAtlas map`.
+Les cartes générées avec la 2.x proposaient une commande commençant par `NetFlowAudit.Cli map` dans leur zone de copie. Régénérez-les avec la 3.0 pour obtenir la syntaxe `PortAtlas map`.
