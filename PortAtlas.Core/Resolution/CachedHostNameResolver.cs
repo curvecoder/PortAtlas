@@ -39,6 +39,16 @@ public sealed class CachedHostNameResolver(
     // resolutions only this long, so that the end of an audit is not held by a DNS server that does not answer.
     internal static readonly TimeSpan QueueShutdownWaitLimit = TimeSpan.FromSeconds(2);
 
+    /// <summary>
+    /// Number of times an address that got no answer is queued again on its own, without a scan seeing it again. The
+    /// count starts over once the address gets an answer.
+    /// </summary>
+    internal const int MaxScheduledRetries = 3;
+
+    // A timer counts elapsed ticks while the retry delay is checked against the wall clock: without this margin a
+    // timer firing a few milliseconds early would find the address not due yet and the retry would be lost.
+    internal static readonly TimeSpan RetryTimerMargin = TimeSpan.FromSeconds(1);
+
     private const string CustomSource = "Custom";
     private const string ExcludedSource = "Excluded";
 
@@ -55,6 +65,11 @@ public sealed class CachedHostNameResolver(
     // are not queued again. An address present here may also have a cache entry: its DNS name is kept while the owner
     // lookup is pending.
     private readonly ConcurrentDictionary<IPAddress, DateTimeOffset> _retryNotBefore = new();
+    // Queues an unanswered address again once its retry delay has passed: an address only seen by a short connection
+    // would otherwise stay unnamed, since a scan no longer queues it. Both dictionaries are guarded by _retryTimers.
+    private readonly Dictionary<IPAddress, ITimer> _retryTimers = [];
+    private readonly Dictionary<IPAddress, int> _scheduledRetryCounts = [];
+    private bool _disposed;
     private readonly Channel<IPAddress> _channel = Channel.CreateUnbounded<IPAddress>();
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _concurrencySemaphore = new(10, 10);
@@ -430,6 +445,8 @@ public sealed class CachedHostNameResolver(
                                 _queuedAddresses.TryRemove(address, out _);
                             }
 
+                            UpdateRetrySchedule(address);
+
                             if (!string.IsNullOrWhiteSpace(resolved))
                             {
                                 HostNameResolved?.Invoke(this, new HostNameResolvedEventArgs(address, resolved));
@@ -454,6 +471,66 @@ public sealed class CachedHostNameResolver(
             // OperationCanceledException that is expected here. A failure of a resolution or of a HostNameResolved
             // subscriber is not reported to the disposer either, as before these tasks were awaited.
             await Task.WhenAll(inFlight).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+        }
+    }
+
+    // Only queued resolutions are retried on their own: a caller of ResolveHostNameAsync gets the outcome and decides.
+    // The number of retries is capped so that a server cut off from the Internet does not keep querying its DNS server
+    // for flows that are gone; a scan that sees the address again still queues it once the delay has passed.
+    private void UpdateRetrySchedule(IPAddress address)
+    {
+        lock (_retryTimers)
+        {
+            if (_retryTimers.Remove(address, out var previous))
+            {
+                previous.Dispose();
+            }
+
+            if (_disposed || !_retryNotBefore.TryGetValue(address, out var notBefore))
+            {
+                _scheduledRetryCounts.Remove(address);
+                return;
+            }
+
+            var count = _scheduledRetryCounts.GetValueOrDefault(address) + 1;
+            if (count > MaxScheduledRetries)
+            {
+                return;
+            }
+
+            _scheduledRetryCounts[address] = count;
+            var delay = notBefore - _timeProvider.GetUtcNow();
+            _retryTimers[address] = _timeProvider.CreateTimer(
+                QueueRetry,
+                address,
+                (delay > TimeSpan.Zero ? delay : TimeSpan.Zero) + RetryTimerMargin,
+                Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    // Runs on a timer thread, where an exception would end the process. None can escape: the timer exists only once
+    // the queue worker runs, so QueueResolution never starts it on a disposed token, and after disposal the completed
+    // channel refuses the write.
+    private void QueueRetry(object? state)
+    {
+        if (state is IPAddress address && !Volatile.Read(ref _disposed))
+        {
+            QueueResolution(address);
+        }
+    }
+
+    private void StopRetryTimers()
+    {
+        lock (_retryTimers)
+        {
+            _disposed = true;
+            foreach (var timer in _retryTimers.Values)
+            {
+                timer.Dispose();
+            }
+
+            _retryTimers.Clear();
+            _scheduledRetryCounts.Clear();
         }
     }
 
@@ -485,6 +562,7 @@ public sealed class CachedHostNameResolver(
     /// <inheritdoc />
     public void Dispose()
     {
+        StopRetryTimers();
         _channel.Writer.TryComplete();
         _cts.Cancel();
         _cts.Dispose();
@@ -508,6 +586,7 @@ public sealed class CachedHostNameResolver(
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        StopRetryTimers();
         _channel.Writer.TryComplete();
         await _cts.CancelAsync().ConfigureAwait(false);
 

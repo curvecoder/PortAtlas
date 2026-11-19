@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Resolution;
 using Xunit;
 
@@ -274,6 +275,77 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
         resolver.TryGetCachedEntry(Server, out _).Should().BeFalse();
     }
 
+    [Fact]
+    public async Task QueueResolution_WhenOwnerLookupUnavailable_AsksAgainOnceTheRdapDelayHasPassedWithoutAnotherScan()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider(_clock.GetUtcNow());
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.NotFound());
+        var owners = new ScriptedOwnerResolver(call => call == 1
+            ? OwnerAnswer.Unavailable()
+            : OwnerAnswer.Found(new IpOwnerMetadata("Example Networks", null, null, null)));
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners, clock: clock);
+        var resolved = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        resolver.HostNameResolved += (_, e) => resolved.TrySetResult(e.HostName);
+        resolver.QueueResolution(PublicServer);
+        await WaitUntilAsync(() => owners.Calls == 1 && !resolver.IsQueued(PublicServer));
+
+        // Act
+        clock.Advance(CachedHostNameResolver.RdapUnavailableRetryDelay + CachedHostNameResolver.RetryTimerMargin);
+        await WaitUntilAsync(() => resolved.Task.IsCompleted);
+        var name = await resolved.Task;
+
+        // Assert
+        name.Should().Be("Example Networks");
+    }
+
+    [Fact]
+    public async Task QueueResolution_WhenDnsTimedOut_AsksAgainOnceTheTransientDelayHasPassedWithoutAnotherScan()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider(_clock.GetUtcNow());
+        var dns = new ScriptedReverseDnsLookup(call => call == 1 ? DnsAnswer.Never() : DnsAnswer.Now("SVLVBDD67"));
+        await using var resolver = CreateResolver(dns, TimeSpan.FromMilliseconds(50), clock: clock);
+        var resolved = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        resolver.HostNameResolved += (_, e) => resolved.TrySetResult(e.HostName);
+        resolver.QueueResolution(Server);
+        await WaitUntilAsync(() => dns.Calls == 1 && !resolver.IsQueued(Server));
+
+        // Act
+        clock.Advance(CachedHostNameResolver.TransientFailureRetryDelay + CachedHostNameResolver.RetryTimerMargin);
+        await WaitUntilAsync(() => resolved.Task.IsCompleted);
+        var name = await resolved.Task;
+
+        // Assert
+        name.Should().Be("SVLVBDD67");
+    }
+
+    [Fact]
+    public async Task QueueResolution_WhenOwnerLookupStaysUnavailable_StopsAskingOnItsOwnAfterTheRetryLimit()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider(_clock.GetUtcNow());
+        var dns = new ScriptedReverseDnsLookup(_ => DnsAnswer.NotFound());
+        var owners = new ScriptedOwnerResolver(_ => OwnerAnswer.Unavailable());
+        await using var resolver = CreateResolver(dns, TimeSpan.FromSeconds(1), owners: owners, clock: clock);
+        resolver.QueueResolution(PublicServer);
+        await WaitUntilAsync(() => owners.Calls == 1 && !resolver.IsQueued(PublicServer));
+
+        // Act
+        for (var retry = 1; retry <= CachedHostNameResolver.MaxScheduledRetries; retry++)
+        {
+            clock.Advance(CachedHostNameResolver.RdapUnavailableRetryDelay + CachedHostNameResolver.RetryTimerMargin);
+            var expectedCalls = 1 + retry;
+            await WaitUntilAsync(() => owners.Calls == expectedCalls && !resolver.IsQueued(PublicServer));
+        }
+
+        clock.Advance(CachedHostNameResolver.RdapUnavailableRetryDelay + CachedHostNameResolver.RetryTimerMargin);
+        await Task.Delay(300);
+
+        // Assert
+        owners.Calls.Should().Be(1 + CachedHostNameResolver.MaxScheduledRetries);
+    }
+
     private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
@@ -288,8 +360,9 @@ public sealed class CachedHostNameResolverRetryTests : IDisposable
         IReverseDnsLookup dns,
         TimeSpan timeout,
         PersistentDnsCacheStore? store = null,
-        IIpOrganizationResolver? owners = null) =>
-        new(timeout, cacheStore: store, organizationResolver: owners, reverseDnsLookup: dns, timeProvider: _clock);
+        IIpOrganizationResolver? owners = null,
+        TimeProvider? clock = null) =>
+        new(timeout, cacheStore: store, organizationResolver: owners, reverseDnsLookup: dns, timeProvider: clock ?? _clock);
 
     private sealed class ManualTimeProvider(DateTimeOffset start) : TimeProvider
     {
