@@ -351,6 +351,48 @@ public sealed class CliCharacterizationTests : IDisposable
         (await File.ReadAllTextAsync(html)).Should().Contain("db-oracle.example.test");
     }
 
+    // A {Date} or {Timestamp} token gives each audit start a new log: the expanded path names a log of this very
+    // second or day, which is not the one the operator means.
+    [Theory]
+    [InlineData("map", "{Timestamp}")]
+    [InlineData("export rules", "{Timestamp}")]
+    [InlineData("export ndjson", "{Date}")]
+    [InlineData("resolve", "{timestamp}")]
+    public async Task Main_WhenConfiguredAuditPathHoldsATimeTokenAndNoInputIsGiven_ReturnsExitCodeOneAskingForInput(string command, string token)
+    {
+        // Arrange
+        var template = Path.Combine(_directory, "audit_{HostName}_" + token + ".csv");
+        var config = await WriteConfigurationAsync(new { OutputCsvPath = template, DnsCacheFilePath = Path.Combine(_directory, "cache.json") });
+        var output = Path.Combine(_directory, "time-token.out");
+        string[] outputArguments = command switch
+        {
+            "map" => ["--html", output],
+            "resolve" => ["--output-cache", output],
+            _ => ["-o", output]
+        };
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main([.. command.Split(' '), .. outputArguments, "--config", config]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        var pattern = OutputFilePathResolver.Resolve(Path.Combine(_directory, "audit_{HostName}_*.csv"));
+        capturedError.ToString().Should().Contain(
+            $"OutputCsvPath '{template}' names a new audit log at each audit start, so it names no log to read: give the logs with --input, for example --input \"{pattern}\".");
+        File.Exists(output).Should().BeFalse();
+    }
+
     [Fact]
     public async Task Main_WhenConfigurationEnablesRemovedIsolatedMode_ReturnsNonZeroExitCode()
     {

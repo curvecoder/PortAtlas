@@ -9,6 +9,33 @@ public static class OutputFilePathResolver
 {
     private static readonly char[] InvalidFileNameCharacters = Path.GetInvalidFileNameChars();
 
+    private static readonly string[] TimeTokens = ["{Date}", "{Timestamp}"];
+
+    /// <summary>
+    /// Tells whether a path template holds a token that changes with the time it is expanded at.
+    /// </summary>
+    /// <param name="template">The raw path template.</param>
+    /// <returns><see langword="true"/> when the template holds <c>{Date}</c> or <c>{Timestamp}</c>, in any case.</returns>
+    public static bool HasTimeToken(string template) =>
+        !string.IsNullOrEmpty(template) && TimeTokens.Any(token => template.Contains(token, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Expands a path template into a wildcard pattern matching every file it gave, whatever the time it was expanded at.
+    /// </summary>
+    /// <param name="template">The raw path template.</param>
+    /// <param name="machineName">The target machine or server name (defaults to Environment.MachineName).</param>
+    /// <returns>The path with <c>{Date}</c> and <c>{Timestamp}</c> replaced by <c>*</c> and the other tokens expanded.</returns>
+    public static string ResolveAsPattern(string template, string? machineName = null)
+    {
+        if (string.IsNullOrWhiteSpace(template))
+        {
+            return template;
+        }
+
+        var pattern = TimeTokens.Aggregate(template, (current, token) => current.Replace(token, "*", StringComparison.OrdinalIgnoreCase));
+        return Resolve(pattern, machineName);
+    }
+
     /// <summary>
     /// Replaces dynamic placeholder tokens ({ServerName}, {HostName}, {Date}, {Timestamp}) within the supplied file path template.
     /// Preserves directory paths while sanitizing dynamic replacement values against illegal filesystem characters.

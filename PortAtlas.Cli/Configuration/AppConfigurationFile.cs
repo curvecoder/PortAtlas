@@ -8,7 +8,8 @@ namespace PortAtlas.Cli.Configuration;
 /// </summary>
 /// <param name="Configuration">Configuration values (defaults when the file is missing).</param>
 /// <param name="FilePath">Path of the configuration file, used to save exclusions added from the dashboard.</param>
-public sealed record LoadedAppConfiguration(AppConfiguration Configuration, string FilePath);
+/// <param name="OutputCsvPathTemplate">The <c>OutputCsvPath</c> value before its tokens are expanded.</param>
+public sealed record LoadedAppConfiguration(AppConfiguration Configuration, string FilePath, string OutputCsvPathTemplate);
 
 /// <summary>
 /// Reads the JSON configuration file and resolves the file name tokens of its output paths.
@@ -63,7 +64,8 @@ public static class AppConfigurationFile
         if (existingPath is not null)
         {
             // Tokens are expanded here so that every command reads the same file names the audit writes.
-            return new LoadedAppConfiguration(ResolveOutputPathTokens(Read(existingPath)), existingPath);
+            var read = Read(existingPath);
+            return new LoadedAppConfiguration(ResolveOutputPathTokens(read), existingPath, read.OutputCsvPath);
         }
 
         // A path given on the command line states which file the operator wants. A mistyped one would otherwise start
@@ -75,7 +77,8 @@ public static class AppConfigurationFile
 
         // Without the option, a missing portatlas.json is the plain first run: the defaults apply, and an exclusion
         // added from the dashboard creates the file in the working directory.
-        return new LoadedAppConfiguration(ResolveOutputPathTokens(new AppConfiguration()), inWorkingDirectory);
+        var defaults = new AppConfiguration();
+        return new LoadedAppConfiguration(ResolveOutputPathTokens(defaults), inWorkingDirectory, defaults.OutputCsvPath);
     }
 
     /// <summary>

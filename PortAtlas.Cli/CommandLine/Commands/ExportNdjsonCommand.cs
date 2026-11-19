@@ -27,7 +27,13 @@ public sealed class ExportNdjsonCommand : Command
 
         SetAction(async (parseResult, cancellationToken) =>
         {
-            var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
+            var loaded = AppConfigurationFile.Load(parseResult.GetValue(_configFile));
+            if (await _inputs.RefuseTimeDependentDefaultAsync(parseResult, loaded.OutputCsvPathTemplate).ConfigureAwait(false))
+            {
+                return 1;
+            }
+
+            var config = loaded.Configuration;
             var outputPath = Path.GetFullPath(OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.AuditNdjson));
 
             // The output replaces its previous version once every log has been read: written over a log named by its

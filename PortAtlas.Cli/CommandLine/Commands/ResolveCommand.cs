@@ -46,7 +46,8 @@ public sealed class ResolveCommand : Command
 
         SetAction(async (parseResult, cancellationToken) =>
         {
-            var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
+            var loaded = AppConfigurationFile.Load(parseResult.GetValue(_configFile));
+            var config = loaded.Configuration;
             var cacheGiven = parseResult.GetValue(_cache) is { Length: > 0 };
             var caches = parseResult.GetValue(_cache) is { Length: > 0 } given ? given : [config.DnsCacheFilePath];
 
@@ -55,6 +56,11 @@ public sealed class ResolveCommand : Command
             IReadOnlyList<string> auditFiles = [];
             if (_inputs.HasExplicitInput(parseResult) || !cacheGiven)
             {
+                if (await _inputs.RefuseTimeDependentDefaultAsync(parseResult, loaded.OutputCsvPathTemplate).ConfigureAwait(false))
+                {
+                    return 1;
+                }
+
                 // Each log is rewritten, the CSV and the NDJSON of an audit alike; an enriched copy next to its
                 // original is the output of an earlier run and is not enriched again.
                 auditFiles = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.EachOriginalLog, cancellationToken).ConfigureAwait(false);

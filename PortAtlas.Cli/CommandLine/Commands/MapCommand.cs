@@ -33,7 +33,13 @@ public sealed class MapCommand : Command
 
         SetAction(async (parseResult, cancellationToken) =>
         {
-            var config = BuildConfiguration(parseResult, AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration);
+            var loaded = AppConfigurationFile.Load(parseResult.GetValue(_configFile));
+            if (await _inputs.RefuseTimeDependentDefaultAsync(parseResult, loaded.OutputCsvPathTemplate).ConfigureAwait(false))
+            {
+                return 1;
+            }
+
+            var config = BuildConfiguration(parseResult, loaded.Configuration);
             var files = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, CsvExtension, AuditDuplicatePolicy.OneFilePerAudit, cancellationToken).ConfigureAwait(false);
             if (files.Count == 0)
             {

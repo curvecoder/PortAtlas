@@ -23,6 +23,29 @@ internal sealed class AuditInputOptionSet
     public bool HasExplicitInput(ParseResult parseResult) => parseResult.GetValue(_input) is { Length: > 0 };
 
     /// <summary>
+    /// Refuses to read the configuration default when its path changes with the time it is expanded at, and tells on
+    /// the error output how to name the logs.
+    /// </summary>
+    /// <param name="parseResult">Parsed command line.</param>
+    /// <param name="outputCsvPathTemplate"><c>OutputCsvPath</c> of the configuration, before its tokens are expanded.</param>
+    /// <returns><see langword="true"/> when the command must stop with exit code 1.</returns>
+    public async Task<bool> RefuseTimeDependentDefaultAsync(ParseResult parseResult, string outputCsvPathTemplate)
+    {
+        // {Date} and {Timestamp} give each audit start a new log: expanded now, they name a log of this day or second,
+        // which is not the log the operator means.
+        if (HasExplicitInput(parseResult) || !OutputFilePathResolver.HasTimeToken(outputCsvPathTemplate))
+        {
+            return false;
+        }
+
+        var pattern = OutputFilePathResolver.ResolveAsPattern(outputCsvPathTemplate);
+        await Console.Error.WriteLineAsync(
+            $"OutputCsvPath '{outputCsvPathTemplate}' names a new audit log at each audit start, so it names no log to read: " +
+            $"give the logs with --input, for example --input \"{pattern}\".").ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
     /// Tells whether a file is given by its own path to the inputs, rather than found in a directory or a pattern.
     /// </summary>
     /// <param name="parseResult">Parsed command line.</param>

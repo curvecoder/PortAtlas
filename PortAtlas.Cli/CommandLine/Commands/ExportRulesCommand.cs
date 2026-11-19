@@ -38,7 +38,13 @@ public sealed class ExportRulesCommand : Command
 
         SetAction(async (parseResult, cancellationToken) =>
         {
-            var config = _filters.Apply(parseResult, AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration);
+            var loaded = AppConfigurationFile.Load(parseResult.GetValue(_configFile));
+            if (await _inputs.RefuseTimeDependentDefaultAsync(parseResult, loaded.OutputCsvPathTemplate).ConfigureAwait(false))
+            {
+                return 1;
+            }
+
+            var config = _filters.Apply(parseResult, loaded.Configuration);
             var files = await _inputs.ResolveFilesAsync(parseResult, config.OutputCsvPath, AuditInputPathResolver.AuditLogExtensions, AuditDuplicatePolicy.OneFilePerAudit, cancellationToken).ConfigureAwait(false);
             if (files.Count == 0)
             {
