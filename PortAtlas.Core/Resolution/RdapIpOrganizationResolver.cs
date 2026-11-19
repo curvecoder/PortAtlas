@@ -44,7 +44,7 @@ public sealed class RdapIpOrganizationResolver : IIpOrganizationResolver, IDispo
     /// Initializes a new instance of the RDAP resolver with optional configuration overrides.
     /// </summary>
     /// <param name="httpClient">Injected HTTP client (or null to initialize default internal client).</param>
-    /// <param name="requestTimeout">Maximum timeout per RDAP request (default: 2s).</param>
+    /// <param name="requestTimeout">Maximum time per RDAP lookup, redirect and connection included (default: 4s).</param>
     /// <param name="circuitBreakerThreshold">Consecutive failure count before tripping the circuit breaker (default: 2).</param>
     /// <param name="circuitBreakerCooldown">Cooldown period before permitting a trial request after trip (default: 60s).</param>
     public RdapIpOrganizationResolver(
@@ -53,7 +53,7 @@ public sealed class RdapIpOrganizationResolver : IIpOrganizationResolver, IDispo
         int circuitBreakerThreshold = 2,
         TimeSpan? circuitBreakerCooldown = null)
     {
-        _requestTimeout = requestTimeout ?? TimeSpan.FromSeconds(2);
+        _requestTimeout = requestTimeout ?? TimeSpan.FromSeconds(4);
         _circuitBreakerThreshold = circuitBreakerThreshold;
         _circuitBreakerCooldown = circuitBreakerCooldown ?? TimeSpan.FromSeconds(60);
 
@@ -64,9 +64,10 @@ public sealed class RdapIpOrganizationResolver : IIpOrganizationResolver, IDispo
         }
         else
         {
+            // No connection timeout of its own: rdap.org redirects to the registry, so a lookup opens two HTTPS
+            // connections, and a 1-second limit on each failed lookups that the diagnostic completed.
             var handler = new SocketsHttpHandler
             {
-                ConnectTimeout = TimeSpan.FromSeconds(1),
                 PooledConnectionLifetime = TimeSpan.FromMinutes(5)
             };
 

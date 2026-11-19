@@ -80,6 +80,24 @@ public sealed class IpResolutionDiagnosticReporterTests
     }
 
     [Fact]
+    public async Task RunDiagnosticAsync_WhenRdapTimeoutConfigured_ProbesWithTheAuditRdapTimeout()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        var config = new AppConfiguration { RdapTimeoutMs = 4500, DnsResolutionTimeoutMs = 500 };
+        using var cancelled = new CancellationTokenSource();
+        await cancelled.CancelAsync();
+
+        // Act
+        // A public address reaches the RDAP step; the cancelled token stops each query before it is sent.
+        await reporter.RunDiagnosticAsync("8.8.8.8", config, cancelled.Token);
+
+        // Assert
+        output.ToString().Should().Contain("Configured timeout     : 4500 ms (RdapTimeoutMs)");
+    }
+
+    [Fact]
     public async Task RunDiagnosticAsync_WhenTheAddressHasAnAlias_SendsNoQueryAndSynthesizesTheAliasLikeTheAudit()
     {
         // Arrange

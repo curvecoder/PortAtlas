@@ -23,7 +23,8 @@ internal static class ConfigurationKeyValidator
     {
         [nameof(AppConfiguration.ScanIntervalSeconds)] = 1,
         [nameof(AppConfiguration.LogRewriteIntervalMinutes)] = 1,
-        [nameof(AppConfiguration.DnsResolutionTimeoutMs)] = 1
+        [nameof(AppConfiguration.DnsResolutionTimeoutMs)] = 1,
+        [nameof(AppConfiguration.RdapTimeoutMs)] = 1
     }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>

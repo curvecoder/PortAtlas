@@ -757,6 +757,8 @@ public sealed class CliCharacterizationTests : IDisposable
     [InlineData("LogRewriteIntervalMinutes", -1)]
     [InlineData("DnsResolutionTimeoutMs", 0)]
     [InlineData("DnsResolutionTimeoutMs", -100)]
+    [InlineData("RdapTimeoutMs", 0)]
+    [InlineData("RdapTimeoutMs", -100)]
     public async Task Main_WhenABoundedKeyOfTheConfigurationIsBelowOne_ReturnsExitCodeOneNamingTheKeyAndTheMinimum(string key, int value)
     {
         // Arrange

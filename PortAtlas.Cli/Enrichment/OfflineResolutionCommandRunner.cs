@@ -11,18 +11,20 @@ namespace PortAtlas.Cli.Enrichment;
 /// <param name="dnsResolutionTimeout">Reverse DNS timeout of the default enricher (<c>DnsResolutionTimeoutMs</c>); ignored when <paramref name="enricher"/> is given.</param>
 /// <param name="resolveHostNames">When false, the default enricher sends no reverse DNS query (<c>ResolveRemoteHostNames</c>).</param>
 /// <param name="resolveIpOwners">When false, the default enricher sends no RDAP query (<c>ResolveIpOwners</c>).</param>
+/// <param name="rdapTimeout">RDAP timeout of the default enricher (<c>RdapTimeoutMs</c>); ignored when <paramref name="enricher"/> is given.</param>
 public sealed class OfflineResolutionCommandRunner(
     OfflineAuditEnricher? enricher = null,
     TimeSpan? dnsResolutionTimeout = null,
     bool resolveHostNames = true,
-    bool resolveIpOwners = true)
+    bool resolveIpOwners = true,
+    TimeSpan? rdapTimeout = null)
 {
     // 128 + SIGINT, the exit code shells report for a command stopped by Ctrl+C.
     private const int InterruptedExitCode = 130;
 
     private readonly OfflineAuditEnricher _enricher = enricher ?? new OfflineAuditEnricher(
         offlineResolver: new OfflineDnsResolver(
-            organizationResolver: resolveIpOwners ? new RdapIpOrganizationResolver() : null,
+            organizationResolver: resolveIpOwners ? new RdapIpOrganizationResolver(requestTimeout: rdapTimeout) : null,
             resolutionTimeout: dnsResolutionTimeout,
             logThrottlingNotice: Console.WriteLine,
             resolveHostNames: resolveHostNames),

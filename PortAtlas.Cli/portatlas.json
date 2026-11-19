@@ -50,6 +50,7 @@
   "ResolveRemoteHostNames": true,
   "DnsResolutionTimeoutMs": 3000,
   "ResolveIpOwners": true,
+  "RdapTimeoutMs": 4000,
   "DnsCacheFilePath": "portatlas_dns_cache.json",
   "DnsExcludedNetworks": [
     "0.0.0.0",

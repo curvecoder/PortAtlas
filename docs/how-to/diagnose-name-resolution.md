@@ -22,6 +22,10 @@ PortAtlas audit --dns-timeout-ms 6000
 
 Check the new value with `PortAtlas lookup 192.0.2.25 --dns-timeout-ms 6000`. Resolution runs in the background, so a longer wait does not delay the scans. An address whose query timed out is asked again one minute later; an address cached without a name (step 2 shows an empty `HostName` with `Source: None`) is asked again 24 hours after its `Resolved at` date.
 
+## When RDAP is slow
+
+Step 5 shows the RDAP call duration and the timeout used, the same as the audit and `resolve` (`RdapTimeoutMs`, 4000 ms by default). `rdap.org` redirects each query to the registry that holds the address, so a lookup opens two HTTPS connections. If step 5 reports `TIMEOUT`, or a duration close to the timeout, raise `RdapTimeoutMs` in the configuration file. An address without DNS name whose RDAP query got no answer is not cached: it is asked again 15 minutes later.
+
 ## Why ping -a finds a name and PortAtlas does not
 
 On Windows, `ping -a` asks the hosts file, the DNS cache, NetBIOS, LLMNR and the DNS servers with the domain suffixes. PortAtlas sends only a reverse DNS query (a `PTR` record in `in-addr.arpa`). A machine known through NetBIOS or LLMNR but without a `PTR` record therefore stays unnamed. The reverse DNS step of `lookup` shows the error returned.

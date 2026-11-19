@@ -174,7 +174,7 @@ public static class ContinuousAuditRunner
         var dnsCacheStore = new PersistentDnsCacheStore(config.DnsCacheFilePath);
 
         using var orgResolver = config.ResolveIpOwners
-            ? new RdapIpOrganizationResolver()
+            ? new RdapIpOrganizationResolver(requestTimeout: TimeSpan.FromMilliseconds(config.RdapTimeoutMs))
             : (IIpOrganizationResolver)new NoOpIpOrganizationResolver();
 
         // A DNS cache that cannot be read stops the audit here (DnsCacheUnreadableException, shown by Program.Main),

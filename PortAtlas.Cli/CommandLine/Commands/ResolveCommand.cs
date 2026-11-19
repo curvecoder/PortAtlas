@@ -80,7 +80,8 @@ public sealed class ResolveCommand : Command
             var runner = new OfflineResolutionCommandRunner(
                 dnsResolutionTimeout: dnsTimeout,
                 resolveHostNames: config.ResolveRemoteHostNames,
-                resolveIpOwners: config.ResolveIpOwners);
+                resolveIpOwners: config.ResolveIpOwners,
+                rdapTimeout: TimeSpan.FromMilliseconds(config.RdapTimeoutMs));
             return await runner.RunAsync(auditFiles, caches, options, cancellationToken).ConfigureAwait(false);
         });
     }

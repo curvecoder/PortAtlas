@@ -19,9 +19,9 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
 
     private static HttpClient CreateRdapHttpClient()
     {
+        // No connection timeout of its own: RdapTimeoutMs bounds the whole query, as in the audit.
         var handler = new SocketsHttpHandler
         {
-            ConnectTimeout = TimeSpan.FromSeconds(3),
             PooledConnectionLifetime = TimeSpan.FromMinutes(2)
         };
         var client = new HttpClient(handler, disposeHandler: true);
@@ -237,12 +237,12 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
         {
             var rdapUri = $"https://rdap.org/ip/{address}";
             await _output.WriteLineAsync($"  * HTTP request target    : GET {rdapUri}").ConfigureAwait(false);
-            await _output.WriteLineAsync("  * Configured timeout     : 4000 ms").ConfigureAwait(false);
+            await _output.WriteLineAsync($"  * Configured timeout     : {config.RdapTimeoutMs} ms (RdapTimeoutMs)").ConfigureAwait(false);
 
             try
             {
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(4));
+                timeoutCts.CancelAfter(TimeSpan.FromMilliseconds(config.RdapTimeoutMs));
 
                 using var response = await RdapHttpClient.GetAsync(rdapUri, HttpCompletionOption.ResponseHeadersRead, timeoutCts.Token).ConfigureAwait(false);
                 rdapSw.Stop();
@@ -281,7 +281,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
             {
                 rdapSw.Stop();
                 await _output.WriteLineAsync($"  * Call duration          : {rdapSw.ElapsedMilliseconds} ms").ConfigureAwait(false);
-                await _output.WriteLineAsync("  * RDAP Status            : TIMEOUT (rdap.org did not respond within 4000 ms).").ConfigureAwait(false);
+                await _output.WriteLineAsync($"  * RDAP Status            : TIMEOUT (rdap.org did not respond within {config.RdapTimeoutMs} ms). Raise RdapTimeoutMs.").ConfigureAwait(false);
             }
         }
 

@@ -162,6 +162,12 @@ public sealed record AppConfiguration
     public bool ResolveIpOwners { get; init; } = true;
 
     /// <summary>
+    /// Milliseconds to wait for an RDAP answer before giving up on an address for this attempt. rdap.org redirects
+    /// each query to the registry that holds the address, so one lookup opens two HTTPS connections.
+    /// </summary>
+    public int RdapTimeoutMs { get; init; } = 4000;
+
+    /// <summary>
     /// Reverse DNS persistent cache file path (JSON format).
     /// </summary>
     public string DnsCacheFilePath { get; init; } = DefaultOutputFileNames.DnsCache;
