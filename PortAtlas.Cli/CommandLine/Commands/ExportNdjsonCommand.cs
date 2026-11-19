@@ -30,7 +30,8 @@ public sealed class ExportNdjsonCommand : Command
             var config = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
             var outputPath = Path.GetFullPath(OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.AuditNdjson));
 
-            // The output is emptied before the logs are read: written over a log named by its path, it would lose that log.
+            // The output replaces its previous version once every log has been read: written over a log named by its
+            // path, it would replace that log by a copy of the logs read.
             if (_inputs.NamesFile(parseResult, config.OutputCsvPath, outputPath))
             {
                 await Console.Error.WriteLineAsync($"The output '{outputPath}' is also an audit log to read: choose another --output.").ConfigureAwait(false);
@@ -55,7 +56,7 @@ public sealed class ExportNdjsonCommand : Command
 
             var delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',';
 
-            var count = await new AuditNdjsonExporter().ExportAuditLogsToNdjsonAsync(files, outputPath, delimiter, cancellationToken).ConfigureAwait(false);
+            var count = await new AuditNdjsonExporter(Console.WriteLine).ExportAuditLogsToNdjsonAsync(files, outputPath, delimiter, cancellationToken).ConfigureAwait(false);
             Console.WriteLine($"Exported {count} audit flow entries from {files.Count} file(s) to NDJSON: {outputPath}");
             return 0;
         });

@@ -1,4 +1,5 @@
 using System.Text;
+using FileForge.IO;
 using PortAtlas.Core.Models;
 
 namespace PortAtlas.Core.Export;
@@ -6,8 +7,13 @@ namespace PortAtlas.Core.Export;
 /// <summary>
 /// Exports network audit entries or converts existing CSV logs into NDJSON files.
 /// </summary>
-public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCsvHistoryParser csvHistoryParser)
+/// <param name="formatter">Formatter of the NDJSON lines.</param>
+/// <param name="csvHistoryParser">Reader of the CSV audit logs.</param>
+/// <param name="logger">Receives one line for each NDJSON log holding lines that are not a JSON audit record; <see langword="null"/> ignores them.</param>
+public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCsvHistoryParser csvHistoryParser, Action<string>? logger = null)
 {
+    private const string UnreadableNdjsonLineReason = "that are not valid JSON";
+
     private readonly AuditNdjsonFormatter _formatter = formatter ?? throw new ArgumentNullException(nameof(formatter));
     private readonly IAuditCsvHistoryParser _csvHistoryParser = csvHistoryParser ?? throw new ArgumentNullException(nameof(csvHistoryParser));
     private readonly AuditNdjsonParser _ndjsonParser = new();
@@ -15,7 +21,8 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
     /// <summary>
     /// Initializes an exporter with default formatter and CSV parser components.
     /// </summary>
-    public AuditNdjsonExporter() : this(new AuditNdjsonFormatter(), new AuditCsvHistoryParser())
+    /// <param name="logger">Receives one line for each NDJSON log holding lines that are not a JSON audit record; <see langword="null"/> ignores them.</param>
+    public AuditNdjsonExporter(Action<string>? logger = null) : this(new AuditNdjsonFormatter(), new AuditCsvHistoryParser(), logger)
     {
     }
 
@@ -37,15 +44,11 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputNdjsonFilePath);
 
-        await using var fileStream = CreateOutputStream(outputNdjsonFilePath);
-        await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
         var count = 0;
-        await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, async () =>
-        {
-            count = await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false);
-            await writer.FlushAsync(cancellationToken).ConfigureAwait(false);
-        }).ConfigureAwait(false);
+        await WriteOutputAsync(
+            outputNdjsonFilePath,
+            async (writer, _, token) => count = await WriteEntriesAsync(writer, entries, token).ConfigureAwait(false),
+            cancellationToken).ConfigureAwait(false);
         return count;
     }
 
@@ -92,24 +95,35 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         ArgumentNullException.ThrowIfNull(inputFilePaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(outputNdjsonFilePath);
 
-        await using var fileStream = CreateOutputStream(outputNdjsonFilePath);
-        await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-
         var totalCount = 0;
-        foreach (var inputFilePath in inputFilePaths)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var entries = AuditLogRecognizer.IsNdjsonPath(inputFilePath)
-                ? await _ndjsonParser.ParseHistoryAsync(inputFilePath, cancellationToken: cancellationToken).ConfigureAwait(false)
-                : await ReadCsvLogAsync(inputFilePath, delimiter, cancellationToken).ConfigureAwait(false);
+        await WriteOutputAsync(
+            outputNdjsonFilePath,
+            async (writer, logRead, token) =>
+            {
+                foreach (var inputFilePath in inputFilePaths)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var entries = await logRead.RunAsync(() => AuditLogRecognizer.IsNdjsonPath(inputFilePath)
+                        ? ReadNdjsonLogAsync(inputFilePath, token)
+                        : ReadCsvLogAsync(inputFilePath, delimiter, token)).ConfigureAwait(false);
+                    totalCount += await WriteEntriesAsync(writer, entries, token).ConfigureAwait(false);
+                }
+            },
+            cancellationToken).ConfigureAwait(false);
+        return totalCount;
+    }
 
-            // Guarded apart from the read above: a full disk names the output, an unreadable log keeps naming the log.
-            await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, async () =>
-                totalCount += await WriteEntriesAsync(writer, entries, cancellationToken).ConfigureAwait(false)).ConfigureAwait(false);
+    // A line cut by a crash or edited by hand holds no flow: it is left out, and named so that the operator knows the
+    // export holds fewer flows than the log has lines.
+    private async Task<IReadOnlyList<NetworkAuditEntry>> ReadNdjsonLogAsync(string filePath, CancellationToken cancellationToken)
+    {
+        var read = await _ndjsonParser.ReadLogAsync(filePath, cancellationToken).ConfigureAwait(false);
+        if (read.UnreadableLineNumbers.Count > 0)
+        {
+            logger?.Invoke(new RejectedAuditLogLines(filePath, read.UnreadableLineNumbers, UnreadableNdjsonLineReason).Describe());
         }
 
-        await OutputFileUnwritableException.GuardAsync(outputNdjsonFilePath, () => writer.FlushAsync(cancellationToken)).ConfigureAwait(false);
-        return totalCount;
+        return read.Entries;
     }
 
     // Logs gathered from several servers may have been written with different CsvDelimiter settings. A missing log is
@@ -122,22 +136,54 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         return await _csvHistoryParser.ParseHistoryAsync(filePath, maxRows: null, delimiter: delimiter, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    // Only the creation of the output is guarded: an error while reading a log must keep naming that log.
-    private static FileStream CreateOutputStream(string filePath)
+    // The output replaces the previous one only once complete, so that a log that cannot be read, a cancellation or a
+    // full disk does not leave it emptied or cut. A file system error names the output, except while a log is read:
+    // that error keeps naming the log.
+    private static async Task WriteOutputAsync(
+        string filePath,
+        Func<StreamWriter, LogReadScope, CancellationToken, Task> write,
+        CancellationToken cancellationToken)
     {
+        var logRead = new LogReadScope();
         try
         {
-            var directory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrWhiteSpace(directory))
+            // AtomicFileWriter would write the whole output beside the folder before failing to replace it, and leave
+            // it there as <path>.pending.
+            if (Directory.Exists(filePath))
             {
-                Directory.CreateDirectory(directory);
+                throw new IOException("A folder has this name.");
             }
 
-            return new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 4096, useAsync: true);
+            await AtomicFileWriter.WriteAsync(
+                filePath,
+                async (stream, token) =>
+                {
+                    // The stream stays open for AtomicFileWriter, which flushes it to disk.
+                    var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), leaveOpen: true);
+                    await using (writer.ConfigureAwait(false))
+                    {
+                        await write(writer, logRead, token).ConfigureAwait(false);
+                    }
+                },
+                cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (Exception ex) when (!logRead.IsReading && ex is IOException or UnauthorizedAccessException or NotSupportedException)
         {
             throw OutputFileUnwritableException.Naming(filePath, ex);
+        }
+    }
+
+    // Tells WriteOutputAsync that an error comes from a log being read, not from the output.
+    private sealed class LogReadScope
+    {
+        public bool IsReading { get; private set; }
+
+        public async Task<T> RunAsync<T>(Func<Task<T>> read)
+        {
+            IsReading = true;
+            var result = await read().ConfigureAwait(false);
+            IsReading = false;
+            return result;
         }
     }
 

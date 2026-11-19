@@ -291,6 +291,63 @@ FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrima
         return act.Should().ThrowAsync<ArgumentNullException>();
     }
 
+    // The logs are read while the output is written: a log that stops the export halfway must not leave the
+    // previous output emptied or cut.
+    [Fact]
+    public async Task ExportAuditLogsToNdjsonAsync_WhenALogCannotBeReadHalfway_KeepsThePreviousOutput()
+    {
+        // Arrange
+        var folder = Directory.CreateTempSubdirectory("PortAtlas_NdjsonAtomic_").FullName;
+        try
+        {
+            var readable = Path.Combine(folder, "nas.csv");
+            await File.WriteAllLinesAsync(readable, [CsvHeader, "2026-10-25T10:00:00.0000000Z,2026-10-25T10:00:00.0000000Z,1,nas,Linux,192.168.1.20,Tcp,Outbound,ESTABLISHED,192.168.1.20,50000,192.168.1.30,5432,db.home.arpa,1024,psql,/usr/bin/psql,psql -h db,,backup"]);
+            var unclosedQuote = Path.Combine(folder, "proxmox.csv");
+            await File.WriteAllLinesAsync(unclosedQuote, [CsvHeader, "2026-10-25T10:00:00.0000000Z,2026-10-25T10:00:00.0000000Z,1,proxmox,Linux,192.168.1.10,Tcp,Outbound,ESTABLISHED,192.168.1.10,50000,192.168.1.30,5432,,1024,psql,/usr/bin/psql,\"psql -h db,,backup"]);
+            var output = Path.Combine(folder, "audit.ndjson");
+            await File.WriteAllTextAsync(output, "previous export\n");
+
+            // Act
+            var act = () => _exporter.ExportAuditLogsToNdjsonAsync([readable, unclosedQuote], output);
+
+            // Assert
+            await act.Should().ThrowAsync<AuditLogFormatException>();
+            (await File.ReadAllTextAsync(output)).Should().Be("previous export\n");
+            Directory.GetFiles(folder).Should().BeEquivalentTo([readable, unclosedQuote, output]);
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task ExportAuditLogsToNdjsonAsync_WhenNdjsonLinesAreNotValidJson_NamesTheLogAndTheLines()
+    {
+        // Arrange
+        var folder = Directory.CreateTempSubdirectory("PortAtlas_NdjsonRejects_").FullName;
+        try
+        {
+            var source = Path.Combine(folder, "nas.ndjson");
+            var valid = new AuditNdjsonFormatter().FormatEntry(CreateSampleEntry("nas", 5432));
+            await File.WriteAllLinesAsync(source, [valid, "{\"serverName\":\"nas\",", "", "not json", valid]);
+            var output = Path.Combine(folder, "audit.ndjson");
+            var messages = new List<string>();
+            var exporter = new AuditNdjsonExporter(messages.Add);
+
+            // Act
+            var count = await exporter.ExportAuditLogsToNdjsonAsync([source], output);
+
+            // Assert
+            count.Should().Be(2);
+            messages.Should().ContainSingle().Which.Should().Be($"Skipped 2 line(s) of {source} that are not valid JSON: lines 2, 4.");
+        }
+        finally
+        {
+            Directory.Delete(folder, recursive: true);
+        }
+    }
+
     private static NetworkAuditEntry CreateSampleEntry(string hostName, int remotePort)
     {
         var now = DateTimeOffset.UtcNow;

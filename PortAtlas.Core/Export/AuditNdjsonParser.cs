@@ -58,30 +58,50 @@ public sealed class AuditNdjsonParser
             return [];
         }
 
-        if (!File.Exists(ndjsonFilePath))
-        {
-            return [];
-        }
-
-        var results = new List<NetworkAuditEntry>();
-        await using var stream = new FileStream(ndjsonFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 4096, useAsync: true);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-
-        while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var entry = ParseLine(line);
-            if (entry is not null)
-            {
-                results.Add(entry);
-            }
-        }
-
+        var results = (await ReadLogAsync(ndjsonFilePath, cancellationToken).ConfigureAwait(false)).Entries;
         if (maxRows.HasValue && maxRows.Value > 0 && results.Count > maxRows.Value)
         {
             return results.TakeLast(maxRows.Value).ToList();
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// Reads every entry of an NDJSON audit log, and the lines that hold no entry.
+    /// </summary>
+    /// <param name="ndjsonFilePath">Path to the NDJSON file on disk; a missing file reads as empty.</param>
+    /// <param name="cancellationToken">Cooperative cancellation token.</param>
+    /// <returns>The entries in file order, and the one-based numbers of the non-blank lines that are not a JSON audit record.</returns>
+    public async Task<AuditNdjsonReadResult> ReadLogAsync(string ndjsonFilePath, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ndjsonFilePath);
+
+        var entries = new List<NetworkAuditEntry>();
+        var unreadableLines = new List<int>();
+        if (!File.Exists(ndjsonFilePath))
+        {
+            return new AuditNdjsonReadResult(entries, unreadableLines);
+        }
+
+        await using var stream = new FileStream(ndjsonFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, bufferSize: 4096, useAsync: true);
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+
+        var lineNumber = 0;
+        while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            lineNumber++;
+            if (ParseLine(line) is { } entry)
+            {
+                entries.Add(entry);
+            }
+            else if (!string.IsNullOrWhiteSpace(line))
+            {
+                unreadableLines.Add(lineNumber);
+            }
+        }
+
+        return new AuditNdjsonReadResult(entries, unreadableLines);
     }
 }

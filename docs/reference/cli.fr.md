@@ -219,6 +219,8 @@ PortAtlas export ndjson [-i <path>]... [-o <path>]
 
 Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Un fichier `.ndjson` ou `.jsonl` est lu comme NDJSON, tout autre fichier comme CSV. Les fichiers sont lus l'un après l'autre et seul le fichier en cours est gardé en mémoire. Chaque flux lu donne une ligne : un flux présent dans deux journaux, comme les journaux de deux jours, ou un journal et sa copie enrichie tous deux donnés par leur chemin à `--input`, est écrit deux fois. Une sortie donnée par son chemin à `--input` arrête la commande avec `The output '<path>' is also an audit log to read: choose another --output.` et le code de sortie 1. La sortie d'une exécution précédente trouvée dans un dossier ou un motif n'est pas lue, et la commande affiche `Skipped <path>: it is the output of this command.`
 
+Une ligne non vide d'un journal NDJSON qui n'est pas un enregistrement d'audit JSON, comme une ligne coupée par un arrêt brutal, est écartée, et la commande affiche `Skipped <n> line(s) of <path> that are not valid JSON: lines <numbers>.` La sortie ne remplace le fichier précédent qu'une fois tous les journaux lus : un journal illisible, `Ctrl+C` ou un disque plein laissent le fichier précédent tel quel ; après `Ctrl+C`, la sortie partielle peut rester à côté, sous le nom `<path>.pending`.
+
 Clés de configuration lues : `OutputCsvPath` (entrée par défaut) et `CsvDelimiter`. Aucun filtre ne s'applique.
 
 ## resolve
