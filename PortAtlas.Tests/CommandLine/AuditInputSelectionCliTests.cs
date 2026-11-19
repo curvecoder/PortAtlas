@@ -154,6 +154,42 @@ public sealed class AuditInputSelectionCliTests : IDisposable
         File.Exists(matrix).Should().BeFalse();
     }
 
+    // The matrix is written once every log has been read: written over one of them, it would replace the audit.
+    [Theory]
+    [InlineData("-o", false)]
+    [InlineData("--pairs-output", false)]
+    [InlineData("-o", true)]
+    public async Task ExportRules_WhenAnOutputIsAnAuditLogToRead_ReturnsExitCodeOneAndKeepsTheLog(string outputOption, bool inputIsTheDirectory)
+    {
+        // Arrange
+        var log = Path.Combine(_collected, "audit_nas.csv");
+        var before = await File.ReadAllTextAsync(log);
+        var otherOutput = outputOption == "-o" ? "--pairs-output" : "-o";
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main([
+                "export", "rules", "-i", inputIsTheDirectory ? _collected : log,
+                outputOption, log, otherOutput, Path.Combine(_root, "other-output.csv"),
+                "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain($"The output '{log}' is also an audit log to read");
+        (await File.ReadAllTextAsync(log)).Should().Be(before);
+        File.Exists(Path.Combine(_root, "other-output.csv")).Should().BeFalse();
+    }
+
     [Fact]
     public async Task Resolve_WhenInputDirectoryHoldsAnEnrichedCopyAndAMatrix_EnrichesTheOriginalLogOnly()
     {

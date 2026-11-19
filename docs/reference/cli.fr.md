@@ -182,7 +182,7 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 
 | Option | Valeur | Défaut | Effet |
 | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `firewall_rules.csv` | Fichier de la matrice ([colonnes](output-formats.fr.md#matrice-de-règles-de-pare-feu)) |
+| `-o`, `--output` | `<path>` | `portatlas_rules.csv` | Fichier de la matrice ([colonnes](output-formats.fr.md#matrice-de-règles-de-pare-feu)) |
 | `--min-observations` | nombre, au moins 1 | `1` | Garder les flux observés au moins ce nombre de fois |
 | `--active-within-days` | nombre, au moins 1 | sans limite | Garder les flux vus pendant les N derniers jours |
 | `--zone` | `all`, `internal`, `public` | `all` | Zone de destination à garder |
@@ -200,6 +200,8 @@ Une règle porte le nom du serveur, le nom distant, le chemin de l'exécutable e
 `--include-ips` et `--exclude-ips` suivent la même règle sur les deux adresses que la règle affiche, quel que soit le sens du flux : une correspondance suffit, pour garder la règle comme pour la retirer. Exclure une adresse distante retire les flux qu'elle reçoit et ceux qu'elle ouvre ; inclure le sous-réseau du serveur garde tous ses flux, l'exclure les retire tous. Une écoute n'est testée que sur l'adresse à laquelle elle est liée : une écoute liée à `0.0.0.0` ou `::` n'est pas dans le sous-réseau de son serveur.
 
 Un journal CSV est lu avec le séparateur trouvé sur sa propre première ligne (`,`, `;`, tabulation ou `|`) : des journaux écrits avec des valeurs différentes de `CsvDelimiter` peuvent donc être consolidés ensemble. C'est le séparateur placé entre les noms de colonnes de l'en-tête ou, dans un journal sans en-tête, celui qui revient le plus souvent hors des champs entre guillemets. La matrice est écrite avec `CsvDelimiter`.
+
+Les matrices sont écrites une fois tous les journaux lus. Quand `--output` ou `--pairs-output` est l'un des journaux d'audit à lire, donné par son chemin ou trouvé dans un dossier ou un motif, la commande n'écrit rien et s'arrête avec `The output '<path>' is also an audit log to read: choose another --output or --pairs-output.` et le code de sortie 1.
 
 Clés de configuration lues : `OutputCsvPath` (entrée par défaut), `CsvDelimiter` (aussi le séparateur des matrices), et les clés des filtres de flux sauf `MapExcludeEphemeralPorts`. Les clés du rendu de la carte, les filtres d'enregistrement et les clés de résolution de noms ne sont pas lus.
 

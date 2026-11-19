@@ -182,7 +182,7 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 
 | Option | Value | Default | Effect |
 | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `firewall_rules.csv` | Matrix file ([columns](output-formats.md#firewall-rule-matrix)) |
+| `-o`, `--output` | `<path>` | `portatlas_rules.csv` | Matrix file ([columns](output-formats.md#firewall-rule-matrix)) |
 | `--pairs-output` | `<path>` | not written | Also writes the pair matrix, one row per source and destination ([columns](output-formats.md#pair-matrix)); same tokens as `--output` |
 | `--min-observations` | number, at least 1 | `1` | Keep flows observed at least this number of times |
 | `--active-within-days` | number, at least 1 | no limit | Keep flows last seen during the last N days |
@@ -200,6 +200,8 @@ A rule carries the server name, the remote name, the executable path and the acc
 `--include-ips` and `--exclude-ips` follow the same rule on the two addresses the rule shows, whatever the direction of the flow: one match is enough, to keep the rule as to remove it. Excluding a remote address removes the flows it receives and the flows it opens; including the subnet of the server keeps all of its flows, excluding it removes them all. A listening socket is tested on the address it is bound to only: a listener bound to `0.0.0.0` or `::` is not in the subnet of its server.
 
 A CSV log is read with the separator found on its own first line (`,`, `;`, tab or `|`), so logs written with different `CsvDelimiter` values can be consolidated together: the separator between the column names of the header or, in a log without header, the one that occurs most often outside the quoted fields. The matrix is written with `CsvDelimiter`.
+
+The matrices are written once every log has been read. When `--output` or `--pairs-output` is one of the audit logs to read, given by its own path or found in a directory or a pattern, the command writes nothing and stops with `The output '<path>' is also an audit log to read: choose another --output or --pairs-output.` and exit code 1.
 
 Configuration keys read: `OutputCsvPath` (default input), `CsvDelimiter` (also the separator of the matrices), and the flow filter keys except `MapExcludeEphemeralPorts`. The map rendering keys, the recording filters and the name resolution keys are not read.
 

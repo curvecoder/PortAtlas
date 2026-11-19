@@ -1,4 +1,6 @@
+using System.CommandLine;
 using AwesomeAssertions;
+using PortAtlas.Cli.CommandLine.Commands;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Core.Enrichment;
 using Xunit;
@@ -41,5 +43,15 @@ public sealed class DefaultFileNameTests
         // Assert
         loaded.Configuration.OutputCsvPath.Should().Be("portatlas_audit.csv");
         loaded.Configuration.DnsCacheFilePath.Should().Be("portatlas_dns_cache.json");
+    }
+
+    [Fact]
+    public void ExportRulesCommand_WhenOutputIsNotGiven_NamesTheMatrixAfterPortAtlas()
+    {
+        // Act
+        var command = new ExportRulesCommand(new Option<string?>("--config"));
+
+        // Assert
+        command.Options.Single(option => option.Name == "--output").Description.Should().EndWith("Default: portatlas_rules.csv.");
     }
 }

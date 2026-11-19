@@ -13,7 +13,7 @@ public sealed class ExportRulesCommand : Command
 {
     private readonly AuditInputOptionSet _inputs = new();
     private readonly FlowFilterOptionSet _filters = new();
-    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", "Matrix CSV to write. Tokens {ServerName}, {HostName}, {Date}, {Timestamp} are expanded. Default: firewall_rules.csv.", "-o");
+    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", $"Matrix CSV to write. Tokens {{ServerName}}, {{HostName}}, {{Date}}, {{Timestamp}} are expanded. Default: {DefaultOutputFileNames.RulesCsv}.", "-o");
     private readonly Option<int?> _minObservations = OptionFactory.CreateInteger("--min-observations", "count", "Keep only flows observed at least this number of times. Default: 1.", minimum: 1);
     private readonly Option<int?> _activeWithinDays = OptionFactory.CreateInteger("--active-within-days", "days", "Keep only flows seen during the last N days. Default: no limit.", minimum: 1);
     private readonly Option<string?> _pairsOutput = OptionFactory.CreatePath("--pairs-output", "Also write a pair matrix CSV (one row per source and destination: flow count, ports, observations), with the same filters. Same tokens as --output. Default: not written.");
@@ -46,6 +46,21 @@ public sealed class ExportRulesCommand : Command
                 return 1;
             }
 
+            var outputPath = OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.RulesCsv);
+            var pairsOutputPath = parseResult.GetValue(_pairsOutput) is { } pairsOutput ? OutputFilePathResolver.Resolve(pairsOutput) : null;
+
+            // The matrices are written once every log has been read: written over one of them, they would replace an
+            // audit by a matrix, which no later command reads as flows.
+            var overwrittenLog = new[] { outputPath, pairsOutputPath }
+                .OfType<string>()
+                .Select(Path.GetFullPath)
+                .FirstOrDefault(path => files.Contains(path, StringComparer.OrdinalIgnoreCase));
+            if (overwrittenLog is not null)
+            {
+                await Console.Error.WriteLineAsync($"The output '{overwrittenLog}' is also an audit log to read: choose another --output or --pairs-output.").ConfigureAwait(false);
+                return 1;
+            }
+
             var filters = FlowFilters.Parse(config);
             var options = new FirewallRuleExportOptions
             {
@@ -66,10 +81,9 @@ public sealed class ExportRulesCommand : Command
                 IncludedProcesses = config.MapIncludedProcesses,
                 ExcludedProcesses = config.MapExcludedProcesses,
                 Delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',',
-                PairsOutputPath = parseResult.GetValue(_pairsOutput) is { } pairsOutput ? OutputFilePathResolver.Resolve(pairsOutput) : null
+                PairsOutputPath = pairsOutputPath
             };
 
-            var outputPath = OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? "firewall_rules.csv");
             return await new FirewallRuleExportCommandRunner().RunAsync(files, outputPath, options, cancellationToken).ConfigureAwait(false);
         });
     }

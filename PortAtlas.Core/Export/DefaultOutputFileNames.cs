@@ -12,6 +12,9 @@ public static class DefaultOutputFileNames
     /// <summary>NDJSON log written by <c>export ndjson</c>.</summary>
     public const string AuditNdjson = "portatlas_audit.ndjson";
 
+    /// <summary>Flow matrix written by <c>export rules</c>; versions before 6.0 named it <c>firewall_rules.csv</c>.</summary>
+    public const string RulesCsv = "portatlas_rules.csv";
+
     /// <summary>HTML topology map written by <c>map</c> and by <c>audit</c>.</summary>
     public const string TopologyHtml = "portatlas_topology.html";
 
