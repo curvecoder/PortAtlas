@@ -40,3 +40,6 @@ netflow_topology.html
 *topology*.html
 netflow_dns_cache.json
 portatlas_dns_cache.json
+
+# CodeGraph index (local, rebuilt by codegraph)
+.codegraph/
