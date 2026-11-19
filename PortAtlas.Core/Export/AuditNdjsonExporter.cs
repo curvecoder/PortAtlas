@@ -181,9 +181,14 @@ public sealed class AuditNdjsonExporter(AuditNdjsonFormatter formatter, IAuditCs
         public async Task<T> RunAsync<T>(Func<Task<T>> read)
         {
             IsReading = true;
-            var result = await read().ConfigureAwait(false);
-            IsReading = false;
-            return result;
+            try
+            {
+                return await read().ConfigureAwait(false);
+            }
+            finally
+            {
+                IsReading = false;
+            }
         }
     }
 
