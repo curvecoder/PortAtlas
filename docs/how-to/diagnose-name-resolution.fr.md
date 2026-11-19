@@ -24,7 +24,7 @@ Vérifiez la nouvelle valeur avec `PortAtlas lookup 192.0.2.25 --dns-timeout-ms 
 
 ## Quand RDAP est lent
 
-L'étape 5 affiche la durée de l'appel RDAP et le délai utilisé, le même que celui de l'audit et de `resolve` (`RdapTimeoutMs`, 4000 ms par défaut). `rdap.org` redirige chaque requête vers le registre qui détient l'adresse : une recherche ouvre donc deux connexions HTTPS. Si l'étape 5 indique `TIMEOUT`, ou une durée proche du délai, augmentez `RdapTimeoutMs` dans le fichier de configuration. Une adresse sans nom DNS dont la requête RDAP est restée sans réponse n'est pas mise en cache : elle est reposée 15 minutes plus tard, même quand la connexion a disparu, trois fois au plus ; ensuite, seul un balayage qui revoit l'adresse la remet en file.
+L'étape 5 affiche la durée de l'appel RDAP et le délai utilisé, le même que celui de l'audit et de `resolve` (`RdapTimeoutMs`, 4000 ms par défaut). `rdap.org` redirige chaque requête vers le registre qui détient l'adresse : une recherche ouvre donc deux connexions HTTPS. Si l'étape 5 indique `TIMEOUT`, ou une durée proche du délai, augmentez `RdapTimeoutMs` dans le fichier de configuration. Une adresse sans nom DNS dont la requête RDAP est restée sans réponse n'est pas mise en cache : elle est reposée 15 minutes plus tard, même quand la connexion a disparu, trois fois au plus ; ensuite, seul un balayage qui revoit l'adresse la remet en file. Relancer `audit` repose la question pour chaque flux du journal encore sans nom.
 
 ## Pourquoi ping -a trouve un nom et pas PortAtlas
 

@@ -3,9 +3,11 @@ using PortAtlas.Core.Models;
 namespace PortAtlas.Core.Resolution;
 
 /// <summary>
-/// Gives the flows reloaded from an audit log the remote host names already held in the resolver cache.
+/// Gives the flows reloaded from an audit log the remote host names already held in the resolver cache, and asks for
+/// the names still missing.
 /// </summary>
-/// <param name="hostNameResolver">Resolver whose cache is read; no resolution is requested.</param>
+/// <param name="hostNameResolver">Resolver whose cache is read by <see cref="ResolveFromCache"/> and to which
+/// <see cref="QueueUnnamed"/> hands the addresses without name.</param>
 public sealed class ReloadedFlowNameResolver(IHostNameResolver hostNameResolver)
 {
     /// <summary>
@@ -32,5 +34,25 @@ public sealed class ReloadedFlowNameResolver(IHostNameResolver hostNameResolver)
         }
 
         return named;
+    }
+
+    /// <summary>
+    /// Queues the resolution of the remote address of each reloaded flow that still has no name.
+    /// </summary>
+    /// <param name="reloadedFlows">Flows returned by <see cref="ResolveFromCache"/>.</param>
+    public void QueueUnnamed(IReadOnlyList<NetworkAuditEntry> reloadedFlows)
+    {
+        ArgumentNullException.ThrowIfNull(reloadedFlows);
+
+        // A flow logged by an earlier run whose lookup got no answer is not in the cache; without this request it
+        // would stay unnamed unless a scan saw the connection again.
+        var unnamedAddresses = reloadedFlows
+            .Where(flow => string.IsNullOrWhiteSpace(flow.RemoteHostName))
+            .Select(flow => flow.Socket.RemoteEndpoint.Address)
+            .Distinct();
+        foreach (var address in unnamedAddresses)
+        {
+            hostNameResolver.QueueResolution(address);
+        }
     }
 }

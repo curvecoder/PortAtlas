@@ -207,7 +207,8 @@ public static class ContinuousAuditRunner
 
         // A name already in the DNS cache raises no resolution event during the audit, so a flow logged before
         // its name was known would stay unnamed on the dashboard: the names are taken from the cache here.
-        var historicalEntries = new ReloadedFlowNameResolver(hostNameResolver).ResolveFromCache(parsedEntries);
+        var reloadedFlowNameResolver = new ReloadedFlowNameResolver(hostNameResolver);
+        var historicalEntries = reloadedFlowNameResolver.ResolveFromCache(parsedEntries);
         deduplicationRegister.Hydrate(historicalEntries);
 
         try
@@ -241,6 +242,10 @@ public static class ContinuousAuditRunner
                 dashboard.HydrateDiscoveries(historicalEntries);
             }
         }
+
+        // Only once the register is hydrated and the dashboard subscribed: a name found before would reach neither
+        // the reloaded flow in the log nor its dashboard row.
+        reloadedFlowNameResolver.QueueUnnamed(historicalEntries);
 
         engine.ScanCycleFailed += (_, e) => ReportScanFailure(dashboard, e);
         engine.LogRewriteFailed += (_, e) => ReportWarning(dashboard, FormatLogRewriteFailure(e.Error));

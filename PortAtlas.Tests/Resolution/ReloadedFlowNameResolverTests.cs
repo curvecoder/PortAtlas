@@ -52,6 +52,27 @@ public sealed class ReloadedFlowNameResolverTests
         named.Select(flow => flow.RemoteHostName).Should().Equal("dns.home.arpa", "", "pbs.home.arpa");
     }
 
+    [Fact]
+    public void QueueUnnamed_WhenFlowsAreMixed_QueuesEachUnnamedRemoteAddressOnce()
+    {
+        // Arrange
+        var hostNameResolver = new QueueRecordingResolver();
+        var resolver = new ReloadedFlowNameResolver(hostNameResolver);
+        NetworkAuditEntry[] reloaded =
+        [
+            CreateFlow("192.168.1.2", 53, "pihole.home.arpa"),
+            CreateFlow("192.168.1.40", 445, ""),
+            CreateFlow("192.168.1.40", 139, "  "),
+            CreateFlow("192.168.1.50", 8006, ""),
+        ];
+
+        // Act
+        resolver.QueueUnnamed(reloaded);
+
+        // Assert
+        hostNameResolver.Queued.Should().Equal(IPAddress.Parse("192.168.1.40"), IPAddress.Parse("192.168.1.50"));
+    }
+
     private static NetworkAuditEntry CreateFlow(string remoteIp, int remotePort, string remoteHostName)
     {
         var seenUtc = new DateTimeOffset(2026, 11, 1, 8, 0, 0, TimeSpan.Zero);
@@ -89,5 +110,27 @@ public sealed class ReloadedFlowNameResolverTests
 
         public Task<string> ResolveHostNameAsync(IPAddress address, CancellationToken cancellationToken = default) =>
             throw new InvalidOperationException("Reloading must not request a resolution.");
+    }
+
+    private sealed class QueueRecordingResolver : IHostNameResolver
+    {
+        public event EventHandler<HostNameResolvedEventArgs>? HostNameResolved
+        {
+            add { }
+            remove { }
+        }
+
+        public List<IPAddress> Queued { get; } = [];
+
+        public bool TryGetCachedHostName(IPAddress address, out string hostName)
+        {
+            hostName = string.Empty;
+            return false;
+        }
+
+        public void QueueResolution(IPAddress address) => Queued.Add(address);
+
+        public Task<string> ResolveHostNameAsync(IPAddress address, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Queuing must not wait for a resolution.");
     }
 }
