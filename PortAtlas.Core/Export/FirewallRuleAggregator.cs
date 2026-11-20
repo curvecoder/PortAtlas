@@ -63,7 +63,7 @@ public sealed class FirewallRuleAggregator
         ArgumentNullException.ThrowIfNull(entries);
         ArgumentNullException.ThrowIfNull(options);
 
-        var groups = new Dictionary<(string Direction, string SourceIp, string DestIp, int DestPort, string Protocol, string Process), AggregationAccumulator>();
+        var groups = new Dictionary<(string Direction, string SourceIp, string DestIp, int DestPort, string Protocol, string Process, string Server), AggregationAccumulator>();
 
         var portFilter = new PortMatcher(options.IncludedPorts, options.ExcludedPorts);
         var ipMatcher = BuildIpMatcher(options.IncludedIps, options.ExcludedIps);
@@ -102,7 +102,8 @@ public sealed class FirewallRuleAggregator
             }
 
             var sourceIp = isOutbound ? entry.Socket.LocalEndpoint.Address.ToString() : entry.Socket.RemoteEndpoint.Address.ToString();
-            var destIp = isOutbound ? entry.Socket.RemoteEndpoint.Address.ToString() : entry.Socket.LocalEndpoint.Address.ToString();
+            var destAddress = isOutbound ? entry.Socket.RemoteEndpoint.Address : entry.Socket.LocalEndpoint.Address;
+            var destIp = destAddress.ToString();
             var destPort = isOutbound ? entry.Socket.RemoteEndpoint.Port : entry.Socket.LocalEndpoint.Port;
 
             // Ephemeral destination port exclusion
@@ -130,7 +131,7 @@ public sealed class FirewallRuleAggregator
             }
 
             var protocolStr = entry.Socket.Protocol == SocketTransportProtocol.Udp ? "UDP" : "TCP";
-            var key = (directionStr, sourceIp, destIp, destPort, protocolStr, processName);
+            var key = (directionStr, sourceIp, destIp, destPort, protocolStr, processName, AuditedServerScope(entry, destAddress));
 
             if (!groups.TryGetValue(key, out var acc))
             {
@@ -224,6 +225,8 @@ public sealed class FirewallRuleAggregator
             .ThenBy(r => r.SourceIp, StringComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Protocol, StringComparer.Ordinal)
             .ThenBy(r => r.ProcessName, StringComparer.Ordinal)
+            .ThenBy(r => r.SourceHost, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.DestinationHost, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
         for (var i = 0; i < sorted.Count; i++)
@@ -233,6 +236,14 @@ public sealed class FirewallRuleAggregator
 
         return sorted;
     }
+
+    // A loopback or unspecified destination names no machine: the same address in the logs of two servers is two
+    // endpoints, so the audited server joins the rule key. A routable address names one machine whatever the log that
+    // saw it, so the server stays out of the key.
+    private static string AuditedServerScope(NetworkAuditEntry entry, IPAddress destination) =>
+        IPAddress.IsLoopback(destination) || destination.Equals(IPAddress.Any) || destination.Equals(IPAddress.IPv6Any)
+            ? entry.Server.HostName.ToUpperInvariant()
+            : string.Empty;
 
     private static string DeduceServiceName(int port, string protocol, string processName)
     {

@@ -195,6 +195,8 @@ Familles lues : entrées (`.csv`, `.ndjson`, `.jsonl`) et filtres de flux, avec 
 
 Une destination est `Internal` si c'est une adresse de bouclage, une adresse d'une plage privée, ou `0.0.0.0` / `::` ; sinon elle est `Public`.
 
+Une destination de bouclage ou `0.0.0.0` / `::` ne désigne aucune machine : le même flux dans les journaux de deux serveurs donne une règle par serveur. Une destination routable donne une seule règle, quel que soit le journal qui l'a vue.
+
 Une règle porte le nom du serveur, le nom distant, le chemin de l'exécutable et le compte trouvés sur n'importe laquelle de ses lignes de journal, le plus récemment vu quand plusieurs lignes diffèrent, quel que soit l'ordre des entrées. `--include-hosts` et `--exclude-hosts` sont testés sur la règle consolidée, contre ses deux extrémités, par le nom et par l'adresse que la règle affiche : une correspondance suffit, pour garder la règle comme pour la retirer. La source `Any` d'une écoute n'est pas testée.
 
 `--include-ips` et `--exclude-ips` suivent la même règle sur les deux adresses que la règle affiche, quel que soit le sens du flux : une correspondance suffit, pour garder la règle comme pour la retirer. Exclure une adresse distante retire les flux qu'elle reçoit et ceux qu'elle ouvre ; inclure le sous-réseau du serveur garde tous ses flux, l'exclure les retire tous. Une écoute n'est testée que sur l'adresse à laquelle elle est liée : une écoute liée à `0.0.0.0` ou `::` n'est pas dans le sous-réseau de son serveur.

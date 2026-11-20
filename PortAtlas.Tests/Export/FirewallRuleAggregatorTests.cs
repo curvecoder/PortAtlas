@@ -920,6 +920,55 @@ public sealed class FirewallRuleAggregatorTests
             .Should().Equal(("RULE-001", "Caddy"), ("RULE-002", "caddy"), ("RULE-003", "nginx"));
     }
 
+    [Fact]
+    public void Aggregate_WhenTwoServersConnectOverLoopback_KeepsOneRulePerServer()
+    {
+        // Arrange
+        var nas = CreateSampleEntry(SocketFlowDirection.Outbound, "127.0.0.1", 51000, "127.0.0.1", 5432, serverHost: "nas.home.arpa", processName: "psql");
+        var pihole = CreateSampleEntry(SocketFlowDirection.Outbound, "127.0.0.1", 51000, "127.0.0.1", 5432, serverHost: "pihole.home.arpa", processName: "psql");
+
+        // Act
+        var rules = new FirewallRuleAggregator().Aggregate([nas, pihole], new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Select(rule => rule.SourceHost).Should().BeEquivalentTo(["nas.home.arpa", "pihole.home.arpa"]);
+    }
+
+    [Theory]
+    [InlineData("0.0.0.0")]
+    [InlineData("::")]
+    public void Aggregate_WhenListenersOnlyAndTwoServersListenOnTheUnspecifiedAddress_KeepsOneRulePerServer(string boundAddress)
+    {
+        // Arrange
+        var remoteAddress = boundAddress == "::" ? "::" : "0.0.0.0";
+        var nas = CreateSampleEntry(SocketFlowDirection.Listening, boundAddress, 22, remoteAddress, 0, serverHost: "nas.home.arpa", processName: "sshd", state: "Listen");
+        var pihole = CreateSampleEntry(SocketFlowDirection.Listening, boundAddress, 22, remoteAddress, 0, serverHost: "pihole.home.arpa", processName: "sshd", state: "Listen");
+
+        // Act
+        var rules = new FirewallRuleAggregator().Aggregate([nas, pihole], new FirewallRuleExportOptions { ListenersOnly = true });
+
+        // Assert
+        rules.Select(rule => rule.DestinationHost).Should().BeEquivalentTo(["nas.home.arpa", "pihole.home.arpa"]);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Aggregate_WhenRulesDifferOnlyByServer_NumbersThemInServerOrderWhateverTheInputOrder(bool reversed)
+    {
+        // Arrange
+        var pihole = CreateSampleEntry(SocketFlowDirection.Listening, "0.0.0.0", 22, "0.0.0.0", 0, serverHost: "pihole.home.arpa", processName: "sshd", state: "Listen");
+        var nas = CreateSampleEntry(SocketFlowDirection.Listening, "0.0.0.0", 22, "0.0.0.0", 0, serverHost: "nas.home.arpa", processName: "sshd", state: "Listen");
+        NetworkAuditEntry[] entries = reversed ? [nas, pihole] : [pihole, nas];
+
+        // Act
+        var rules = new FirewallRuleAggregator().Aggregate(entries, new FirewallRuleExportOptions { ListenersOnly = true });
+
+        // Assert
+        rules.Select(rule => (rule.RuleId, rule.DestinationHost))
+            .Should().Equal(("RULE-001", "nas.home.arpa"), ("RULE-002", "pihole.home.arpa"));
+    }
+
     // The SMB service of nas.home.arpa, bound to 192.168.1.20 unless another address is given.
     private static NetworkAuditEntry CreateListenerEntry(string boundAddress = "192.168.1.20") =>
         CreateSampleEntry(
