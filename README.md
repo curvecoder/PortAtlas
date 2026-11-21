@@ -29,7 +29,7 @@ Moving a self-hosted service to another machine, writing firewall rules for a ho
 
 Download the archive for your system from the [releases page](https://github.com/curvecoder/PortAtlas/releases) (`PortAtlas-<version>-win-x64.zip` or `PortAtlas-<version>-linux-x64.tar.gz`) and extract it. The executable includes the .NET runtime.
 
-On Windows, `PortAtlas.Gui-<version>-win-x64.zip` contains a graphical interface that builds the command line of every command except `audit` from a form and runs it; see [Graphical interface](docs/explanation/gui-architecture.md). The archive does not contain the `PortAtlas` executable: extract `PortAtlas-<version>-win-x64.zip` and `PortAtlas.Gui-<version>-win-x64.zip` into the same folder. The Linux releases do not include the interface; it can be built from source, as shown below.
+On Windows, `PortAtlas.Gui-<version>-win-x64.zip` contains a graphical interface that builds the command line of every command except `audit` from a form and runs it; see [Use the graphical interface](docs/how-to/use-the-graphical-interface.md). The archive does not contain the `PortAtlas` executable: extract `PortAtlas-<version>-win-x64.zip` and `PortAtlas.Gui-<version>-win-x64.zip` into the same folder. The Linux releases do not include the interface; it can be built from source, as shown below.
 
 To build from source (.NET 8 SDK):
 
@@ -70,7 +70,7 @@ PortAtlas export rules -i collected -o rules.csv --zone internal --min-observati
 | | |
 | :--- | :--- |
 | Tutorial | [Getting started](docs/getting-started.md) |
-| How-to guides | [Run as a service](docs/how-to/run-as-a-service.md) · [Map several machines](docs/how-to/map-several-machines.md) · [Export firewall rules](docs/how-to/export-firewall-rules.md) · [Audit isolated servers](docs/how-to/audit-isolated-servers.md) · [Diagnose a missing host name](docs/how-to/diagnose-name-resolution.md) · [Upgrade from 1.x](docs/how-to/upgrade-to-2.0.md) · [Upgrade from 2.x to 3.0](docs/how-to/upgrade-to-3.0.md) · [Upgrade from 3.x to 4.0](docs/how-to/upgrade-to-4.0.md) · [Upgrade from 4.x to 5.0](docs/how-to/upgrade-to-5.0.md) · [Upgrade from 5.x to 6.0](docs/how-to/upgrade-to-6.0.md) |
+| How-to guides | [Run as a service](docs/how-to/run-as-a-service.md) · [Map several machines](docs/how-to/map-several-machines.md) · [Export firewall rules](docs/how-to/export-firewall-rules.md) · [Audit isolated servers](docs/how-to/audit-isolated-servers.md) · [Diagnose a missing host name](docs/how-to/diagnose-name-resolution.md) · [Use the graphical interface](docs/how-to/use-the-graphical-interface.md) · [Upgrade from 1.x](docs/how-to/upgrade-to-2.0.md) · [Upgrade from 2.x to 3.0](docs/how-to/upgrade-to-3.0.md) · [Upgrade from 3.x to 4.0](docs/how-to/upgrade-to-4.0.md) · [Upgrade from 4.x to 5.0](docs/how-to/upgrade-to-5.0.md) · [Upgrade from 5.x to 6.0](docs/how-to/upgrade-to-6.0.md) |
 | Reference | [Command line](docs/reference/cli.md) · [Configuration file](docs/reference/configuration.md) · [Output formats](docs/reference/output-formats.md) · [Terminal dashboard](docs/reference/dashboard.md) |
 | Explanation | [How PortAtlas works](docs/explanation/architecture.md) · [Graphical interface](docs/explanation/gui-architecture.md) · [Architecture decisions](docs/adr/README.md) |
 

@@ -2,7 +2,7 @@
 
 # How the graphical interface is built
 
-The graphical interface lets you fill in a form instead of typing the options of a command. This page explains how it is organized and why it has no description of the options of its own. The decision is recorded in [ADR-0002](../adr/0002-avalonia-gui-generated-from-command-tree.md). The options themselves are in the [CLI reference](../reference/cli.md).
+The graphical interface lets you fill in a form instead of typing the options of a command. This page explains how it is organized and why it has no description of the options of its own. The decision is recorded in [ADR-0002](../adr/0002-avalonia-gui-generated-from-command-tree.md). The options themselves are in the [CLI reference](../reference/cli.md). To install and use the interface, see [Use the graphical interface](../how-to/use-the-graphical-interface.md).
 
 ## One source for the options
 
@@ -24,27 +24,21 @@ The view models live in `PortAtlas.Gui.Core` and reach the operating system and 
 
 The form state, which holds the values typed for one command, is turned into an argument list: the command path, then the options that have a value, then the positional arguments. An option left empty adds nothing, so the CLI applies its default. A repeatable option is written once per value. A preview shows the command line with quotes for display and copy, but the program never runs that text.
 
-The command runs as a child process of the `PortAtlas` executable, found as described below. The process receives the argument array directly, without a shell, so no value can be interpreted as shell syntax. Standard output and standard error are read line by line while the command runs. Cancelling a run closes the standard input first, as described above, and kills the process tree only if it is still running 10 seconds later.
+The command runs as a child process of the `PortAtlas` executable, found as described in [Use the graphical interface](../how-to/use-the-graphical-interface.md#install). The process receives the argument array directly, without a shell, so no value can be interpreted as shell syntax. Standard output and standard error are read line by line while the command runs. Cancelling a run closes the standard input first, as described above, and kills the process tree only if it is still running 10 seconds later.
 
 Running the executable gives the same behavior as the CLI, including its exit codes, and a failure of a command cannot bring the interface down.
 
 ## The PortAtlas executable
 
-The release archive of the interface does not contain the `PortAtlas` executable: extract `PortAtlas-<version>-win-x64.zip` and `PortAtlas.Gui-<version>-win-x64.zip` into the same folder. The Linux releases do not include the interface; the [README](../../README.md#install) gives the command that builds it.
-
-The interface looks for the executable at the path chosen in the interface, then next to itself (`PortAtlas.exe` on Windows, `PortAtlas` on Linux), then at the path held by the `PORTATLAS_EXE` environment variable, and uses the first file that exists. A chosen path that no longer holds a file is skipped without a message. The line next to **Executable** shows the path found at start-up or after the last change of path (**Change...**, **Automatic**, loading a profile), or `PortAtlas.exe was not found next to the GUI or at the configured path.`; each run searches again. When no file is found, a banner offers **Select PortAtlas...** without blocking the rest of the window, and a run fails with a message that names every location searched, `PORTATLAS_EXE` included.
-
-**Change...** picks another executable at any time, and **Automatic**, shown while a path is chosen, returns to the search above. The chosen path is stored in the profile when the profile is saved, so that different profiles can run different versions of PortAtlas; loading a profile without a chosen path returns to the automatic search.
+The archive of the interface does not contain the `PortAtlas` executable; [Use the graphical interface](../how-to/use-the-graphical-interface.md#install) explains how to install both and the order in which the interface looks for the executable. The line next to **Executable** shows the path found at start-up or after the last change of path (**Change...**, **Automatic**, loading a profile), but each run searches again, and a chosen path that no longer holds a file is skipped without a message. The chosen path is stored in the profile, so that different profiles can run different versions of PortAtlas.
 
 ## Profiles
 
-A profile is a named set of form states, one per command, stored as a JSON file in `Data\profiles`, next to the executable. When that folder cannot be written (an installation under Program Files), profiles stay in the per-user folder of earlier versions: `%APPDATA%\PortAtlas\profiles` on Windows, `$XDG_CONFIG_HOME/portatlas/profiles` (or `~/.config/portatlas/profiles`) on Linux. The first time `Data\profiles` is created, the profiles and `preferences.json` of the per-user folder are copied into it and left in place. The copy only becomes `Data\profiles` once complete: if it stops half-way (a profile held open by another program), the application uses the per-user folder for that run and copies again at the next start. A file is written to a temporary name and then renamed over the previous one, so an interruption leaves the earlier profile intact. A profile file that cannot be read raises an error naming the file.
+A profile is a named set of form states, one per command, stored as a JSON file in `Data\profiles`, next to the executable. When that folder cannot be created (an installation under Program Files), profiles stay in the per-user folder of earlier versions: `%APPDATA%\PortAtlas\profiles` on Windows, `$XDG_CONFIG_HOME/portatlas/profiles` (or `~/.config/portatlas/profiles`) on Linux. The first time `Data\profiles` is created, the profiles and `preferences.json` of the per-user folder are copied into it and left in place. The copy only becomes `Data\profiles` once complete: if it stops half-way (a profile held open by another program), the application uses the per-user folder for that run and copies again at the next start. A file is written to a temporary name and then renamed over the previous one, so an interruption leaves the earlier profile intact. A profile file that cannot be read raises an error naming the file.
 
-**Load** opens the selected profile, or the profile whose name is typed when none is selected. **Save** writes under the typed name, or updates the selected profile when no name is typed; overwriting an existing profile always asks for confirmation through `IConfirmationService`. The colour theme and the name of the last profile used are stored in `preferences.json`, one level above the profile directory in use: in `Data` next to the executable, or in the per-user folder (`%APPDATA%\PortAtlas`, `$XDG_CONFIG_HOME/portatlas` or `~/.config/portatlas`) when the profiles stay there. They are restored when the window opens; a missing or damaged preferences file falls back to the defaults.
+Overwriting an existing profile always asks for confirmation through `IConfirmationService`, which keeps the question out of the view model and lets the tests answer it. The colour theme and the name of the last profile used are stored in `preferences.json`, one level above the profile directory in use, so they follow the profiles when these stay in the per-user folder; a missing or damaged preferences file falls back to the defaults.
 
-A text entry of a repeatable option counts as soon as it is typed, so a value left in the box without pressing Add is still part of the profile and of the command line. Options declared once on the root command, such as `--config`, share a single value across all commands. Option groups are collapsible, and the group of rarely used options starts folded.
-
-The `--input` option accepts files, directories and wildcard patterns, so it offers both a File and a Folder picker.
+Options declared once on the root command, such as `--config`, share a single value across all commands.
 
 ## Layers
 
