@@ -25,6 +25,7 @@ public sealed class AuditCommand : Command
     private readonly Option<bool> _noTui = new("--no-tui") { Description = "Run without the terminal dashboard (Windows service, systemd unit)." };
     private readonly Option<bool> _noDns = new("--no-dns") { Description = "Do not name remote addresses: no reverse DNS, no RDAP owner, no alias." };
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
+    private readonly Option<int?> _rdapTimeout = OptionFactory.CreateRdapTimeout();
     private readonly Option<bool> _noRdap = new("--no-rdap") { Description = "Do not query RDAP registries (Internet) for address owners; reverse DNS stays active." };
     private readonly Option<string[]> _excludeRemoteIps = OptionFactory.CreateList("--exclude-remote-ips", "addresses", "Remote IP addresses or CIDR subnets that are not recorded.");
     private readonly Option<string[]> _alias = OptionFactory.CreateList("--alias", "ip=host", "Host name used for an IP address instead of reverse DNS (ip=host, or ip:host for IPv4). Repeatable.");
@@ -53,6 +54,7 @@ public sealed class AuditCommand : Command
         Options.Add(_noDns);
         Options.Add(_noRdap);
         Options.Add(_dnsTimeout);
+        Options.Add(_rdapTimeout);
         Options.Add(_excludeRemoteIps);
         _alias.Validators.Add(result =>
         {
@@ -108,6 +110,7 @@ public sealed class AuditCommand : Command
             ResolveRemoteHostNames = config.ResolveRemoteHostNames && !parseResult.GetValue(_noDns),
             ResolveIpOwners = config.ResolveIpOwners && !parseResult.GetValue(_noRdap),
             DnsResolutionTimeoutMs = parseResult.GetValue(_dnsTimeout) ?? config.DnsResolutionTimeoutMs,
+            RdapTimeoutMs = parseResult.GetValue(_rdapTimeout) ?? config.RdapTimeoutMs,
             ExcludedRemoteIps = OptionFactory.ReadList(parseResult, _excludeRemoteIps, config.ExcludedRemoteIps),
             CustomHostAliases = MergeAliases(config.CustomHostAliases, parseResult.GetValue(_alias) ?? []),
             MaskServerName = maskServer,

@@ -76,6 +76,12 @@ internal static class OptionFactory
         CreateInteger("--dns-timeout-ms", "milliseconds", "Time to wait for a reverse DNS answer. Default: 3000.", minimum: 1);
 
     /// <summary>
+    /// <c>--rdap-timeout-ms</c>, shared by the commands that send RDAP queries (configuration key <c>RdapTimeoutMs</c>).
+    /// </summary>
+    public static Option<int?> CreateRdapTimeout() =>
+        CreateInteger("--rdap-timeout-ms", "milliseconds", "Time to wait for an RDAP answer, redirects included. Default: 4000.", minimum: 1);
+
+    /// <summary>
     /// Option holding a single file path.
     /// </summary>
     public static Option<string?> CreatePath(string name, string description, params string[] aliases) =>

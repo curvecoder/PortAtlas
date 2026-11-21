@@ -143,6 +143,7 @@ public sealed class PortAtlasCommandLineTests
     [InlineData("export", "rules", "--active-within-days", "0")]
     [InlineData("resolve", "--rdap-delay-ms", "-5")]
     [InlineData("audit", "--dns-timeout-ms", "0")]
+    [InlineData("audit", "--rdap-timeout-ms", "0")]
     [InlineData("lookup", "not-an-ip-address")]
     public void Parse_WhenNumericOrAddressValueIsInvalid_ReportsError(params string[] args)
     {
@@ -163,6 +164,9 @@ public sealed class PortAtlasCommandLineTests
     [InlineData("lookup", "192.0.2.1", "--dns-timeout-ms", "4000")]
     [InlineData("resolve", "-i", "audit.csv", "--dns-timeout-ms", "4000")]
     [InlineData("audit", "--dns-timeout-ms", "4000")]
+    [InlineData("lookup", "192.0.2.1", "--rdap-timeout-ms", "6000")]
+    [InlineData("resolve", "-i", "audit.csv", "--rdap-timeout-ms", "6000")]
+    [InlineData("audit", "--rdap-timeout-ms", "6000")]
     [InlineData("config", "init", "portatlas.json")]
     [InlineData("audit", "--config", "custom.json")]
     public void Parse_WhenCommandLineIsValid_ReportsNoError(params string[] args)

@@ -281,7 +281,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
             {
                 rdapSw.Stop();
                 await _output.WriteLineAsync($"  * Call duration          : {rdapSw.ElapsedMilliseconds} ms").ConfigureAwait(false);
-                await _output.WriteLineAsync($"  * RDAP Status            : TIMEOUT (rdap.org did not respond within {config.RdapTimeoutMs} ms). Raise RdapTimeoutMs.").ConfigureAwait(false);
+                await _output.WriteLineAsync($"  * RDAP Status            : TIMEOUT (rdap.org did not respond within {config.RdapTimeoutMs} ms). Raise RdapTimeoutMs or --rdap-timeout-ms.").ConfigureAwait(false);
             }
         }
 

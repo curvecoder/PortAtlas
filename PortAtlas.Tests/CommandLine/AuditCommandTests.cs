@@ -152,6 +152,16 @@ public sealed class AuditCommandTests
     }
 
     [Fact]
+    public void BuildConfiguration_WhenRdapTimeoutGiven_SetsRdapTimeout()
+    {
+        // Act
+        var updated = AuditCommandConfiguration.Build(new AppConfiguration(), "audit", "--rdap-timeout-ms", "6000");
+
+        // Assert
+        updated.RdapTimeoutMs.Should().Be(6000);
+    }
+
+    [Fact]
     public void BuildConfiguration_WhenNoTuiGiven_DisablesDashboard()
     {
         // Act

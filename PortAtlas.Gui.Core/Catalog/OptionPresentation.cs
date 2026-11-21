@@ -57,7 +57,8 @@ public static class OptionPresentation
         ["--force-resolve"] = Resolving,
         ["--cache-only"] = Resolving,
         ["--rdap-delay-ms"] = Resolving,
-        ["--dns-timeout-ms"] = Resolving
+        ["--dns-timeout-ms"] = Resolving,
+        ["--rdap-timeout-ms"] = Resolving
     };
 
     /// <summary>

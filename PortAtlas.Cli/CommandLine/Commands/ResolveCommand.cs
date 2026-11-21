@@ -24,6 +24,7 @@ public sealed class ResolveCommand : Command
     private readonly Option<bool> _forceResolve = new("--force-resolve") { Description = "Resolve every address again, those that already have a name included, and replace the host names already present in the audit logs. A lookup that finds nothing never erases a known name. Without this option only the addresses without a name are resolved." };
     private readonly Option<int?> _rdapDelayMs = OptionFactory.CreateInteger("--rdap-delay-ms", "milliseconds", "Delay between two RDAP queries. Default: 200.", minimum: 0);
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
+    private readonly Option<int?> _rdapTimeout = OptionFactory.CreateRdapTimeout();
     private readonly Option<bool> _cacheOnly = new("--cache-only") { Description = "Use only the merged caches: no DNS or RDAP query is sent." };
     private readonly Option<string?> _configFile;
 
@@ -43,6 +44,7 @@ public sealed class ResolveCommand : Command
         Options.Add(_rdapDelayMs);
         Options.Add(_cacheOnly);
         Options.Add(_dnsTimeout);
+        Options.Add(_rdapTimeout);
 
         SetAction(async (parseResult, cancellationToken) =>
         {
@@ -87,7 +89,7 @@ public sealed class ResolveCommand : Command
                 dnsResolutionTimeout: dnsTimeout,
                 resolveHostNames: config.ResolveRemoteHostNames,
                 resolveIpOwners: config.ResolveIpOwners,
-                rdapTimeout: TimeSpan.FromMilliseconds(config.RdapTimeoutMs));
+                rdapTimeout: TimeSpan.FromMilliseconds(parseResult.GetValue(_rdapTimeout) ?? config.RdapTimeoutMs));
             return await runner.RunAsync(auditFiles, caches, options, cancellationToken).ConfigureAwait(false);
         });
     }

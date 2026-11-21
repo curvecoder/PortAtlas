@@ -48,7 +48,7 @@ Ces clés décident quels sockets `audit` enregistre. Le tableau de bord en comp
 | `ResolveRemoteHostNames` | booléen | `true` | Résolution de nom des adresses distantes. `false` désactive le DNS inverse, RDAP et les alias dans `audit`, mais seulement le DNS inverse dans `resolve`. `lookup` ne la lit pas. | `--no-dns` |
 | `DnsResolutionTimeoutMs` | entier | `3000` | Millisecondes d'attente d'une réponse DNS inverse ; utilisé par `audit`, `resolve` et `lookup` ; au moins 1 | `--dns-timeout-ms` |
 | `ResolveIpOwners` | booléen | `true` | Requête RDAP sur le propriétaire des adresses publiques, utilisé comme nom faute de nom DNS ; lue par `audit` et `resolve`, pas par `lookup` | `--no-rdap` |
-| `RdapTimeoutMs` | entier | `4000` | Millisecondes d'attente d'une réponse RDAP, redirection de `rdap.org` vers le registre comprise ; utilisé par `audit`, `resolve` et `lookup` ; au moins 1 | aucune |
+| `RdapTimeoutMs` | entier | `4000` | Millisecondes d'attente d'une réponse RDAP, redirection de `rdap.org` vers le registre comprise ; utilisé par `audit`, `resolve` et `lookup` ; au moins 1 | `--rdap-timeout-ms` |
 | `DnsCacheFilePath` | chemin | `portatlas_dns_cache.json` | Cache DNS persistant ; cache par défaut de `resolve` et `lookup` | `--cache`, `--output-cache` (`resolve`) |
 | `DnsExcludedNetworks` | liste d'adresses ou CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Adresses jamais résolues par `audit`, `resolve` et `lookup` | aucune |
 | `CustomHostAliases` | objet `{ "ip": "nom" }` | `{}` | Noms utilisés à la place du DNS inverse par `audit`, `resolve` et `lookup` ; jamais écrits dans le cache DNS | `--alias` (`audit`, s'ajoute au fichier) |

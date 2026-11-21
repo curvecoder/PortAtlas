@@ -12,6 +12,7 @@ public sealed class LookupCommand : Command
 {
     private readonly Argument<string> _address = new("ip") { Description = "IPv4 or IPv6 address to diagnose." };
     private readonly Option<int?> _dnsTimeout = OptionFactory.CreateDnsTimeout();
+    private readonly Option<int?> _rdapTimeout = OptionFactory.CreateRdapTimeout();
     private readonly Option<string?> _configFile;
 
     /// <summary>
@@ -31,13 +32,15 @@ public sealed class LookupCommand : Command
         });
         Arguments.Add(_address);
         Options.Add(_dnsTimeout);
+        Options.Add(_rdapTimeout);
 
         SetAction(async (parseResult, cancellationToken) =>
         {
             var fileConfiguration = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
             var config = fileConfiguration with
             {
-                DnsResolutionTimeoutMs = parseResult.GetValue(_dnsTimeout) ?? fileConfiguration.DnsResolutionTimeoutMs
+                DnsResolutionTimeoutMs = parseResult.GetValue(_dnsTimeout) ?? fileConfiguration.DnsResolutionTimeoutMs,
+                RdapTimeoutMs = parseResult.GetValue(_rdapTimeout) ?? fileConfiguration.RdapTimeoutMs
             };
             var address = parseResult.GetValue(_address) ?? string.Empty;
             await new IpResolutionDiagnosticReporter().RunDiagnosticAsync(address, config, cancellationToken).ConfigureAwait(false);

@@ -48,7 +48,7 @@ These keys decide which sockets are recorded by `audit`. The dashboard adds entr
 | `ResolveRemoteHostNames` | boolean | `true` | Name resolution of remote addresses. `false` turns off reverse DNS, RDAP and aliases in `audit`, but only reverse DNS in `resolve`. `lookup` does not read it. | `--no-dns` |
 | `DnsResolutionTimeoutMs` | integer | `3000` | Milliseconds to wait for a reverse DNS answer; used by `audit`, `resolve` and `lookup`; at least 1 | `--dns-timeout-ms` |
 | `ResolveIpOwners` | boolean | `true` | RDAP query for the owner of public addresses, used as name when there is no DNS name; read by `audit` and `resolve`, not by `lookup` | `--no-rdap` |
-| `RdapTimeoutMs` | integer | `4000` | Milliseconds to wait for an RDAP answer, redirect from `rdap.org` to the registry included; used by `audit`, `resolve` and `lookup`; at least 1 | none |
+| `RdapTimeoutMs` | integer | `4000` | Milliseconds to wait for an RDAP answer, redirect from `rdap.org` to the registry included; used by `audit`, `resolve` and `lookup`; at least 1 | `--rdap-timeout-ms` |
 | `DnsCacheFilePath` | path | `portatlas_dns_cache.json` | Persistent DNS cache; default cache of `resolve` and `lookup` | `--cache`, `--output-cache` (`resolve`) |
 | `DnsExcludedNetworks` | list of addresses or CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Addresses never resolved by `audit`, `resolve` and `lookup` | none |
 | `CustomHostAliases` | object `{ "ip": "name" }` | `{}` | Names used instead of reverse DNS by `audit`, `resolve` and `lookup`; never written to the DNS cache | `--alias` (`audit`, adds to the file) |

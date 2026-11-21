@@ -133,6 +133,7 @@ PortAtlas audit [options]
 | `--no-dns` | none | `ResolveRemoteHostNames` | DNS on | No name resolution at all: no reverse DNS, no RDAP, no alias |
 | `--no-rdap` | none | `ResolveIpOwners` | RDAP on | No RDAP query to Internet registries; reverse DNS stays active |
 | `--dns-timeout-ms` | milliseconds, at least 1 | `DnsResolutionTimeoutMs` | `3000` | Time to wait for a reverse DNS answer |
+| `--rdap-timeout-ms` | milliseconds, at least 1 | `RdapTimeoutMs` | `4000` | Time to wait for an RDAP answer, redirect to the registry included |
 | `--exclude-remote-ips` | addresses or CIDR | `ExcludedRemoteIps` | none | Remote addresses that are not recorded |
 | `--alias` | `ip=host` (IPv4 or IPv6), or `ip:host` for IPv4, repeatable | `CustomHostAliases` | none | Host name used instead of reverse DNS; a pair without an IP address or a name is refused |
 | `--mask-server` | `<name>` | `MaskServerName` | none | Server name shown by the dashboard |
@@ -245,6 +246,7 @@ PortAtlas resolve [-i <path>]... [--cache <path>]... [options]
 | `--rdap-delay-ms` | milliseconds, at least 0 | `200` | Delay between two RDAP queries |
 | `--cache-only` | none | off | Send no DNS or RDAP query; use only the merged caches |
 | `--dns-timeout-ms` | milliseconds, at least 1 | `DnsResolutionTimeoutMs` | Time to wait for a reverse DNS answer |
+| `--rdap-timeout-ms` | milliseconds, at least 1 | `RdapTimeoutMs` | Time to wait for an RDAP answer, redirect to the registry included |
 
 Family read: inputs (`.csv`, `.ndjson`, `.jsonl`). When two caches give different names for the same address, the most recent entry is kept and the conflict is printed. An entry without a name never conflicts with a named one: the named entry is kept.
 
@@ -259,7 +261,7 @@ Configuration keys read: `OutputCsvPath` (default input), `DnsCacheFilePath`, `D
 Prints a six-step diagnostic of the resolution of one address: classification, local cache, operating system DNS settings, reverse DNS query, RDAP query, resulting cache entry.
 
 ```text
-PortAtlas lookup <ip> [--dns-timeout-ms <milliseconds>]
+PortAtlas lookup <ip> [--dns-timeout-ms <milliseconds>] [--rdap-timeout-ms <milliseconds>]
 ```
 
 `<ip>` must be an IPv4 or IPv6 address. The command reads `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath`, `DnsResolutionTimeoutMs` and `RdapTimeoutMs` from the configuration. As in the audit, an address named by `CustomHostAliases` takes that name, and an address of `DnsExcludedNetworks` gets no name: for both, the reverse DNS and RDAP steps print `SKIPPED` and send no query. Step 1 also says whether `ExcludedRemoteIps` makes the audit drop the flows of the address. Otherwise the command sends the reverse DNS query with the same timeout as `audit`, so that a `SUCCESS` here means the audit names the address too, and the RDAP query for public addresses only, with the same `RdapTimeoutMs`; `ResolveIpOwners` and `--no-rdap` do not apply to it, nor does `ResolveRemoteHostNames`. The pairs of `audit --alias` are not known to `lookup`, which reads `CustomHostAliases` from the file only.
@@ -287,7 +289,7 @@ Configuration keys read: none.
 | Map rendering, `--html`, `--drawio` | ✔ | ✔ | | | | | |
 | `--ndjson`, `--interval`, `--columns`, `--rewrite-interval` | ✔ | | | | | | |
 | `--no-tui`, `--no-dns`, `--no-rdap` | ✔ | | | | | | |
-| `--dns-timeout-ms` | ✔ | | | | ✔ | ✔ | |
+| `--dns-timeout-ms`, `--rdap-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
 | `--mask-server`, `--mask-ip`, `--obfuscate` | ✔ | | | | | | |
 | `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output` | | | ✔ | | | | |

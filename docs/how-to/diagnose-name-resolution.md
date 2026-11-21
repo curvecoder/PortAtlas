@@ -24,7 +24,7 @@ Check the new value with `PortAtlas lookup 192.168.1.25 --dns-timeout-ms 6000`. 
 
 ## When RDAP is slow
 
-Step 5 shows the RDAP call duration and the timeout used, the same as the audit and `resolve` (`RdapTimeoutMs`, 4000 ms by default). `rdap.org` redirects each query to the registry that holds the address, so a lookup opens two HTTPS connections. If step 5 reports `TIMEOUT`, or a duration close to the timeout, raise `RdapTimeoutMs` in the configuration file. An address without DNS name whose RDAP query got no answer is not cached: it is asked again 15 minutes later, even when the connection is gone, up to three times; after that, only a scan that sees the address again queues it. Restarting `audit` asks again for every logged flow still without name.
+Step 5 shows the RDAP call duration and the timeout used, the same as the audit and `resolve` (`RdapTimeoutMs`, 4000 ms by default). `rdap.org` redirects each query to the registry that holds the address, so a lookup opens two HTTPS connections. If step 5 reports `TIMEOUT`, or a duration close to the timeout, raise `RdapTimeoutMs` in the configuration file, or try a value first with `PortAtlas lookup <ip> --rdap-timeout-ms 8000` and pass the same `--rdap-timeout-ms` to `audit` or `resolve`. An address without DNS name whose RDAP query got no answer is not cached: it is asked again 15 minutes later, even when the connection is gone, up to three times; after that, only a scan that sees the address again queues it. Restarting `audit` asks again for every logged flow still without name.
 
 ## Why ping -a finds a name and PortAtlas does not
 
