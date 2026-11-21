@@ -1,3 +1,4 @@
+using System.Globalization;
 using FileForge.IO;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Cli.Dashboard;
@@ -479,7 +480,7 @@ public static class ContinuousAuditRunner
         }
 
         Console.ForegroundColor = ConsoleColor.Yellow;
-        Console.WriteLine($"[{DateTimeOffset.Now:HH:mm:ss}] {message}");
+        Console.WriteLine($"[{DateTimeOffset.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture)}] {message}");
         Console.ResetColor();
     }
 

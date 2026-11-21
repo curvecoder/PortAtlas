@@ -935,7 +935,8 @@ public sealed partial class FlowAuditDashboardRenderer
         var sb = new StringBuilder(8192);
 
         var uptimeStr = FormatUptime(_uptime.Elapsed);
-        var timestampStr = DateTime.Now.ToString("HH:mm:ss");
+        // The invariant culture keeps the colons: the current culture may separate hours with dots.
+        var timestampStr = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
         var interiorWidth = totalWidth - 2;
 
@@ -1133,7 +1134,7 @@ public sealed partial class FlowAuditDashboardRenderer
                 var entry = displayEntries[dataIdx];
                 var isRowSelected = _isSelectionActive && i == _selectedRowIndex;
 
-                var time = entry.FirstSeenUtc.ToString("HH:mm:ss");
+                var time = entry.FirstSeenUtc.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
                 var proto = entry.Socket.Protocol == SocketTransportProtocol.Tcp ? "TCP" : "UDP";
                 var dir = entry.Socket.Direction switch
                 {

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -50,6 +51,35 @@ public sealed class FlowAuditDashboardRendererTests
         // Assert
         var headerLine = StripAnsi(frame.Split(["\r\n", "\n"], StringSplitOptions.None)[0]);
         headerLine.Should().Contain($"PortAtlas v{expectedVersion} ");
+    }
+
+    [Fact]
+    public void BuildDashboardFrame_WhenTheCurrentCultureSeparatesTimeWithDots_WritesTheTimesWithColons()
+    {
+        // Arrange
+        var dottedTimeCulture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        dottedTimeCulture.DateTimeFormat.TimeSeparator = ".";
+        var renderer = new FlowAuditDashboardRenderer(5, "output.csv");
+        var entry = CreateOutboundEntry("192.168.1.20", 443, 50001) with { FirstSeenUtc = new DateTimeOffset(2026, 11, 1, 8, 9, 10, TimeSpan.Zero) };
+        renderer.HydrateDiscoveries([entry]);
+        var result = new FlowAuditCycleResult(DateTimeOffset.UtcNow, 0, 0, 0, 1, [], []);
+        var originalCulture = CultureInfo.CurrentCulture;
+
+        // Act
+        string frame;
+        try
+        {
+            CultureInfo.CurrentCulture = dottedTimeCulture;
+            frame = StripAnsi(renderer.BuildDashboardFrame(result, SampleHost));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+        }
+
+        // Assert
+        frame.Should().Contain("08:09:10");
+        frame.Should().NotMatchRegex(@"\d{2}\.\d{2}\.\d{2}");
     }
 
     [Fact]
