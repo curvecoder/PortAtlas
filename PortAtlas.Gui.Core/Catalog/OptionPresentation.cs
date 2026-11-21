@@ -18,7 +18,7 @@ public static class OptionPresentation
     {
         ["--input"] = Input,
         ["--cache"] = Input,
-        ["--config"] = new(OptionGroup.Advanced, PathKind.FileToRead),
+        ["--config"] = new(OptionGroup.Other, PathKind.FileToRead),
 
         ["--include-ports"] = Filter,
         ["--exclude-ports"] = Filter,
@@ -64,7 +64,7 @@ public static class OptionPresentation
     /// Returns the presentation of an option.
     /// </summary>
     /// <param name="optionName">Long name of the option.</param>
-    /// <returns>The entry of the option, or one in <see cref="OptionGroup.Advanced"/> without path when none is declared.</returns>
+    /// <returns>The entry of the option, or one in <see cref="OptionGroup.Other"/> without path when none is declared.</returns>
     public static OptionPresentationEntry For(string optionName) =>
-        Entries.TryGetValue(optionName, out var entry) ? entry : new OptionPresentationEntry(OptionGroup.Advanced, PathKind.None);
+        Entries.TryGetValue(optionName, out var entry) ? entry : new OptionPresentationEntry(OptionGroup.Other, PathKind.None);
 }

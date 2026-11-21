@@ -105,7 +105,7 @@ public sealed class MainViewModelTests : IDisposable
     }
 
     [Fact]
-    public void Groups_WhenAFormIsShown_StartOpenExceptAdvanced()
+    public void Groups_WhenAFormIsShown_StartOpenExceptOther()
     {
         // Arrange
         var vm = CreateMainViewModel();
@@ -115,8 +115,8 @@ public sealed class MainViewModelTests : IDisposable
         var groups = vm.CurrentForm.Groups;
 
         // Assert
-        groups.Where(g => g.Group != OptionGroup.Advanced).Should().OnlyContain(g => g.IsExpanded);
-        groups.Single(g => g.Group == OptionGroup.Advanced).IsExpanded.Should().BeFalse();
+        groups.Where(g => g.Group != OptionGroup.Other).Should().OnlyContain(g => g.IsExpanded);
+        groups.Single(g => g.Group == OptionGroup.Other).IsExpanded.Should().BeFalse();
     }
 
     [Fact]

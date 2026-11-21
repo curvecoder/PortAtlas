@@ -54,7 +54,7 @@ public sealed class CommandFormViewModelTests
             OptionGroup.Inputs,
             OptionGroup.Filters,
             OptionGroup.Outputs,
-            OptionGroup.Advanced);
+            OptionGroup.Other);
         vm.Groups.Should().OnlyContain(g => g.Options.Count > 0);
     }
 

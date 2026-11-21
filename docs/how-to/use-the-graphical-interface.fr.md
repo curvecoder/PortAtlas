@@ -32,7 +32,7 @@ Quand aucun n'existe, un bandeau en haut de la fenêtre affiche `PortAtlas.exe w
 
 ## Remplir un formulaire
 
-Les options sont regroupées en sections, affichées dans cet ordre et seulement quand la commande a des options dedans : `Inputs`, `Filters`, `MapRendering`, `Outputs`, `Resolution`, puis une dernière section pour les autres options, comme `--config`. Chaque section se replie et se déplie depuis son en-tête ; la dernière démarre repliée.
+Les options sont regroupées en sections, affichées dans cet ordre et seulement quand la commande a des options dedans : **Inputs**, **Filters**, **Map rendering**, **Outputs**, **Resolution**, puis **Other options**, qui contient les options d'aucune autre section, comme `--config`. Chaque section se replie et se déplie depuis son en-tête ; **Other options** démarre repliée.
 
 | Champ | Usage |
 | :--- | :--- |
@@ -57,8 +57,8 @@ Aucune de ces commandes ne lit les tables de sockets ; aucune n'a donc besoin de
 ## Exemple : dessiner une carte à partir d'un journal d'audit
 
 1. Dans **Commands**, sélectionnez `map`.
-2. Dans `Inputs`, sur la ligne `--input`, cliquez sur **File...** et choisissez `portatlas_audit.csv`.
-3. Dans `Outputs`, sur la ligne `--html`, cliquez sur **Browse...** et indiquez `homelab.html`.
+2. Dans **Inputs**, sur la ligne `--input`, cliquez sur **File...** et choisissez `portatlas_audit.csv`.
+3. Dans **Outputs**, sur la ligne `--html`, cliquez sur **Browse...** et indiquez `homelab.html`.
 4. Vérifiez la ligne de commande, par exemple `map --input C:\Tools\PortAtlas\portatlas_audit.csv --html C:\Tools\PortAtlas\homelab.html`.
 5. Cliquez sur **Run**. La sortie affiche `Topology map generated: …`, et la barre d'exécution `Completed` et `Exit code: 0`.
 6. Ouvrez `homelab.html` dans un navigateur.

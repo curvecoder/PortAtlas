@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.VisualTree;
 using AwesomeAssertions;
 using PortAtlas.Gui.Core.Catalog;
 using PortAtlas.Gui.Core.Execution;
@@ -56,6 +57,38 @@ public sealed class MainWindowTests : IDisposable
 
         // Assert
         listedKeys.Should().Equal(catalog.Commands.Select(c => c.Key));
+    }
+
+    [AvaloniaFact]
+    public void MainWindow_WhenMapFormIsShown_HeadsEachSectionWithItsTitle()
+    {
+        // Arrange
+        var vm = new MainViewModel(
+            CommandCatalog.Build(),
+            new NoOpRunner(),
+            new NullFilePicker(),
+            new ImmediateDispatcher(),
+            new ProfileStore(new FixedDirectory(_directory)),
+            new AlwaysConfirm(),
+            new UserPreferencesStore(new FixedDirectory(_directory)),
+            new ExecutableViewModel(new PortAtlasExecutableLocator(_root, _ => null), new NullFilePicker()));
+        vm.SelectedCommand = vm.Commands.Single(c => c.Key == "map");
+        var window = new MainWindow { DataContext = vm };
+
+        // Act
+        window.Show();
+        var headers = window.GetVisualDescendants()
+            .OfType<Expander>()
+            .Select(e => e.Header)
+            .OfType<Panel>()
+            .SelectMany(p => p.Children.OfType<TextBlock>())
+            .Select(t => t.Text)
+            .ToArray();
+        window.Close();
+
+        // Assert
+        headers.Should().Equal(vm.CurrentForm.Groups.Select(g => g.Title));
+        headers.Should().Contain(["Map rendering", "Other options"]);
     }
 
     [AvaloniaFact]

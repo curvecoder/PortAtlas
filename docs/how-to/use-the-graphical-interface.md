@@ -32,7 +32,7 @@ When none exists, a banner at the top of the window reads `PortAtlas.exe was not
 
 ## Fill in a form
 
-The options are grouped in sections, shown in this order and only when the command has options in them: `Inputs`, `Filters`, `MapRendering`, `Outputs`, `Resolution`, then a last section for the other options, such as `--config`. Each section folds and unfolds from its header; the last one starts folded.
+The options are grouped in sections, shown in this order and only when the command has options in them: **Inputs**, **Filters**, **Map rendering**, **Outputs**, **Resolution**, then **Other options**, which holds the options of no other section, such as `--config`. Each section folds and unfolds from its header; **Other options** starts folded.
 
 | Field | Use |
 | :--- | :--- |
@@ -57,8 +57,8 @@ None of these commands reads the socket tables, so none needs administrator righ
 ## Example: draw a map from an audit log
 
 1. In **Commands**, select `map`.
-2. In `Inputs`, on the `--input` line, click **File...** and choose `portatlas_audit.csv`.
-3. In `Outputs`, on the `--html` line, click **Browse...** and give `homelab.html`.
+2. In **Inputs**, on the `--input` line, click **File...** and choose `portatlas_audit.csv`.
+3. In **Outputs**, on the `--html` line, click **Browse...** and give `homelab.html`.
 4. Check the command line, for example `map --input C:\Tools\PortAtlas\portatlas_audit.csv --html C:\Tools\PortAtlas\homelab.html`.
 5. Click **Run**. The output shows `Topology map generated: …`, and the run bar `Completed` and `Exit code: 0`.
 6. Open `homelab.html` in a browser.

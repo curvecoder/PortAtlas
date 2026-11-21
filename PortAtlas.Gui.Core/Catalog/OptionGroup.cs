@@ -21,5 +21,5 @@ public enum OptionGroup
     Resolution,
 
     /// <summary>Options that do not belong to another section.</summary>
-    Advanced
+    Other
 }

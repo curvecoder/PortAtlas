@@ -26,7 +26,7 @@ public sealed class OptionGroupIconConverter : IValueConverter
             OptionGroup.MapRendering => "Icon.Map",
             OptionGroup.Outputs => "Icon.Output",
             OptionGroup.Resolution => "Icon.Resolve",
-            _ => "Icon.Advanced"
+            _ => "Icon.Other"
         };
 
         return Application.Current.TryFindResource(key, out var icon) ? icon : null;

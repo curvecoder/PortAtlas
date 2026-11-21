@@ -10,7 +10,17 @@ namespace PortAtlas.Gui.Core.ViewModels;
 public sealed record OptionGroupViewModel(OptionGroup Group, IReadOnlyList<OptionViewModel> Options)
 {
     /// <summary>
-    /// Whether the section is open. Advanced options start folded so that the usual ones stay in view.
+    /// Whether the section is open. The section of other options starts folded so that the usual ones stay in view.
     /// </summary>
-    public bool IsExpanded { get; set; } = Group != OptionGroup.Advanced;
+    public bool IsExpanded { get; set; } = Group != OptionGroup.Other;
+
+    /// <summary>
+    /// Header shown above the section.
+    /// </summary>
+    public string Title => Group switch
+    {
+        OptionGroup.MapRendering => "Map rendering",
+        OptionGroup.Other => "Other options",
+        _ => Group.ToString()
+    };
 }
