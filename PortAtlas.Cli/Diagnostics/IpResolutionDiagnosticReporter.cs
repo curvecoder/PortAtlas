@@ -31,7 +31,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
     }
 
     /// <summary>
-    /// Executes the complete 6-stage diagnostic pipeline for the target IP address and prints a comprehensive technical report to the console.
+    /// Executes the complete 6-stage diagnostic pipeline for the target IP address and prints the outcome of each stage to the console.
     /// </summary>
     /// <param name="targetIpString">The IP string to diagnose.</param>
     /// <param name="config">Application configuration containing cache paths and exclusion rules.</param>

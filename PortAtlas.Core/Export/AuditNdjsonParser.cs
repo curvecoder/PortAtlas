@@ -34,7 +34,8 @@ public sealed class AuditNdjsonParser
         }
         catch (JsonException)
         {
-            // Malformed or truncated NDJSON records are skipped to preserve streaming reader resiliency.
+            // A line cut short by an abrupt stop must not prevent reading the rest of the log:
+            // the caller receives null, and ParseHistoryAsync records the line number as unreadable.
             return null;
         }
     }
