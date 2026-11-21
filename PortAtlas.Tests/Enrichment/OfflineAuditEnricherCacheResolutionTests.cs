@@ -316,6 +316,23 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         resolver.ResolvedAddresses.Should().BeEquivalentTo(["192.168.1.40", "192.168.1.43"]);
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenNdjsonKeysAreWrittenInAnotherCase_ResolvesAndNamesTheRemoteAddressUnderItsOwnKey()
+    {
+        // Arrange
+        var auditPath = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.ndjson");
+        await File.WriteAllLinesAsync(auditPath, ["""{"RemoteIp":"192.168.1.50","RemoteHostName":"","RemotePort":443}"""]);
+        var resolver = new ScriptedIpResolver { ["192.168.1.50"] = Resolved("proxmox.home.arpa") };
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([auditPath], [], Options());
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("192.168.1.50");
+        (await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Which)).Should()
+            .Equal("""{"RemoteIp":"192.168.1.50","RemoteHostName":"proxmox.home.arpa","RemotePort":443}""");
+    }
+
     [Theory]
     [InlineData(';')]
     [InlineData('\t')]

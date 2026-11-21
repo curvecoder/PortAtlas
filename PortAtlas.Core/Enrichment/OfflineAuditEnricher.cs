@@ -30,6 +30,11 @@ public sealed class OfflineAuditEnricher(
         WriteIndented = false
     };
 
+    // The audit writes camelCase keys, and export ndjson reads the keys in any case (AuditNdjsonParser): resolve reads
+    // them the same way, so a log saved by another tool is named too, under the key the line already has.
+    private static readonly JsonNodeOptions CaseInsensitiveKeys = new() { PropertyNameCaseInsensitive = true };
+    private const string RemoteHostNameKey = "remoteHostName";
+
     private readonly DnsCacheConsolidator _consolidator = consolidator ?? new DnsCacheConsolidator();
     private readonly IOfflineIpResolver _offlineResolver = offlineResolver ?? new OfflineDnsResolver();
     private readonly Action<string>? _logger = logger;
@@ -285,26 +290,9 @@ public sealed class OfflineAuditEnricher(
 
                 try
                 {
-                    using var doc = JsonDocument.Parse(line);
-                    var root = doc.RootElement;
-                    if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("remoteIp", out var ipProp))
+                    if (ReadNdjsonRemoteAddress(line) is { } remote && ShouldResolve(remote.Ip, remote.HostName, knownCache, forceResolve))
                     {
-                        continue;
-                    }
-
-                    // ToString, unlike GetString, accepts a value of any JSON type (a JSON null gives an empty string),
-                    // so the scan reads each line as the enrichment pass does with JsonNode. A value that is not an
-                    // address is dropped by the IPAddress.TryParse of the resolution loop.
-                    var ip = ipProp.ToString();
-                    if (string.IsNullOrWhiteSpace(ip))
-                    {
-                        continue;
-                    }
-
-                    var host = root.TryGetProperty("remoteHostName", out var hostProp) ? hostProp.ToString() : null;
-                    if (ShouldResolve(ip, host, knownCache, forceResolve))
-                    {
-                        result.Add(ip);
+                        result.Add(remote.Ip);
                     }
                 }
                 catch (JsonException)
@@ -532,6 +520,29 @@ public sealed class OfflineAuditEnricher(
         }
     }
 
+    // ToString accepts a value of any JSON type, and a JSON null gives no host name: the scan and the enrichment pass read
+    // each line alike. A value that is not an address is dropped by the IPAddress.TryParse of the resolution loop.
+    private static NdjsonRemoteAddress? ReadNdjsonRemoteAddress(string line)
+    {
+        if (JsonNode.Parse(line, CaseInsensitiveKeys) is not JsonObject record
+            || !record.TryGetPropertyValue("remoteIp", out var ipNode)
+            || ipNode is null)
+        {
+            return null;
+        }
+
+        var ip = ipNode.ToString();
+        if (string.IsNullOrWhiteSpace(ip))
+        {
+            return null;
+        }
+
+        var hostName = record.TryGetPropertyValue(RemoteHostNameKey, out var hostNode) ? hostNode?.ToString() : null;
+        return new NdjsonRemoteAddress(record, ip, hostName);
+    }
+
+    private sealed record NdjsonRemoteAddress(JsonObject Record, string Ip, string? HostName);
+
     private static (string ModifiedLine, bool WasUpdated, string? Ip) EnrichNdjsonLine(
         string line,
         IReadOnlyDictionary<string, DnsCacheEntry> cache,
@@ -539,32 +550,17 @@ public sealed class OfflineAuditEnricher(
     {
         try
         {
-            var node = JsonNode.Parse(line);
-            if (node is not JsonObject obj)
+            if (ReadNdjsonRemoteAddress(line) is not { } remote
+                || !ShouldUpdateHost(remote.Ip, remote.HostName, cache, forceResolve, out var newHost))
             {
                 return (line, false, null);
             }
 
-            if (!obj.TryGetPropertyValue("remoteIp", out var ipNode) || ipNode is null)
-            {
-                return (line, false, null);
-            }
-
-            var ip = ipNode.ToString();
-            if (string.IsNullOrWhiteSpace(ip))
-            {
-                return (line, false, null);
-            }
-
-            var currentHost = obj.TryGetPropertyValue("remoteHostName", out var hostNode) ? hostNode?.ToString() : null;
-
-            if (ShouldUpdateHost(ip, currentHost, cache, forceResolve, out var newHost))
-            {
-                obj["remoteHostName"] = newHost;
-                return (obj.ToJsonString(CompactJsonOptions), true, ip);
-            }
-
-            return (line, false, null);
+            // Setting an existing key through the indexer would rename it to the spelling given here.
+            var hostNameKey = remote.Record.Select(property => property.Key)
+                .FirstOrDefault(key => key.Equals(RemoteHostNameKey, StringComparison.OrdinalIgnoreCase)) ?? RemoteHostNameKey;
+            remote.Record[hostNameKey] = newHost;
+            return (remote.Record.ToJsonString(CompactJsonOptions), true, remote.Ip);
         }
         catch (JsonException)
         {
