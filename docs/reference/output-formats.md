@@ -103,7 +103,7 @@ Written by `audit --ndjson` and by `export ndjson`. One JSON object per line, al
 
 `observationCount`, `localPort`, `remotePort` and `processId` are numbers; the other values are strings, empty when unknown, never `null`. Dates are ISO 8601 with their offset (`2026-03-14T08:30:00.1234567+00:00`). Accented characters are written as they are. PortAtlas reads each line break of a command line as a space; a line break of an older CSV log converted by `export ndjson` is written as `\n`.
 
-`export rules`, `export ndjson` and `resolve` read NDJSON files (`.ndjson`, `.jsonl`) as well as CSV files. All three read property names without case. `export rules` and `export ndjson` skip a line that is not a valid JSON object without a message; `resolve` copies such a line unchanged, and writes a host name under the key spelling the line already uses.
+`export rules`, `export ndjson` and `resolve` read NDJSON files (`.ndjson`, `.jsonl`) as well as CSV files. All three read property names without case. `export rules` and `export ndjson` skip a line that is not a valid JSON object without a message; `resolve` copies such a line unchanged, as well as a line holding two keys that differ only in case, and writes a host name under the key spelling the line already uses.
 
 ## Firewall rule matrix
 

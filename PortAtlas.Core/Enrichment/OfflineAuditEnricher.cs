@@ -524,10 +524,23 @@ public sealed class OfflineAuditEnricher(
     // each line alike. A value that is not an address is dropped by the IPAddress.TryParse of the resolution loop.
     private static NdjsonRemoteAddress? ReadNdjsonRemoteAddress(string line)
     {
-        if (JsonNode.Parse(line, CaseInsensitiveKeys) is not JsonObject record
-            || !record.TryGetPropertyValue("remoteIp", out var ipNode)
-            || ipNode is null)
+        if (JsonNode.Parse(line, CaseInsensitiveKeys) is not JsonObject record)
         {
+            return null;
+        }
+
+        JsonNode? ipNode;
+        try
+        {
+            if (!record.TryGetPropertyValue("remoteIp", out ipNode) || ipNode is null)
+            {
+                return null;
+            }
+        }
+        catch (ArgumentException)
+        {
+            // Two keys that differ only in case (remoteIp and RemoteIp) leave the address ambiguous: the line is neither
+            // resolved nor named, and the enrichment pass copies it unchanged, as a line that is not a JSON object.
             return null;
         }
 

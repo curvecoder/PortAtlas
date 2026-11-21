@@ -333,6 +333,24 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
             .Equal("""{"RemoteIp":"192.168.1.50","RemoteHostName":"proxmox.home.arpa","RemotePort":443}""");
     }
 
+    [Fact]
+    public async Task EnrichFilesAsync_WhenAnNdjsonLineHoldsTheSameKeyInTwoCases_KeepsTheLineAndReadsTheOthers()
+    {
+        // Arrange
+        var auditPath = Path.Combine(_tempDirectory, $"audit_{Guid.NewGuid():N}.ndjson");
+        const string ambiguousLine = """{"remoteIp":"192.168.1.50","RemoteIp":"192.168.1.51","remoteHostName":""}""";
+        await File.WriteAllLinesAsync(auditPath, [ambiguousLine, """{"remoteIp":"192.168.1.52","remoteHostName":""}"""]);
+        var resolver = new ScriptedIpResolver { ["192.168.1.52"] = Resolved("nas.home.arpa") };
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver).EnrichFilesAsync([auditPath], [], Options());
+
+        // Assert
+        resolver.ResolvedAddresses.Should().Equal("192.168.1.52");
+        (await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Which)).Should()
+            .Equal(ambiguousLine, """{"remoteIp":"192.168.1.52","remoteHostName":"nas.home.arpa"}""");
+    }
+
     [Theory]
     [InlineData(';')]
     [InlineData('\t')]

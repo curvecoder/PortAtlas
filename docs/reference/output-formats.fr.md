@@ -103,7 +103,7 @@ Dans `export rules` et `export ndjson`, une valeur illisible prend une valeur pa
 
 `observationCount`, `localPort`, `remotePort` et `processId` sont des nombres ; les autres valeurs sont des chaînes, vides quand elles sont inconnues, jamais `null`. Les dates sont au format ISO 8601 avec leur décalage (`2026-03-14T08:30:00.1234567+00:00`). Les caractères accentués sont écrits tels quels. PortAtlas lit chaque retour à la ligne d'une ligne de commande comme une espace ; un retour à la ligne d'un ancien journal CSV converti par `export ndjson` est écrit sous la forme `\n`.
 
-`export rules`, `export ndjson` et `resolve` lisent les fichiers NDJSON (`.ndjson`, `.jsonl`) comme les fichiers CSV. Les trois lisent les noms de propriétés sans tenir compte de la casse. `export rules` et `export ndjson` ignorent sans message une ligne qui n'est pas un objet JSON valide ; `resolve` copie une telle ligne telle quelle, et écrit un nom d'hôte sous la clé telle que la ligne l'orthographie déjà.
+`export rules`, `export ndjson` et `resolve` lisent les fichiers NDJSON (`.ndjson`, `.jsonl`) comme les fichiers CSV. Les trois lisent les noms de propriétés sans tenir compte de la casse. `export rules` et `export ndjson` ignorent sans message une ligne qui n'est pas un objet JSON valide ; `resolve` copie une telle ligne telle quelle, comme une ligne qui porte deux clés ne différant que par la casse, et écrit un nom d'hôte sous la clé telle que la ligne l'orthographie déjà.
 
 ## Matrice de règles de pare-feu
 
