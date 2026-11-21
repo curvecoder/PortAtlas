@@ -213,8 +213,8 @@ Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'a
 
 ```json
 {
-  "198.51.100.20": {
-    "HostName": "app.example.com",
+  "192.168.1.20": {
+    "HostName": "proxmox.home.arpa",
     "Organization": null,
     "Country": null,
     "NetworkRange": null,
@@ -231,7 +231,7 @@ Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'a
 | `Source` | `DNS`, `RDAP` ou `None` (aucun nom trouvé), écrits par `audit` et `resolve` ; `Local` (bouclage), écrit par `resolve` seulement |
 | `ResolvedAtUtc` | Date de la recherche |
 
-Un alias de `CustomHostAliases` n'est jamais écrit dans le cache. Un cache sous la forme de la 1.x, `{ "198.51.100.20": "app.example.com" }`, est toujours lu. Une entrée illisible est écartée et son adresse est demandée à nouveau.
+Un alias de `CustomHostAliases` n'est jamais écrit dans le cache. Un cache sous la forme de la 1.x, `{ "192.168.1.20": "proxmox.home.arpa" }`, est toujours lu. Une entrée illisible est écartée et son adresse est demandée à nouveau.
 
 `audit` le lit et le met à jour ; `resolve` en fusionne plusieurs ; `lookup` le lit.
 

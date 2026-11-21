@@ -7,7 +7,7 @@ Objectif : comprendre pourquoi une adresse apparaît sans nom dans l'audit, et y
 ## Lancer le diagnostic
 
 ```bash
-PortAtlas lookup 192.0.2.25
+PortAtlas lookup 192.168.1.25
 ```
 
 Le rapport compte six étapes : classification de l'adresse, entrée du cache local, réglages DNS du système, requête DNS inverse avec sa durée et son erreur, requête RDAP (adresses publiques uniquement), et l'entrée de cache qui en résulte.
@@ -20,7 +20,7 @@ L'étape 4 affiche la durée de l'appel et le délai utilisé, le même que celu
 PortAtlas audit --dns-timeout-ms 6000
 ```
 
-Vérifiez la nouvelle valeur avec `PortAtlas lookup 192.0.2.25 --dns-timeout-ms 6000`. La résolution tourne en arrière-plan : une attente plus longue ne retarde pas les balayages. Une adresse dont la requête a expiré est reposée une minute plus tard ; une adresse mise en cache sans nom (l'étape 2 affiche un `HostName` vide avec `Source: None`) est reposée 24 heures après sa date `Resolved at`.
+Vérifiez la nouvelle valeur avec `PortAtlas lookup 192.168.1.25 --dns-timeout-ms 6000`. La résolution tourne en arrière-plan : une attente plus longue ne retarde pas les balayages. Une adresse dont la requête a expiré est reposée une minute plus tard ; une adresse mise en cache sans nom (l'étape 2 affiche un `HostName` vide avec `Source: None`) est reposée 24 heures après sa date `Resolved at`.
 
 ## Quand RDAP est lent
 
@@ -37,10 +37,10 @@ Sous Windows, `ping -a` interroge le fichier hosts, le cache DNS, NetBIOS, LLMNR
 
   ```json
   {
-    "CustomHostAliases": { "192.0.2.25": "nas" }
+    "CustomHostAliases": { "192.168.1.25": "nas" }
   }
   ```
 
-  ou en ligne de commande : `PortAtlas audit --alias 192.0.2.25=nas`.
+  ou en ligne de commande : `PortAtlas audit --alias 192.168.1.25=nas`.
 
 Les alias passent avant le DNS. `lookup` ne lit que les alias du fichier de configuration : une paire donnée à `audit --alias` n'apparaît pas dans son rapport. Les adresses jamais résolues (diffusion, multidiffusion, lien local par défaut) sont listées dans `DnsExcludedNetworks` ; pour elles, et pour une adresse qui a un alias, `lookup` affiche `SKIPPED` aux étapes DNS inverse et RDAP.

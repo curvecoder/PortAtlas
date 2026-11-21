@@ -68,4 +68,4 @@ The unit runs as root so that every socket is attributed to its process ([why](.
 
 After a few scans, the CSV log (`portatlas_audit.csv` in the working directory, or `OutputCsvPath`) contains lines. Without the dashboard, the agent prints its settings at startup and `Graceful shutdown of network flow audit.` when it stops; with NSSM these lines go to `service.log`, with systemd to `journalctl -u portatlas`.
 
-The command must name `audit`: started without a command, PortAtlas 2.0 prints the help and exits with code 0. A unit with `Restart=on-failure` then stays stopped.
+The command must name `audit`: started without a command, PortAtlas prints the help and exits with code 0. A unit with `Restart=on-failure` then stays stopped.

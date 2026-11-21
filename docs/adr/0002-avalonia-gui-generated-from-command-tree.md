@@ -75,3 +75,7 @@ Design rules:
 - System.CommandLine does not expose some metadata (family of an option, minimum of an integer): the presentation
   table and the architecture test cover the first, the CLI error message covers the second.
 - Avalonia headless tests do not cover native file dialogs: the picker adapter stays thin and is checked by hand.
+
+## Notes
+
+**2026-11-21**: the releases ship the GUI for Windows only (`PortAtlas.Gui-<version>-win-x64.zip` and `PortAtlas.Gui-<version>-win-x64.exe`). The Linux releases do not include it; it is built from the sources with the command given in the README. The decision above is unchanged.

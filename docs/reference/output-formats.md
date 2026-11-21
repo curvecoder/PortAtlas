@@ -213,8 +213,8 @@ Rows are sorted by host name, host address, direction (`Inbound` first), port, p
 
 ```json
 {
-  "198.51.100.20": {
-    "HostName": "app.example.com",
+  "192.168.1.20": {
+    "HostName": "proxmox.home.arpa",
     "Organization": null,
     "Country": null,
     "NetworkRange": null,
@@ -231,7 +231,7 @@ Rows are sorted by host name, host address, direction (`Inbound` first), port, p
 | `Source` | `DNS`, `RDAP` or `None` (no name found), written by `audit` and `resolve`; `Local` (loopback), written by `resolve` only |
 | `ResolvedAtUtc` | Date of the lookup |
 
-An alias of `CustomHostAliases` is never written to the cache. A cache in the 1.x form, `{ "198.51.100.20": "app.example.com" }`, is still read. An entry that cannot be read is dropped and its address is asked again.
+An alias of `CustomHostAliases` is never written to the cache. A cache in the 1.x form, `{ "192.168.1.20": "proxmox.home.arpa" }`, is still read. An entry that cannot be read is dropped and its address is asked again.
 
 `audit` reads and updates it; `resolve` merges several of them; `lookup` reads it.
 
