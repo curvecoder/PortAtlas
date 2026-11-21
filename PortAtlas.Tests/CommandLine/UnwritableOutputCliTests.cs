@@ -49,13 +49,16 @@ public sealed class UnwritableOutputCliTests : IDisposable
     [InlineData("map", "--drawio", "map.drawio")]
     [InlineData("export rules", "-o", "rules.csv")]
     [InlineData("export rules", "--pairs-output", "pairs.csv")]
+    [InlineData("export rules", "--flows-output", "flows.csv")]
+    [InlineData("export rules", "--host-rules-output", "host_rules.csv")]
+    [InlineData("export rules", "--listeners-output", "listeners.csv")]
     [InlineData("export ndjson", "-o", "audit.ndjson")]
     public async Task Main_WhenTheOutputFolderCannotBeCreated_ReturnsExitCodeOneWithOneLineNamingTheOutput(string command, string outputOption, string fileName)
     {
         // Arrange
         var output = Path.Combine(_blocker, "sub", fileName);
         string[] arguments = [.. command.Split(' '), "-i", _auditPath, outputOption, output, "--config", _configPath];
-        if (outputOption == "--pairs-output")
+        if (command == "export rules" && outputOption != "-o")
         {
             arguments = [.. arguments, "-o", Path.Combine(_root, "rules.csv")];
         }

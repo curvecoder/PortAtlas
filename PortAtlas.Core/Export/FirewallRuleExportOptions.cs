@@ -90,4 +90,22 @@ public sealed record FirewallRuleExportOptions
     /// matrix; <see langword="null"/> skips it.
     /// </summary>
     public string? PairsOutputPath { get; init; }
+
+    /// <summary>
+    /// Destination of the flow matrix (one row per flow, merged from the logs of both ends); <see langword="null"/>
+    /// skips it.
+    /// </summary>
+    public string? FlowsOutputPath { get; init; }
+
+    /// <summary>
+    /// Destination of the host rule matrix (an outbound rule on the source and an inbound rule on the destination of
+    /// each flow); <see langword="null"/> skips it.
+    /// </summary>
+    public string? HostRulesOutputPath { get; init; }
+
+    /// <summary>
+    /// Destination of the listening socket matrix, written in the same pass whatever <see cref="ListenersOnly"/> says;
+    /// <see langword="null"/> skips it.
+    /// </summary>
+    public string? ListenersOutputPath { get; init; }
 }

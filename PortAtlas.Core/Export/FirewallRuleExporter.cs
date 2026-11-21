@@ -30,6 +30,10 @@ public sealed class FirewallRuleExporter(
     private readonly Action<string>? _logger = logger;
     private readonly FirewallRulePairAggregator _pairAggregator = pairAggregator ?? new FirewallRulePairAggregator();
     private readonly FirewallRulePairCsvFormatter _pairFormatter = pairFormatter ?? new FirewallRulePairCsvFormatter();
+    private readonly FirewallFlowAggregator _flowAggregator = new();
+    private readonly FirewallFlowCsvFormatter _flowFormatter = new();
+    private readonly FirewallHostRuleAggregator _hostRuleAggregator = new();
+    private readonly FirewallHostRuleCsvFormatter _hostRuleFormatter = new();
 
     /// <summary>
     /// Ingests audit files, aggregates firewall rules, and exports a formatted CSV matrix.
@@ -87,26 +91,75 @@ public sealed class FirewallRuleExporter(
             cancellationToken).ConfigureAwait(false);
         _logger?.Invoke($"Firewall rule matrix with {rules.Count} rule(s) successfully generated: {Path.GetFullPath(outputPath)}");
 
-        if (string.IsNullOrWhiteSpace(options.PairsOutputPath))
-        {
-            return new FirewallRuleExportReport(validFiles, Path.GetFullPath(outputPath), rules.Count, allEntries.Count);
-        }
+        // The listening sockets come from the same logs and filters as the rules: only the listener switch differs.
+        var listeners = await WriteOptionalMatrixAsync(
+            options.ListenersOutputPath,
+            _formatter.BuildHeader(options.Delimiter),
+            () => _aggregator.Aggregate(allEntries, options with { ListenersOnly = true }),
+            rule => _formatter.FormatRow(rule, options.Delimiter),
+            count => $"Listening socket matrix with {count} socket(s)",
+            cancellationToken).ConfigureAwait(false);
 
-        var pairs = _pairAggregator.Aggregate(rules);
-        await WriteCsvAsync(
+        // The pair and host rule matrices are built on the flow matrix, which merges the two ends of each connection.
+        var servers = new Lazy<AuditedServerDirectory>(() => AuditedServerDirectory.FromEntries(allEntries));
+        var flows = new Lazy<IReadOnlyList<FirewallFlowItem>>(() => _flowAggregator.Aggregate(rules, servers.Value));
+
+        var flowFile = await WriteOptionalMatrixAsync(
+            options.FlowsOutputPath,
+            _flowFormatter.BuildHeader(options.Delimiter),
+            () => flows.Value,
+            flow => _flowFormatter.FormatRow(flow, options.Delimiter),
+            count => $"Flow matrix with {count} flow(s)",
+            cancellationToken).ConfigureAwait(false);
+
+        var pairs = await WriteOptionalMatrixAsync(
             options.PairsOutputPath,
             _pairFormatter.BuildHeader(options.Delimiter),
-            pairs.Select(pair => _pairFormatter.FormatRow(pair, options.Delimiter)),
+            () => _pairAggregator.Aggregate(flows.Value),
+            pair => _pairFormatter.FormatRow(pair, options.Delimiter),
+            count => $"Pair matrix with {count} source/destination pair(s)",
             cancellationToken).ConfigureAwait(false);
-        _logger?.Invoke($"Pair matrix with {pairs.Count} source/destination pair(s) successfully generated: {Path.GetFullPath(options.PairsOutputPath)}");
+
+        var hostRules = await WriteOptionalMatrixAsync(
+            options.HostRulesOutputPath,
+            _hostRuleFormatter.BuildHeader(options.Delimiter),
+            () => _hostRuleAggregator.Aggregate(flows.Value, servers.Value),
+            rule => _hostRuleFormatter.FormatRow(rule, options.Delimiter),
+            count => $"Host rule matrix with {count} rule(s)",
+            cancellationToken).ConfigureAwait(false);
 
         return new FirewallRuleExportReport(
             validFiles,
             Path.GetFullPath(outputPath),
             rules.Count,
             allEntries.Count,
-            Path.GetFullPath(options.PairsOutputPath),
-            pairs.Count);
+            pairs?.Path,
+            pairs?.RowCount ?? 0)
+        {
+            Flows = flowFile,
+            HostRules = hostRules,
+            Listeners = listeners
+        };
+    }
+
+    private async Task<ExportedMatrixFile?> WriteOptionalMatrixAsync<T>(
+        string? path,
+        string header,
+        Func<IReadOnlyList<T>> build,
+        Func<T, string> format,
+        Func<int, string> describe,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var items = build();
+        await WriteCsvAsync(path, header, items.Select(format), cancellationToken).ConfigureAwait(false);
+        var file = new ExportedMatrixFile(Path.GetFullPath(path), items.Count);
+        _logger?.Invoke($"{describe(file.RowCount)} successfully generated: {file.Path}");
+        return file;
     }
 
     // UTF-8 with a byte order mark, as the CSV audit log: spreadsheet programs need it to show accented names. The

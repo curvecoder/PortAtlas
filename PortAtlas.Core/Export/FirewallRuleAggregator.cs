@@ -14,18 +14,6 @@ public sealed class FirewallRuleAggregator
 {
     private const string AnySourceHost = "Any";
 
-    private static readonly IpAddressRangeMatcher PrivateNetworkMatcher = new(
-    [
-        "10.0.0.0/8",
-        "172.16.0.0/12",
-        "192.168.0.0/16",
-        "127.0.0.0/8",
-        "169.254.0.0/16",
-        "::1/128",
-        "fc00::/7",
-        "fe80::/10"
-    ]);
-
     private static readonly Dictionary<int, string> WellKnownServices = new()
     {
         [22] = "SSH",
@@ -177,11 +165,8 @@ public sealed class FirewallRuleAggregator
                 }
             }
 
-            // A listener bound to 0.0.0.0 or :: is reached through the server's own addresses, hence internal.
-            var isInternal = IPAddress.TryParse(acc.DestinationIp, out var parsedIp) &&
-                             (IPAddress.IsLoopback(parsedIp) || PrivateNetworkMatcher.IsMatch(parsedIp) ||
-                              parsedIp.Equals(IPAddress.Any) || parsedIp.Equals(IPAddress.IPv6Any));
-            var zone = isInternal ? "Internal" : "Public";
+            var zone = NetworkZoneClassifier.ZoneOf(acc.DestinationIp);
+            var isInternal = zone == NetworkZoneClassifier.Internal;
 
             if (string.Equals(options.DestinationZoneFilter, "internal", StringComparison.OrdinalIgnoreCase) && !isInternal)
             {
@@ -211,7 +196,8 @@ public sealed class FirewallRuleAggregator
                 UserName = acc.UserName,
                 ObservationCount = acc.ObservationCount,
                 FirstSeenUtc = acc.FirstSeenUtc,
-                LastSeenUtc = acc.LastSeenUtc
+                LastSeenUtc = acc.LastSeenUtc,
+                AuditedServer = acc.ServerHostName
             });
         }
 
@@ -241,7 +227,7 @@ public sealed class FirewallRuleAggregator
     // endpoints, so the audited server joins the rule key. A routable address names one machine whatever the log that
     // saw it, so the server stays out of the key.
     private static string AuditedServerScope(NetworkAuditEntry entry, IPAddress destination) =>
-        IPAddress.IsLoopback(destination) || destination.Equals(IPAddress.Any) || destination.Equals(IPAddress.IPv6Any)
+        !NetworkZoneClassifier.NamesOneMachine(destination)
             ? entry.Server.HostName.ToUpperInvariant()
             : string.Empty;
 

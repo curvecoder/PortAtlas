@@ -84,4 +84,10 @@ public sealed record FirewallRuleItem
     /// Most recent recorded UTC observation timestamp proving current activity.
     /// </summary>
     public DateTimeOffset LastSeenUtc { get; init; }
+
+    /// <summary>
+    /// Audited server whose log recorded the rule: the source of an outbound rule, the destination of an inbound one.
+    /// Not written to the matrix, where the host columns already show it.
+    /// </summary>
+    public string AuditedServer { get; init; } = string.Empty;
 }

@@ -15,4 +15,20 @@ public sealed record FirewallRuleExportReport(
     int TotalRulesExported,
     int TotalRawFlowsScanned,
     string? PairsCsvPath = null,
-    int TotalPairsExported = 0);
+    int TotalPairsExported = 0)
+{
+    /// <summary>
+    /// Flow matrix written, or <see langword="null"/> when it was not requested.
+    /// </summary>
+    public ExportedMatrixFile? Flows { get; init; }
+
+    /// <summary>
+    /// Host rule matrix written, or <see langword="null"/> when it was not requested.
+    /// </summary>
+    public ExportedMatrixFile? HostRules { get; init; }
+
+    /// <summary>
+    /// Listening socket matrix written, or <see langword="null"/> when it was not requested.
+    /// </summary>
+    public ExportedMatrixFile? Listeners { get; init; }
+}

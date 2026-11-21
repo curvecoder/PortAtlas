@@ -58,6 +58,9 @@ public sealed class FirewallRuleExporterTests : IDisposable
         lines[1].Should().StartWith("RULE-001,Outbound,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.prod,Internal,TCP,1521,Oracle-TNS,tnslsnr,");
         lines[1].Should().Contain(",35,"); // Sum of observation count (10 + 25)
         report.PairsCsvPath.Should().BeNull();
+        report.Flows.Should().BeNull();
+        report.HostRules.Should().BeNull();
+        report.Listeners.Should().BeNull();
     }
 
     [Theory]
@@ -202,7 +205,16 @@ public sealed class FirewallRuleExporterTests : IDisposable
         var auditCsv = await WriteNasAuditAsync();
         var targetMatrixCsv = Path.Combine(_tempDirectory, "firewall_matrix.csv");
         var pairsCsv = Path.Combine(_tempDirectory, "firewall_pairs.csv");
-        var options = new FirewallRuleExportOptions { PairsOutputPath = pairsCsv };
+        var flowsCsv = Path.Combine(_tempDirectory, "firewall_flows.csv");
+        var hostRulesCsv = Path.Combine(_tempDirectory, "firewall_host_rules.csv");
+        var listenersCsv = Path.Combine(_tempDirectory, "firewall_listeners.csv");
+        var options = new FirewallRuleExportOptions
+        {
+            PairsOutputPath = pairsCsv,
+            FlowsOutputPath = flowsCsv,
+            HostRulesOutputPath = hostRulesCsv,
+            ListenersOutputPath = listenersCsv
+        };
 
         // Act
         await new FirewallRuleExporter().ExportRulesAsync([auditCsv], targetMatrixCsv, options);
@@ -211,6 +223,9 @@ public sealed class FirewallRuleExporterTests : IDisposable
         byte[] byteOrderMark = [0xEF, 0xBB, 0xBF];
         (await File.ReadAllBytesAsync(targetMatrixCsv)).Take(3).Should().Equal(byteOrderMark);
         (await File.ReadAllBytesAsync(pairsCsv)).Take(3).Should().Equal(byteOrderMark);
+        (await File.ReadAllBytesAsync(flowsCsv)).Take(3).Should().Equal(byteOrderMark);
+        (await File.ReadAllBytesAsync(hostRulesCsv)).Take(3).Should().Equal(byteOrderMark);
+        (await File.ReadAllBytesAsync(listenersCsv)).Take(3).Should().Equal(byteOrderMark);
     }
 
     // Stopped between the two matrices (Ctrl+C), the export used to open the pair matrix, emptying it, before it
@@ -302,6 +317,87 @@ public sealed class FirewallRuleExporterTests : IDisposable
 
         // Assert
         messages.Should().Contain("Consolidating 2 raw flow(s) from 1 file(s)...");
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenFlowsOutputPathIsSet_WritesOneRowForAFlowSeenByBothEnds()
+    {
+        // Arrange
+        var logs = await WriteDesktopAndNasAuditsAsync();
+        var flowsCsv = Path.Combine(_tempDirectory, "flows", "firewall_flows.csv");
+        var options = new FirewallRuleExportOptions { FlowsOutputPath = flowsCsv };
+
+        // Act
+        var report = await new FirewallRuleExporter().ExportRulesAsync(logs, Path.Combine(_tempDirectory, "firewall_matrix.csv"), options);
+
+        // Assert
+        report.TotalRulesExported.Should().Be(2);
+        report.Flows.Should().Be(new ExportedMatrixFile(flowsCsv, 1));
+        var lines = await File.ReadAllLinesAsync(flowsCsv);
+        lines.Should().HaveCount(2);
+        lines[0].Should().StartWith("FlowId,SourceIp,SourceHost,");
+        lines[1].Should().StartWith("FLOW-001,192.168.1.10,desktop,192.168.1.50,nas,Internal,TCP,443,HTTPS,curl,caddy,Both,10,8,");
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenHostRulesOutputPathIsSet_WritesAnObservedRuleOnEachAuditedEnd()
+    {
+        // Arrange
+        var logs = await WriteDesktopAndNasAuditsAsync();
+        var hostRulesCsv = Path.Combine(_tempDirectory, "firewall_host_rules.csv");
+        var options = new FirewallRuleExportOptions { HostRulesOutputPath = hostRulesCsv };
+
+        // Act
+        var report = await new FirewallRuleExporter().ExportRulesAsync(logs, Path.Combine(_tempDirectory, "firewall_matrix.csv"), options);
+
+        // Assert
+        report.HostRules.Should().Be(new ExportedMatrixFile(hostRulesCsv, 2));
+        var lines = await File.ReadAllLinesAsync(hostRulesCsv);
+        lines.Should().HaveCount(3);
+        lines[1].Should().StartWith("HOST-001,desktop,192.168.1.10,Yes,Outbound,192.168.1.50,nas,Internal,TCP,443,HTTPS,curl,Observed,10,");
+        lines[2].Should().StartWith("HOST-002,nas,192.168.1.50,Yes,Inbound,192.168.1.10,desktop,Internal,TCP,443,HTTPS,caddy,Observed,8,");
+    }
+
+    // The listening sockets used to need a second run with --listeners-only, which replaced the whole matrix.
+    [Fact]
+    public async Task ExportRulesAsync_WhenListenersOutputPathIsSet_WritesTheListeningSocketsBesideTheFlows()
+    {
+        // Arrange
+        var logs = await WriteDesktopAndNasAuditsAsync();
+        var matrixCsv = Path.Combine(_tempDirectory, "firewall_matrix.csv");
+        var listenersCsv = Path.Combine(_tempDirectory, "firewall_listeners.csv");
+        var options = new FirewallRuleExportOptions { ListenersOutputPath = listenersCsv };
+
+        // Act
+        var report = await new FirewallRuleExporter().ExportRulesAsync(logs, matrixCsv, options);
+
+        // Assert
+        (await File.ReadAllLinesAsync(matrixCsv)).Should().NotContain(line => line.Contains(",Any,", StringComparison.Ordinal));
+        report.Listeners.Should().Be(new ExportedMatrixFile(listenersCsv, 1));
+        var lines = await File.ReadAllLinesAsync(listenersCsv);
+        lines.Should().HaveCount(2);
+        lines[0].Should().StartWith("RuleId,Direction,SourceIp,");
+        lines[1].Should().StartWith("RULE-001,Inbound,0.0.0.0,Any,0.0.0.0,nas,Internal,TCP,443,HTTPS,caddy,");
+    }
+
+    // The same HTTPS connection seen from desktop (192.168.1.10, curl) and from nas (192.168.1.50, caddy listening on 443).
+    private async Task<IReadOnlyList<string>> WriteDesktopAndNasAuditsAsync()
+    {
+        var header = "FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,ServerOsVersion,ServerPrimaryIp,Protocol,Direction,TcpState,LocalIp,LocalPort,RemoteIp,RemotePort,RemoteHostName,ProcessId,ProcessName,ExecutablePath,CommandLine,TargetExecutable,UserName";
+        var desktopLog = Path.Combine(_tempDirectory, "audit_desktop.csv");
+        var nasLog = Path.Combine(_tempDirectory, "audit_nas.csv");
+        await File.WriteAllLinesAsync(desktopLog,
+        [
+            header,
+            "2026-10-24T07:00:00Z,2026-10-24T07:05:00Z,10,desktop,Windows,192.168.1.10,Tcp,Outbound,Established,192.168.1.10,50000,192.168.1.50,443,nas.home.arpa,1234,curl,C:\\curl.exe,curl,,user"
+        ]);
+        await File.WriteAllLinesAsync(nasLog,
+        [
+            header,
+            "2026-10-24T07:00:05Z,2026-10-24T07:05:05Z,8,nas,Linux,192.168.1.50,Tcp,Inbound,Established,192.168.1.50,443,192.168.1.10,50000,desktop.home.arpa,80,caddy,/usr/bin/caddy,caddy run,,caddy",
+            "2026-10-24T07:00:00Z,2026-10-24T07:05:05Z,60,nas,Linux,192.168.1.50,Tcp,Listening,Listen,0.0.0.0,443,0.0.0.0,0,,80,caddy,/usr/bin/caddy,caddy run,,caddy"
+        ]);
+        return [desktopLog, nasLog];
     }
 
     // Two flows from desktop (192.168.1.10) to nas.home.arpa (192.168.1.50): HTTPS and rsync.

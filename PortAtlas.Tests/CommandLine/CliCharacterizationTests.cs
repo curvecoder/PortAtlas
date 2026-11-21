@@ -79,6 +79,29 @@ public sealed class CliCharacterizationTests : IDisposable
     }
 
     [Fact]
+    public async Task ExportRules_WhenEveryOutputIsGiven_WritesEachMatrixInOnePass()
+    {
+        // Arrange
+        var matrix = Path.Combine(_directory, "rules_all.csv");
+        var flows = Path.Combine(_directory, "rules_flows.csv");
+        var hostRules = Path.Combine(_directory, "rules_host_rules.csv");
+        var listeners = Path.Combine(_directory, "rules_listeners.csv");
+
+        // Act
+        await RunAsync(
+            "export", "rules", "-o", matrix, "-i", _auditPath, "--zone", "internal",
+            "--flows-output", flows, "--host-rules-output", hostRules, "--listeners-output", listeners);
+
+        // Assert
+        File.Exists(matrix).Should().BeTrue();
+        (await File.ReadAllLinesAsync(flows)).Skip(1).Should().ContainSingle()
+            .Which.Should().StartWith("FLOW-001,10.0.0.1,SRV-APP-01,10.20.1.5,db-oracle.example.test,Internal,TCP,1521,Oracle-TNS,");
+        (await File.ReadAllLinesAsync(hostRules)).Skip(1).Should().HaveCount(2);
+        (await File.ReadAllLinesAsync(listeners)).Skip(1).Should().ContainSingle()
+            .Which.Should().StartWith("RULE-001,Inbound,0.0.0.0,Any,10.0.0.1,SRV-APP-01,Internal,TCP,8080,");
+    }
+
+    [Fact]
     public async Task ExportRules_WhenPublicZoneGiven_ExportsOnlyPublicDestinations()
     {
         // Arrange

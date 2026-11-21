@@ -48,6 +48,9 @@ public static class OptionPresentation
         ["--drawio"] = Output,
         ["--output"] = Output,
         ["--pairs-output"] = Output,
+        ["--flows-output"] = Output,
+        ["--host-rules-output"] = Output,
+        ["--listeners-output"] = Output,
         ["--output-cache"] = Output,
 
         ["--in-place"] = Resolving,

@@ -158,6 +158,9 @@ public sealed class AuditInputSelectionCliTests : IDisposable
     [Theory]
     [InlineData("-o", false)]
     [InlineData("--pairs-output", false)]
+    [InlineData("--flows-output", false)]
+    [InlineData("--host-rules-output", false)]
+    [InlineData("--listeners-output", false)]
     [InlineData("-o", true)]
     public async Task ExportRules_WhenAnOutputIsAnAuditLogToRead_ReturnsExitCodeOneAndKeepsTheLog(string outputOption, bool inputIsTheDirectory)
     {
@@ -185,9 +188,42 @@ public sealed class AuditInputSelectionCliTests : IDisposable
 
         // Assert
         exitCode.Should().Be(1);
-        capturedError.ToString().Should().Contain($"The output '{log}' is also an audit log to read");
+        capturedError.ToString().Should().Contain($"The output '{log}' is also an audit log to read: choose another path for {(outputOption == "-o" ? "--output" : outputOption)}.");
         (await File.ReadAllTextAsync(log)).Should().Be(before);
         File.Exists(Path.Combine(_root, "other-output.csv")).Should().BeFalse();
+    }
+
+    // Two matrices written to one path would leave only the last one, with no sign that the other was lost.
+    [Fact]
+    public async Task ExportRules_WhenTwoOutputsNameTheSameFile_ReturnsExitCodeOneAndWritesNothing()
+    {
+        // Arrange
+        var log = Path.Combine(_collected, "audit_nas.csv");
+        var matrix = Path.Combine(_root, "matrix.csv");
+        var shared = Path.Combine(_root, "shared.csv");
+        var consoleError = Console.Error;
+        using var capturedError = new StringWriter();
+        Console.SetError(capturedError);
+
+        // Act
+        int exitCode;
+        try
+        {
+            exitCode = await Program.Main([
+                "export", "rules", "-i", log, "-o", matrix,
+                "--flows-output", shared, "--host-rules-output", Path.Combine(_root, ".", "SHARED.csv"),
+                "--config", _emptyConfigPath]);
+        }
+        finally
+        {
+            Console.SetError(consoleError);
+        }
+
+        // Assert
+        exitCode.Should().Be(1);
+        capturedError.ToString().Should().Contain($"--flows-output and --host-rules-output name the same file '{shared}': choose two different paths.");
+        File.Exists(matrix).Should().BeFalse();
+        File.Exists(shared).Should().BeFalse();
     }
 
     [Fact]

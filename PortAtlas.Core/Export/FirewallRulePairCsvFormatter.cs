@@ -19,7 +19,8 @@ public sealed class FirewallRulePairCsvFormatter
         "Ports",
         "ObservationCount",
         "FirstSeenUtc",
-        "LastSeenUtc"
+        "LastSeenUtc",
+        "SeenFrom"
     ];
 
     /// <summary>
@@ -50,7 +51,8 @@ public sealed class FirewallRulePairCsvFormatter
             string.Join(", ", pair.Ports),
             pair.ObservationCount.ToString(CultureInfo.InvariantCulture),
             pair.FirstSeenUtc.ToString("o", CultureInfo.InvariantCulture),
-            pair.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture)
+            pair.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture),
+            string.Join(", ", pair.SeenFrom)
         };
 
         // Opened in a spreadsheet and never read back, with host names from DNS or RDAP: see FirewallRuleCsvFormatter.

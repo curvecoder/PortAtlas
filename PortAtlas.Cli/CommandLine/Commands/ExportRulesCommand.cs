@@ -17,6 +17,9 @@ public sealed class ExportRulesCommand : Command
     private readonly Option<int?> _minObservations = OptionFactory.CreateInteger("--min-observations", "count", "Keep only flows observed at least this number of times. Default: 1.", minimum: 1);
     private readonly Option<int?> _activeWithinDays = OptionFactory.CreateInteger("--active-within-days", "days", "Keep only flows seen during the last N days. Default: no limit.", minimum: 1);
     private readonly Option<string?> _pairsOutput = OptionFactory.CreatePath("--pairs-output", "Also write a pair matrix CSV (one row per source and destination: flow count, ports, observations), with the same filters. Same tokens as --output. Default: not written.");
+    private readonly Option<string?> _flowsOutput = OptionFactory.CreatePath("--flows-output", "Also write a flow matrix CSV (one row per flow, the two ends of a connection merged: processes and observations of each end), with the same filters. Same tokens as --output. Default: not written.");
+    private readonly Option<string?> _hostRulesOutput = OptionFactory.CreatePath("--host-rules-output", "Also write a host rule matrix CSV for network security groups (an outbound rule on the source and an inbound rule on the destination of each flow, private addresses only), with the same filters. Same tokens as --output. Default: not written.");
+    private readonly Option<string?> _listenersOutput = OptionFactory.CreatePath("--listeners-output", "Also write the listening sockets CSV, as --listeners-only would, in the same pass. Same tokens as --output. Default: not written.");
     private readonly Option<string?> _zone = OptionFactory.CreateChoice("--zone", "Destination zone to keep: internal (private address ranges), public, or all. Default: all.", "all", "internal", "public");
     private readonly Option<string?> _configFile;
 
@@ -31,6 +34,9 @@ public sealed class ExportRulesCommand : Command
         _inputs.AddTo(this);
         Options.Add(_output);
         Options.Add(_pairsOutput);
+        Options.Add(_flowsOutput);
+        Options.Add(_hostRulesOutput);
+        Options.Add(_listenersOutput);
         Options.Add(_minObservations);
         Options.Add(_activeWithinDays);
         Options.Add(_zone);
@@ -53,17 +59,23 @@ public sealed class ExportRulesCommand : Command
             }
 
             var outputPath = OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.RulesCsv);
-            var pairsOutputPath = parseResult.GetValue(_pairsOutput) is { } pairsOutput ? OutputFilePathResolver.Resolve(pairsOutput) : null;
+            var pairsOutputPath = ResolveOptional(parseResult, _pairsOutput);
+            var flowsOutputPath = ResolveOptional(parseResult, _flowsOutput);
+            var hostRulesOutputPath = ResolveOptional(parseResult, _hostRulesOutput);
+            var listenersOutputPath = ResolveOptional(parseResult, _listenersOutput);
 
-            // The matrices are written once every log has been read: written over one of them, they would replace an
-            // audit by a matrix, which no later command reads as flows.
-            var overwrittenLog = new[] { outputPath, pairsOutputPath }
-                .OfType<string>()
-                .Select(Path.GetFullPath)
-                .FirstOrDefault(path => files.Contains(path, StringComparer.OrdinalIgnoreCase));
-            if (overwrittenLog is not null)
+            (string Option, string? Path)[] requested =
+            [
+                (_output.Name, outputPath),
+                (_pairsOutput.Name, pairsOutputPath),
+                (_flowsOutput.Name, flowsOutputPath),
+                (_hostRulesOutput.Name, hostRulesOutputPath),
+                (_listenersOutput.Name, listenersOutputPath)
+            ];
+            var conflict = MatrixOutputPathValidator.FindConflict(requested, files);
+            if (conflict is not null)
             {
-                await Console.Error.WriteLineAsync($"The output '{overwrittenLog}' is also an audit log to read: choose another --output or --pairs-output.").ConfigureAwait(false);
+                await Console.Error.WriteLineAsync(conflict).ConfigureAwait(false);
                 return 1;
             }
 
@@ -87,10 +99,16 @@ public sealed class ExportRulesCommand : Command
                 IncludedProcesses = config.MapIncludedProcesses,
                 ExcludedProcesses = config.MapExcludedProcesses,
                 Delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',',
-                PairsOutputPath = pairsOutputPath
+                PairsOutputPath = pairsOutputPath,
+                FlowsOutputPath = flowsOutputPath,
+                HostRulesOutputPath = hostRulesOutputPath,
+                ListenersOutputPath = listenersOutputPath
             };
 
             return await new FirewallRuleExportCommandRunner().RunAsync(files, outputPath, options, cancellationToken).ConfigureAwait(false);
         });
     }
+
+    private static string? ResolveOptional(ParseResult parseResult, Option<string?> option) =>
+        parseResult.GetValue(option) is { } path ? OutputFilePathResolver.Resolve(path) : null;
 }

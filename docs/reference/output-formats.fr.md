@@ -9,7 +9,7 @@
 | Journal d'audit CSV | `audit` | UTF-8 avec marque d'ordre des octets (BOM) | Une fois complet (voir [Cycle de réécriture](#cycle-de-réécriture)) |
 | Journal d'audit NDJSON | `audit --ndjson` | UTF-8 sans BOM | Une fois complet, comme le journal CSV |
 | Export NDJSON | `export ndjson` | UTF-8 sans BOM | Écrit sur place : un export interrompu laisse un fichier partiel |
-| Matrice de règles et matrice par paire | `export rules` | UTF-8 avec BOM | Une fois complètes |
+| Matrices de règles, des sockets en écoute, de flux, par paire et de règles par hôte | `export rules` | UTF-8 avec BOM | Une fois complètes |
 | Cache DNS | `audit`, `resolve` | UTF-8 sans BOM | Une fois complet ; quand il ne peut pas être écrit, le fichier précédent reste |
 | Copie enrichie | `resolve` | BOM du journal qu'elle copie | Une fois complète |
 | Carte HTML | `map --html`, `audit --html` | UTF-8 avec BOM | Écrite sur place |
@@ -132,20 +132,74 @@ Une valeur qui commence par `=`, `+`, `-`, `@` (ou leurs formes pleine chasse), 
 | `FirstSeenUtc` | Première observation la plus ancienne |
 | `LastSeenUtc` | Observation la plus récente |
 
+### Matrice des sockets en écoute
+
+Écrite par `export rules --listeners-output`, avec les colonnes de la matrice de règles de pare-feu : les lignes qu'écrirait `--listeners-only`, à partir des mêmes journaux et des mêmes filtres, pendant que la matrice de règles garde les flux.
+
+## Matrice de flux
+
+Écrite par `export rules --flows-output`, à partir des lignes de la matrice de règles après filtrage. Une ligne par adresse source, adresse de destination, protocole et port de destination : une connexion relevée par le journal de sa source (une règle `Outbound`) et par celui de sa destination (une règle `Inbound`) ne fait qu'une ligne, de même qu'un flux ouvert par plusieurs processus. Une destination de bouclage ou `0.0.0.0` / `::` ne désigne aucune machine : le même flux local sur deux serveurs reste sur deux lignes.
+
+Les lignes sont triées par zone, port, adresse de destination, adresse source, protocole et serveur, comme du texte : la numérotation ne dépend pas de l'ordre des journaux. Une adresse qui appartient à un serveur audité, trouvée comme adresse locale dans son propre journal, porte le nom de ce serveur, quel que soit le journal qui a vu le flux ; toute autre adresse prend le nom donné par le journal de son propre bout, sinon celui donné par l'autre bout, sinon l'adresse. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
+
+| Colonne | Contenu |
+| :--- | :--- |
+| `FlowId` | `FLOW-001`, `FLOW-002`… dans l'ordre du tri |
+| `SourceIp`, `SourceHost` | Adresse et nom du client |
+| `DestinationIp`, `DestinationHost` | Adresse et nom du serveur |
+| `DestinationZone` | `Internal` ou `Public`, comme dans la matrice de règles |
+| `Protocol` | `TCP` ou `UDP` |
+| `DestinationPort` | Port du service |
+| `ServiceName` | Service nommé par les règles de la destination (par celles de la source quand seule la source a vu le flux) ; `port/protocole` quand elles nomment plusieurs services |
+| `SourceProcesses` | Processus qui ont ouvert le flux, triés et séparés par `, ` ; vide quand seule la destination l'a vu |
+| `DestinationProcesses` | Processus qui ont accepté le flux ; vide quand seule la source l'a vu |
+| `SeenFrom` | `Source`, `Destination` ou `Both` : le bout dont le journal a relevé le flux |
+| `SourceObservationCount` | Observations relevées par le journal de la source |
+| `DestinationObservationCount` | Observations relevées par le journal de la destination |
+| `FirstSeenUtc` | Première observation la plus ancienne, aux deux bouts |
+| `LastSeenUtc` | Observation la plus récente, aux deux bouts |
+
+`SeenFrom` montre un trou dans les journaux : entre deux serveurs audités, un flux vu d'un seul bout signifie que les journaux ne couvrent pas la même période, ou qu'une traduction d'adresse ou une deuxième carte réseau cache un bout derrière une autre adresse.
+
 ## Matrice par paire
 
-Écrite par `export rules --pairs-output`, à partir des lignes de la matrice de règles après filtrage. Une ligne par adresse source et adresse de destination : les deux sens entre deux serveurs restent sur deux lignes, comme des règles de pare-feu. Triée par adresse source puis de destination, comme du texte. Les noms d'hôte sont ceux de la première règle de la paire. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
+Écrite par `export rules --pairs-output`, à partir des lignes de la matrice de flux. Une ligne par adresse source et adresse de destination : les deux sens entre deux serveurs restent sur deux lignes, comme des règles de pare-feu. Triée par adresse source puis de destination, comme du texte. Les noms d'hôte sont ceux du premier flux de la paire. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
 
 | Colonne | Contenu |
 | :--- | :--- |
 | `PairId` | `PAIR-001`, `PAIR-002`… dans l'ordre du tri |
-| `SourceIp`, `SourceHost` | Adresse et nom du client, comme dans la matrice de règles |
-| `DestinationIp`, `DestinationHost` | Adresse et nom du serveur, comme dans la matrice de règles |
-| `FlowCount` | Nombre de lignes de la matrice de règles regroupées dans la paire |
+| `SourceIp`, `SourceHost` | Adresse et nom du client, comme dans la matrice de flux |
+| `DestinationIp`, `DestinationHost` | Adresse et nom du serveur, comme dans la matrice de flux |
+| `FlowCount` | Nombre de lignes de la matrice de flux regroupées dans la paire |
 | `Ports` | Ports de destination distincts, `port/protocole`, triés par port (`443/TCP, 873/TCP`) |
-| `ObservationCount` | Somme des compteurs des lignes regroupées |
+| `ObservationCount` | Somme des observations des flux regroupés, chaque flux compté une fois : le plus grand de ses deux bouts |
 | `FirstSeenUtc` | Première observation la plus ancienne |
 | `LastSeenUtc` | Observation la plus récente |
+| `SeenFrom` | Valeurs distinctes de `SeenFrom` des flux regroupés, dans l'ordre `Source`, `Destination`, `Both` |
+
+## Matrice de règles par hôte
+
+Écrite par `export rules --host-rules-output`, à partir des lignes de la matrice de flux, pour les groupes de sécurité réseau (NSG) et les listes de sécurité, qui se posent par ressource et par sens. Chaque flux donne une règle `Outbound` à sa source et une règle `Inbound` à sa destination. Seule une adresse privée (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fc00::/7`, `fe80::/10`) porte des règles : une adresse publique n'apparaît que comme pair d'un hôte privé, et un flux de bouclage ou `0.0.0.0` / `::` ne traverse jamais le réseau.
+
+Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'abord), port, protocole et adresse du pair, comme du texte. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
+
+| Colonne | Contenu |
+| :--- | :--- |
+| `HostRuleId` | `HOST-001`, `HOST-002`… dans l'ordre du tri |
+| `Host`, `HostIp` | Hôte qui porte la règle, nommé comme dans la matrice de flux |
+| `Audited` | `Yes` quand un journal de cette adresse a été lu, sinon `No` |
+| `Direction` | `Inbound` quand l'hôte accepte la connexion, `Outbound` quand il l'ouvre |
+| `PeerIp`, `PeerHost` | Autre bout du flux |
+| `PeerZone` | `Internal` ou `Public`, comme `DestinationZone` |
+| `Protocol` | `TCP` ou `UDP` |
+| `Port` | Port de destination du flux : sur l'hôte pour une règle entrante, sur le pair pour une règle sortante |
+| `ServiceName` | Comme dans la matrice de flux |
+| `LocalProcesses` | Processus de l'hôte qui utilisent le flux ; vide quand le journal de l'hôte ne l'a pas relevé |
+| `Evidence` | `Observed` quand le journal de l'hôte a relevé le flux, `Inferred` quand seul le journal du pair l'a fait |
+| `ObservationCount` | Observations relevées par le journal de l'hôte, ou par celui du pair pour une règle `Inferred` |
+| `FirstSeenUtc` | Première observation la plus ancienne du flux |
+| `LastSeenUtc` | Observation la plus récente du flux |
+| `FlowId` | Ligne de la matrice de flux d'où vient la règle |
 
 ## Carte topologique
 

@@ -9,7 +9,7 @@
 | CSV audit log | `audit` | UTF-8 with byte order mark | Once complete (see [Rewrite cycle](#rewrite-cycle)) |
 | NDJSON audit log | `audit --ndjson` | UTF-8 without byte order mark | Once complete, as the CSV log |
 | NDJSON export | `export ndjson` | UTF-8 without byte order mark | Written in place: an interrupted export leaves a partial file |
-| Rule matrix and pair matrix | `export rules` | UTF-8 with byte order mark | Once complete |
+| Rule, listening socket, flow, pair and host rule matrices | `export rules` | UTF-8 with byte order mark | Once complete |
 | DNS cache | `audit`, `resolve` | UTF-8 without byte order mark | Once complete; when it cannot be written, the previous file stays |
 | Enriched copy | `resolve` | Byte order mark of the log it copies | Once complete |
 | HTML map | `map --html`, `audit --html` | UTF-8 with byte order mark | Written in place |
@@ -132,20 +132,74 @@ A value that starts with `=`, `+`, `-`, `@` (or their full-width forms), a tab o
 | `FirstSeenUtc` | Earliest first observation |
 | `LastSeenUtc` | Latest observation |
 
+### Listening socket matrix
+
+Written by `export rules --listeners-output`, in the same columns as the firewall rule matrix: the rows that `--listeners-only` would write, from the same logs and filters, while the rule matrix keeps the flows.
+
+## Flow matrix
+
+Written by `export rules --flows-output`, from the rows of the firewall rule matrix after filtering. One row per source address, destination address, protocol and destination port: a connection recorded by the log of its source (an `Outbound` rule) and by the log of its destination (an `Inbound` rule) is one row, and so is a flow opened by several processes. A loopback or `0.0.0.0` / `::` destination names no machine: the same local flow on two servers stays on two rows.
+
+Rows are sorted by zone, port, destination address, source address, protocol and server, as text: the numbering does not depend on the order of the logs. An address that belongs to an audited server, found as a local address in its own log, is named after that server, whichever log saw the flow; any other address takes the name given by the log of its own end, otherwise the name given by the other end, otherwise the address. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+
+| Column | Content |
+| :--- | :--- |
+| `FlowId` | `FLOW-001`, `FLOW-002`… in sort order |
+| `SourceIp`, `SourceHost` | Client address and name |
+| `DestinationIp`, `DestinationHost` | Server address and name |
+| `DestinationZone` | `Internal` or `Public`, as in the rule matrix |
+| `Protocol` | `TCP` or `UDP` |
+| `DestinationPort` | Service port |
+| `ServiceName` | Service named by the destination rules (by the source rules when only the source saw the flow); `port/protocol` when they name several services |
+| `SourceProcesses` | Processes that opened the flow, sorted and separated by `, `; empty when only the destination saw it |
+| `DestinationProcesses` | Processes that accepted the flow; empty when only the source saw it |
+| `SeenFrom` | `Source`, `Destination` or `Both`: the end whose log recorded the flow |
+| `SourceObservationCount` | Observations recorded by the source log |
+| `DestinationObservationCount` | Observations recorded by the destination log |
+| `FirstSeenUtc` | Earliest first observation on either end |
+| `LastSeenUtc` | Latest observation on either end |
+
+`SeenFrom` shows a gap in the logs: between two audited servers, a flow seen from one end only means that the logs do not cover the same period, or that an address translation or a second network card hides one end behind another address.
+
 ## Pair matrix
 
-Written by `export rules --pairs-output`, from the rows of the firewall rule matrix after filtering. One row per source address and destination address: the two directions between two servers stay on two rows, as firewall rules do. Sorted by source then destination address, as text. The host names are those of the first rule of the pair. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Written by `export rules --pairs-output`, from the rows of the flow matrix. One row per source address and destination address: the two directions between two servers stay on two rows, as firewall rules do. Sorted by source then destination address, as text. The host names are those of the first flow of the pair. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
 
 | Column | Content |
 | :--- | :--- |
 | `PairId` | `PAIR-001`, `PAIR-002`… in sort order |
-| `SourceIp`, `SourceHost` | Client address and name, as in the rule matrix |
-| `DestinationIp`, `DestinationHost` | Server address and name, as in the rule matrix |
-| `FlowCount` | Number of rule matrix rows merged into the pair |
+| `SourceIp`, `SourceHost` | Client address and name, as in the flow matrix |
+| `DestinationIp`, `DestinationHost` | Server address and name, as in the flow matrix |
+| `FlowCount` | Number of flow matrix rows merged into the pair |
 | `Ports` | Distinct destination ports, `port/protocol`, sorted by port (`443/TCP, 873/TCP`) |
-| `ObservationCount` | Sum of the observation counts of the merged rows |
+| `ObservationCount` | Sum of the observations of the merged flows, each flow counted once: the larger of its two ends |
 | `FirstSeenUtc` | Earliest first observation |
 | `LastSeenUtc` | Latest observation |
+| `SeenFrom` | Distinct `SeenFrom` values of the merged flows, in the order `Source`, `Destination`, `Both` |
+
+## Host rule matrix
+
+Written by `export rules --host-rules-output`, from the rows of the flow matrix, for network security groups and security lists, which are set per resource and per direction. Each flow gives an `Outbound` rule to its source and an `Inbound` rule to its destination. Only a private address (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fc00::/7`, `fe80::/10`) carries rules: a public address shows only as the peer of a private host, and a loopback or `0.0.0.0` / `::` flow never crosses the network.
+
+Rows are sorted by host name, host address, direction (`Inbound` first), port, protocol and peer address, as text. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+
+| Column | Content |
+| :--- | :--- |
+| `HostRuleId` | `HOST-001`, `HOST-002`… in sort order |
+| `Host`, `HostIp` | Host that carries the rule, named as in the flow matrix |
+| `Audited` | `Yes` when a log of this address was read, otherwise `No` |
+| `Direction` | `Inbound` when the host accepts the connection, `Outbound` when it opens it |
+| `PeerIp`, `PeerHost` | Other end of the flow |
+| `PeerZone` | `Internal` or `Public`, as `DestinationZone` |
+| `Protocol` | `TCP` or `UDP` |
+| `Port` | Destination port of the flow: on the host for an inbound rule, on the peer for an outbound rule |
+| `ServiceName` | As in the flow matrix |
+| `LocalProcesses` | Processes of the host that use the flow; empty when the host's log did not record it |
+| `Evidence` | `Observed` when the host's own log recorded the flow, `Inferred` when only the peer's log did |
+| `ObservationCount` | Observations recorded by the host's log, or by the peer's log for an `Inferred` rule |
+| `FirstSeenUtc` | Earliest first observation of the flow |
+| `LastSeenUtc` | Latest observation of the flow |
+| `FlowId` | Row of the flow matrix the rule comes from |
 
 ## Topology map
 

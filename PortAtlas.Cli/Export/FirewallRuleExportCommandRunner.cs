@@ -40,10 +40,10 @@ public sealed class FirewallRuleExportCommandRunner(FirewallRuleExporter? export
         }
         Console.WriteLine($"Destination zone filter: {options.DestinationZoneFilter.ToUpperInvariant()}");
         Console.WriteLine($"Destination file: {Path.GetFullPath(outputPath)}");
-        if (options.PairsOutputPath is not null)
-        {
-            Console.WriteLine($"Pair matrix file: {Path.GetFullPath(options.PairsOutputPath)}");
-        }
+        WriteRequestedFile("Pair matrix file", options.PairsOutputPath);
+        WriteRequestedFile("Flow matrix file", options.FlowsOutputPath);
+        WriteRequestedFile("Host rule matrix file", options.HostRulesOutputPath);
+        WriteRequestedFile("Listening socket matrix file", options.ListenersOutputPath);
         Console.WriteLine();
 
         var report = await _exporter.ExportRulesAsync(auditFiles, outputPath, options, cancellationToken).ConfigureAwait(false);
@@ -60,8 +60,27 @@ public sealed class FirewallRuleExportCommandRunner(FirewallRuleExporter? export
         {
             Console.WriteLine($"  * Source/destination pairs: {report.TotalPairsExported}, exported to: {report.PairsCsvPath}");
         }
+        WriteExportedFile("Flows", report.Flows);
+        WriteExportedFile("Host rules", report.HostRules);
+        WriteExportedFile("Listening sockets", report.Listeners);
         Console.WriteLine("------------------------------------------------------------------------");
 
         return 0;
+    }
+
+    private static void WriteRequestedFile(string label, string? path)
+    {
+        if (path is not null)
+        {
+            Console.WriteLine($"{label}: {Path.GetFullPath(path)}");
+        }
+    }
+
+    private static void WriteExportedFile(string label, ExportedMatrixFile? file)
+    {
+        if (file is not null)
+        {
+            Console.WriteLine($"  * {label}: {file.RowCount}, exported to: {file.Path}");
+        }
     }
 }
