@@ -255,6 +255,26 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
     }
 
     [Fact]
+    public async Task ParseLogForResumeAsync_WhenTheLogWasWrittenWithAnotherSeparator_ReadsItsFlows()
+    {
+        // Arrange
+        var parser = new AuditCsvHistoryParser();
+        var csvPath = Path.Combine(_tempDirectory, "semicolon_log.csv");
+        var csvContent = """
+            FirstSeenUtc;ServerName;Protocol;Direction;LocalPort;RemoteIp;RemotePort;ProcessName;ExecutablePath;TargetExecutable
+            2026-11-01T08:00:00.0000000Z;nas;Tcp;Outbound;51000;192.168.1.2;53;pihole-FTL;/usr/bin/pihole-FTL;
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseLogForResumeAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        entries.Should().ContainSingle()
+            .Which.Socket.RemoteEndpoint.Port.Should().Be(53);
+    }
+
+    [Fact]
     public async Task ParseLogForResumeAsync_WhenAFlowWithoutExecutablePathIsReadBack_MatchesTheScannedFlowOfTheSameProcess()
     {
         // Arrange

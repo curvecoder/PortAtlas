@@ -136,7 +136,12 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         char delimiter = ',',
         CancellationToken cancellationToken = default)
     {
-        var table = await ReadTableAsync(csvFilePath, maxRows, delimiter, cancellationToken).ConfigureAwait(false);
+        // The audit rewrites its log with the configured separator at startup: a log written before CsvDelimiter changed
+        // is read with its own separator, so that the change does not stop the audit from resuming it.
+        var logDelimiter = File.Exists(csvFilePath)
+            ? await AuditCsvDelimiterDetector.DetectAsync(csvFilePath, delimiter, cancellationToken).ConfigureAwait(false)
+            : delimiter;
+        var table = await ReadTableAsync(csvFilePath, maxRows, logDelimiter, cancellationToken).ConfigureAwait(false);
 
         var missingColumns = ResumeRequiredColumns.Where(column => !table.ColumnMap.ContainsKey(column)).ToList();
         if (missingColumns.Count > 0)

@@ -17,7 +17,7 @@ The path keys `OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputD
 | `OutputCsvPath` | path | `portatlas_audit.csv` | CSV audit log; default input of the other commands | `-o` (`audit`) |
 | `OutputNdjsonPath` | path | `""` | NDJSON log written alongside the CSV log; empty for none | `--ndjson` |
 | `CsvColumns` | list of names | `[]` | Ordered CSV columns; empty for the 20 columns | `--columns` |
-| `CsvDelimiter` | string | `","` | CSV field separator, first character used. Written by `audit` and in the matrices of `export rules`; read by `audit`, and by `map`, `export rules` and `export ndjson` for a log whose first line does not show its separator; it is also the only way for them to read a separator other than `,`, `;`, tab or `|`. `resolve` does not read it. `audit` reads its own log back with this value: after changing it, write to a new log (`-o` or `OutputCsvPath`), otherwise `audit` refuses to resume the old one. | none |
+| `CsvDelimiter` | string | `","` | CSV field separator, first character used. Written by `audit` and in the matrices of `export rules`; read by `audit`, `map`, `export rules` and `export ndjson` for a log whose first line does not show its separator; it is also the only way for them to read a separator other than `,`, `;`, tab or `|`. `resolve` does not read it. After a change, `audit` resumes its log with the separator of the log and rewrites it with the new value. | none |
 | `EnableDashboard` | boolean | `true` | Terminal dashboard | `--no-tui` |
 | `MaskServerName` | string | `""` | Server name shown by the dashboard | `--mask-server` |
 | `MaskLocalIp` | string | `""` | Local address shown by the dashboard | `--mask-ip` |

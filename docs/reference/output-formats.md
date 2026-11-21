@@ -78,7 +78,7 @@ Each rewrite writes `<log>.tmp`, renames it `<log>.pending` once complete, then 
 
 ### Reading a log back
 
-At startup, `audit` reads the whole existing CSV log with `CsvDelimiter`, so that counts and first-seen dates continue across restarts. The log is then rewritten from what was read, so a log that cannot be read whole stops `audit` with an error naming the columns or the line, and exit code 1:
+At startup, `audit` reads the whole existing CSV log, so that counts and first-seen dates continue across restarts. The log is read with the separator found on its first line, as described below, so a log written before `CsvDelimiter` changed is still resumed. The log is then rewritten from what was read, with `CsvDelimiter`, so a log that cannot be read whole stops `audit` with an error naming the columns or the line, and exit code 1:
 
 - a log without one of the nine columns that identify a flow, listed above: its flows would match none of the observed ones;
 - a line whose `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp` or `RemotePort` is empty or unreadable, or whose `LastSeenUtc`, `ObservationCount` or `LocalIp` is unreadable: the rewrite would replace the value with a default;
@@ -87,7 +87,7 @@ At startup, `audit` reads the whole existing CSV log with `CsvDelimiter`, so tha
 
 Correct or remove the line, or write to a new log with `--output`.
 
-`map`, `export rules`, `export ndjson` and `resolve` find the separator of each log from its first line, so logs written with different separators can be read together. The candidates are `,`, `;`, tab, `|` and `CsvDelimiter` (`,` for `resolve`): on a header, the one that splits out the most audit column names wins; on a line without header, the one that occurs most often outside quotes. `CsvDelimiter` (`,` for `resolve`) wins a tie and is used for an empty first line. A separator outside these four can be read only through `CsvDelimiter`, and not by `resolve`.
+`audit` (when it resumes its log), `map`, `export rules`, `export ndjson` and `resolve` find the separator of each log from its first line, so logs written with different separators can be read together. The candidates are `,`, `;`, tab, `|` and `CsvDelimiter` (`,` for `resolve`): on a header, the one that splits out the most audit column names wins; on a line without header, the one that occurs most often outside quotes. `CsvDelimiter` (`,` for `resolve`) wins a tie and is used for an empty first line. A separator outside these four can be read only through `CsvDelimiter`, and not by `resolve`.
 
 The first line is taken as a header when it names an audit column; otherwise the log is read by position, in the order of the table above; `resolve` copies a log without header and with fewer than 20 fields unchanged. `map` takes the first line as a header only when it names `ServerName` or `LocalPort`.
 

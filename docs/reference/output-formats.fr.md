@@ -78,7 +78,7 @@ Chaque réécriture écrit `<journal>.tmp`, le renomme `<journal>.pending` une f
 
 ### Relecture d'un journal
 
-Au démarrage, `audit` relit tout le journal CSV existant avec `CsvDelimiter`, pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre. Le journal est ensuite réécrit à partir de ce qui a été lu : un journal qui ne peut pas être lu en entier arrête `audit` avec une erreur qui nomme les colonnes ou la ligne, et le code de sortie 1 :
+Au démarrage, `audit` relit tout le journal CSV existant, pour que les compteurs et les dates de première observation se poursuivent d'un redémarrage à l'autre. Le journal est lu avec le séparateur trouvé sur sa première ligne, comme décrit plus bas : un journal écrit avant un changement de `CsvDelimiter` est donc repris. Le journal est ensuite réécrit à partir de ce qui a été lu, avec `CsvDelimiter` : un journal qui ne peut pas être lu en entier arrête `audit` avec une erreur qui nomme les colonnes ou la ligne, et le code de sortie 1 :
 
 - un journal sans l'une des neuf colonnes qui identifient un flux, listées plus haut : ses flux ne correspondraient à aucun flux observé ;
 - une ligne dont `FirstSeenUtc`, `Protocol`, `Direction`, `LocalPort`, `RemoteIp` ou `RemotePort` est vide ou illisible, ou dont `LastSeenUtc`, `ObservationCount` ou `LocalIp` est illisible : la réécriture remplacerait la valeur par une valeur par défaut ;
@@ -87,7 +87,7 @@ Au démarrage, `audit` relit tout le journal CSV existant avec `CsvDelimiter`, p
 
 Corriger ou supprimer la ligne, ou écrire dans un nouveau journal avec `--output`.
 
-`map`, `export rules`, `export ndjson` et `resolve` trouvent le séparateur de chaque journal d'après sa première ligne : des journaux écrits avec des séparateurs différents peuvent donc être lus ensemble. Les candidats sont `,`, `;`, tabulation, `|` et `CsvDelimiter` (`,` pour `resolve`) : sur un en-tête, celui qui sépare le plus de noms de colonnes d'audit l'emporte ; sur une ligne sans en-tête, celui qui apparaît le plus souvent hors guillemets. `CsvDelimiter` (`,` pour `resolve`) l'emporte en cas d'égalité et sert pour une première ligne vide. Un séparateur hors de ces quatre ne peut être lu que par `CsvDelimiter`, et pas par `resolve`.
+`audit` (à la reprise de son journal), `map`, `export rules`, `export ndjson` et `resolve` trouvent le séparateur de chaque journal d'après sa première ligne : des journaux écrits avec des séparateurs différents peuvent donc être lus ensemble. Les candidats sont `,`, `;`, tabulation, `|` et `CsvDelimiter` (`,` pour `resolve`) : sur un en-tête, celui qui sépare le plus de noms de colonnes d'audit l'emporte ; sur une ligne sans en-tête, celui qui apparaît le plus souvent hors guillemets. `CsvDelimiter` (`,` pour `resolve`) l'emporte en cas d'égalité et sert pour une première ligne vide. Un séparateur hors de ces quatre ne peut être lu que par `CsvDelimiter`, et pas par `resolve`.
 
 La première ligne est prise pour un en-tête quand elle nomme une colonne d'audit ; sinon le journal est lu par position, dans l'ordre du tableau ci-dessus ; `resolve` copie tel quel un journal sans en-tête de moins de 20 champs. `map` ne prend la première ligne pour un en-tête que si elle nomme `ServerName` ou `LocalPort`.
 
