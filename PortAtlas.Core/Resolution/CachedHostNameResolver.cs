@@ -76,6 +76,11 @@ public sealed class CachedHostNameResolver(
     private Task? _backgroundWorker;
     private int _workerStarted;
     private int _pendingSaves;
+    // Lets one save write at a time, each with a snapshot taken once it holds the gate, so a later write never carries
+    // an older state. Not disposed: a delayed save may still wait on it after disposal.
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
+    // Set by the final save under _saveGate: a delayed save that runs later writes nothing.
+    private bool _finalSaveDone;
 
     /// <inheritdoc />
     public event EventHandler<HostNameResolvedEventArgs>? HostNameResolved;
@@ -547,16 +552,39 @@ public sealed class CachedHostNameResolver(
             {
                 await Task.Delay(500, CancellationToken.None).ConfigureAwait(false);
                 Interlocked.Exchange(ref _pendingSaves, 0);
-
-                var snapshot = new Dictionary<string, DnsCacheEntry>(_cache.Count, StringComparer.OrdinalIgnoreCase);
-                foreach (var kvp in _cache)
-                {
-                    snapshot[kvp.Key.ToString()] = kvp.Value;
-                }
-
-                await _cacheStore.SaveAsync(snapshot, CancellationToken.None).ConfigureAwait(false);
+                await SaveCacheAsync(_cacheStore, isFinalSave: false).ConfigureAwait(false);
             }, CancellationToken.None);
         }
+    }
+
+    private async Task SaveCacheAsync(PersistentDnsCacheStore cacheStore, bool isFinalSave)
+    {
+        await _saveGate.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            if (_finalSaveDone)
+            {
+                return;
+            }
+
+            _finalSaveDone = isFinalSave;
+            await cacheStore.SaveAsync(TakeCacheSnapshot(), CancellationToken.None).ConfigureAwait(false);
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
+    }
+
+    private Dictionary<string, DnsCacheEntry> TakeCacheSnapshot()
+    {
+        var snapshot = new Dictionary<string, DnsCacheEntry>(_cache.Count, StringComparer.OrdinalIgnoreCase);
+        foreach (var kvp in _cache)
+        {
+            snapshot[kvp.Key.ToString()] = kvp.Value;
+        }
+
+        return snapshot;
     }
 
     /// <inheritdoc />
@@ -571,15 +599,23 @@ public sealed class CachedHostNameResolver(
         // the garbage collector here, which is safe since its wait handle is never created. DisposeAsync waits for them
         // and disposes it.
 
-        if (_cacheStore is not null)
+        if (_cacheStore is null)
         {
-            var snapshot = new Dictionary<string, DnsCacheEntry>(_cache.Count, StringComparer.OrdinalIgnoreCase);
-            foreach (var kvp in _cache)
-            {
-                snapshot[kvp.Key.ToString()] = kvp.Value;
-            }
+            return;
+        }
 
-            _cacheStore.Save(snapshot);
+        _saveGate.Wait(CancellationToken.None);
+        try
+        {
+            if (!_finalSaveDone)
+            {
+                _finalSaveDone = true;
+                _cacheStore.Save(TakeCacheSnapshot());
+            }
+        }
+        finally
+        {
+            _saveGate.Release();
         }
     }
 
@@ -619,13 +655,7 @@ public sealed class CachedHostNameResolver(
 
         if (_cacheStore is not null)
         {
-            var snapshot = new Dictionary<string, DnsCacheEntry>(_cache.Count, StringComparer.OrdinalIgnoreCase);
-            foreach (var kvp in _cache)
-            {
-                snapshot[kvp.Key.ToString()] = kvp.Value;
-            }
-
-            await _cacheStore.SaveAsync(snapshot, CancellationToken.None).ConfigureAwait(false);
+            await SaveCacheAsync(_cacheStore, isFinalSave: true).ConfigureAwait(false);
         }
     }
 }
