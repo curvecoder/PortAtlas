@@ -258,4 +258,110 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
             file.SetAccessControl(security);
         }
     }
+
+    [Fact]
+    public async Task SaveAsync_WhenTheFileIsReadOnly_KeepsThePreviousVersionAndReturnsFalse()
+    {
+        // Arrange
+        const string previous = """{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""";
+        var filePath = Path.Combine(_testDir, "read_only.json");
+        await File.WriteAllTextAsync(filePath, previous);
+        File.SetAttributes(filePath, FileAttributes.ReadOnly);
+        var store = new PersistentDnsCacheStore(filePath);
+        try
+        {
+            // Act
+            var saved = await store.SaveAsync(PiHoleEntry());
+
+            // Assert
+            saved.Should().BeFalse();
+            (await File.ReadAllTextAsync(filePath)).Should().Be(previous);
+        }
+        finally
+        {
+            File.SetAttributes(filePath, FileAttributes.Normal);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAsync_WhenTheFileIsWritten_ReturnsTrue()
+    {
+        // Arrange
+        var store = new PersistentDnsCacheStore(Path.Combine(_testDir, "written.json"));
+
+        // Act
+        var saved = await store.SaveAsync(PiHoleEntry());
+
+        // Assert
+        saved.Should().BeTrue();
+        store.Load().Should().ContainKey("192.168.1.2");
+    }
+
+    [Fact]
+    public async Task Save_WhenTheFileIsReadOnly_KeepsThePreviousVersion()
+    {
+        // Arrange
+        const string previous = """{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""";
+        var filePath = Path.Combine(_testDir, "read_only_sync.json");
+        await File.WriteAllTextAsync(filePath, previous);
+        File.SetAttributes(filePath, FileAttributes.ReadOnly);
+        var store = new PersistentDnsCacheStore(filePath);
+        try
+        {
+            // Act
+            var act = () => store.Save(PiHoleEntry());
+
+            // Assert
+            act.Should().NotThrow();
+            (await File.ReadAllTextAsync(filePath)).Should().Be(previous);
+        }
+        finally
+        {
+            File.SetAttributes(filePath, FileAttributes.Normal);
+        }
+    }
+
+    [Fact]
+    public async Task SaveAsync_WhenTheFolderRefusesNewFiles_KeepsThePreviousVersionAndReturnsFalse()
+    {
+        // Arrange
+        const string previous = """{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""";
+        var folder = Directory.CreateDirectory(Path.Combine(_testDir, "locked_async"));
+        var filePath = Path.Combine(folder.FullName, "dns_cache.json");
+        await File.WriteAllTextAsync(filePath, previous);
+        var store = new PersistentDnsCacheStore(filePath);
+        using var denial = FolderCreationDenial.Apply(folder);
+
+        // Act
+        var saved = await store.SaveAsync(PiHoleEntry());
+
+        // Assert
+        saved.Should().BeFalse();
+        (await File.ReadAllTextAsync(filePath)).Should().Be(previous);
+    }
+
+    [Fact]
+    public async Task Save_WhenTheFolderRefusesNewFiles_KeepsThePreviousVersion()
+    {
+        // Arrange
+        const string previous = """{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""";
+        var folder = Directory.CreateDirectory(Path.Combine(_testDir, "locked_sync"));
+        var filePath = Path.Combine(folder.FullName, "dns_cache.json");
+        await File.WriteAllTextAsync(filePath, previous);
+        var store = new PersistentDnsCacheStore(filePath);
+        using var denial = FolderCreationDenial.Apply(folder);
+
+        // Act
+        var act = () => store.Save(PiHoleEntry());
+
+        // Assert
+        act.Should().NotThrow();
+        (await File.ReadAllTextAsync(filePath)).Should().Be(previous);
+    }
+
+    private static Dictionary<string, DnsCacheEntry> PiHoleEntry() =>
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["192.168.1.2"] = new() { HostName = "pihole.home.arpa", Source = "DNS" }
+        };
 }

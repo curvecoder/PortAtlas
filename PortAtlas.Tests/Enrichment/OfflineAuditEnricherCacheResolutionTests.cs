@@ -2,6 +2,7 @@ using System.Net;
 using AwesomeAssertions;
 using PortAtlas.Core.Enrichment;
 using PortAtlas.Core.Resolution;
+using PortAtlas.Tests.Resolution;
 using Xunit;
 
 namespace PortAtlas.Tests.Enrichment;
@@ -190,6 +191,24 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         // Assert
         report.MergedEntries["10.0.0.5"].HostName.Should().Be("SRV-KNOWN");
         report.Conflicts.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenTheOutputCacheCannotBeWritten_ReportsThatItKeptItsPreviousVersion()
+    {
+        // Arrange
+        var folder = Directory.CreateDirectory(Path.Combine(_tempDirectory, "locked"));
+        var outputCache = Path.Combine(folder.FullName, "master.json");
+        var options = new OfflineAuditEnrichmentOptions { Isolated = true, OutputCachePath = outputCache };
+        var messages = new List<string>();
+        using var denial = FolderCreationDenial.Apply(folder);
+
+        // Act
+        await new OfflineAuditEnricher(logger: messages.Add).EnrichFilesAsync([], [Cache(("10.0.0.5", "SRV-KNOWN"))], options);
+
+        // Assert
+        messages.Should().ContainSingle(message => message.Contains(outputCache, StringComparison.Ordinal))
+            .Which.Should().Be($"The consolidated cache could not be written to {outputCache}; it keeps its previous version.");
     }
 
     [Fact]

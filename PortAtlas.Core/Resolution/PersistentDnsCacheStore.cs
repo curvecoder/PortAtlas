@@ -133,7 +133,9 @@ public sealed class PersistentDnsCacheStore(string filePath)
     /// </summary>
     /// <param name="cache">Dictionary of IP mappings to persist.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    public async Task SaveAsync(IReadOnlyDictionary<string, DnsCacheEntry> cache, CancellationToken cancellationToken = default)
+    /// <returns><see langword="true"/> when the file was written; <see langword="false"/> when it could not be replaced,
+    /// in which case it keeps its previous version.</returns>
+    public async Task<bool> SaveAsync(IReadOnlyDictionary<string, DnsCacheEntry> cache, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(cache);
 
@@ -146,11 +148,14 @@ public sealed class PersistentDnsCacheStore(string filePath)
         try
         {
             await AtomicFileWriter.WriteAllTextAsync(_filePath, json, cancellationToken: cancellationToken).ConfigureAwait(false);
+            return true;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // A file held open by another process must not stop the run: the cache on disk keeps its previous
-            // version, and the next save writes every entry again.
+            // A file held open by another process, or a folder the account cannot write to, must not stop the run:
+            // the cache on disk keeps its previous version, the caller is told so, and the next save writes every
+            // entry again. The resolver saves from a timer, where an escaping exception would go unobserved.
+            return false;
         }
     }
 
@@ -159,7 +164,8 @@ public sealed class PersistentDnsCacheStore(string filePath)
     /// </summary>
     /// <param name="cache">Simple IP mappings dictionary to persist.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
-    public Task SaveAsync(IReadOnlyDictionary<string, string> cache, CancellationToken cancellationToken = default)
+    /// <returns><see langword="true"/> when the file was written; <see langword="false"/> when it kept its previous version.</returns>
+    public Task<bool> SaveAsync(IReadOnlyDictionary<string, string> cache, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(cache);
 
@@ -193,9 +199,10 @@ public sealed class PersistentDnsCacheStore(string filePath)
         {
             AtomicFileWriter.WriteAllText(_filePath, json);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Same tolerance as SaveAsync: the cache on disk keeps its previous version.
+            // Same tolerance as SaveAsync: the cache on disk keeps its previous version. This save runs from Dispose,
+            // which must not throw.
         }
     }
 

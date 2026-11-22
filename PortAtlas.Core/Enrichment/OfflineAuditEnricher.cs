@@ -264,8 +264,10 @@ public sealed class OfflineAuditEnricher(
 
         // Not cancellable: this save also runs after a cancellation, whose token is already cancelled.
         var store = new PersistentDnsCacheStore(outputCachePath);
-        await store.SaveAsync(activeCache, CancellationToken.None).ConfigureAwait(false);
-        _logger?.Invoke($"Consolidated cache successfully saved to: {outputCachePath}");
+        var saved = await store.SaveAsync(activeCache, CancellationToken.None).ConfigureAwait(false);
+        _logger?.Invoke(saved
+            ? $"Consolidated cache successfully saved to: {outputCachePath}"
+            : $"The consolidated cache could not be written to {outputCachePath}; it keeps its previous version.");
     }
 
     private static async Task<IReadOnlyList<string>> ExtractIpsRequiringResolutionAsync(
