@@ -1,6 +1,8 @@
+using System.Globalization;
 using AwesomeAssertions;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Cli.Diagnostics;
+using PortAtlas.Core.Resolution;
 using Xunit;
 
 namespace PortAtlas.Tests.Diagnostics;
@@ -196,5 +198,39 @@ public sealed class IpResolutionDiagnosticReporterTests
         {
             File.Delete(cachePath);
         }
+    }
+
+    [Fact]
+    public async Task RunDiagnosticAsync_WhenTheCurrentCultureSeparatesTimeWithDots_WritesTheCacheResolutionTimeWithColons()
+    {
+        // Arrange
+        var cachePath = Path.Combine(Path.GetTempPath(), $"PortAtlas_LookupCache_{Guid.NewGuid():N}.json");
+        new PersistentDnsCacheStore(cachePath).Save(new Dictionary<string, DnsCacheEntry>
+        {
+            ["192.168.1.10"] = new() { HostName = "nas.home.arpa", Source = "DNS", ResolvedAtUtc = new DateTimeOffset(2026, 11, 1, 8, 9, 10, TimeSpan.Zero) }
+        });
+        var dottedTimeCulture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        dottedTimeCulture.DateTimeFormat.TimeSeparator = ".";
+        dottedTimeCulture.DateTimeFormat.DateSeparator = "/";
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        // The alias keeps the run off the network: only the cache step matters here.
+        var config = new AppConfiguration { DnsCacheFilePath = cachePath, CustomHostAliases = new() { ["192.168.1.10"] = "nas.home.arpa" } };
+        var originalCulture = CultureInfo.CurrentCulture;
+        try
+        {
+            CultureInfo.CurrentCulture = dottedTimeCulture;
+
+            // Act
+            await reporter.RunDiagnosticAsync("192.168.1.10", config);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = originalCulture;
+            File.Delete(cachePath);
+        }
+
+        // Assert
+        output.ToString().Should().Contain("Resolved at (UTC)    : 2026-11-01 08:09:10Z");
     }
 }

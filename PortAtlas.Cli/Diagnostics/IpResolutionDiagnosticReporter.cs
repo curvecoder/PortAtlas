@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -98,7 +99,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
                     await _output.WriteLineAsync($"    - Country              : {cachedEntry.Country ?? "(not populated)"}").ConfigureAwait(false);
                     await _output.WriteLineAsync($"    - Network Range        : {cachedEntry.NetworkRange ?? "(not populated)"}").ConfigureAwait(false);
                     await _output.WriteLineAsync($"    - Source               : {cachedEntry.Source}").ConfigureAwait(false);
-                    await _output.WriteLineAsync($"    - Resolved at (UTC)    : {cachedEntry.ResolvedAtUtc:yyyy-MM-dd HH:mm:ss}Z").ConfigureAwait(false);
+                    await _output.WriteLineAsync(string.Create(CultureInfo.InvariantCulture, $"    - Resolved at (UTC)    : {cachedEntry.ResolvedAtUtc:yyyy-MM-dd HH:mm:ss}Z")).ConfigureAwait(false);
                 }
                 else
                 {
