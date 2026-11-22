@@ -72,6 +72,7 @@ These keys are read by the map of `audit`, by `map`, and for the filters by `exp
 | `MapDirection` | `all`, `in`, `out` | `all` | `--direction` |
 | `MapListenersOnly` | boolean | `false` | `--listeners-only` |
 | `MapExcludeEphemeralPorts` | boolean | `true` | `--include-ephemeral-ports` (map only) |
+| `AddressGroups` | object `{ "group": ["range", …] }` | `{}` | `--address-group` (`export rules` only, adds to the file) |
 | `MapLayoutMode` | see `--layout` | `layered` | `--layout` |
 | `MapSortMethod` | see `--sort` | `barycentric` | `--sort` |
 | `MapRoutingMode` | see `--routing` | `bezier` | `--routing` |
@@ -80,6 +81,18 @@ These keys are read by the map of `audit`, by `map`, and for the filters by `exp
 | `DrawioEdgeMode` | `adaptive`, `direction`, `pair`, `none` | `adaptive` | `--drawio-edges` |
 | `DrawioSubnets` | `on`, `off` | `on` | `--drawio-subnets` |
 | `DrawioTheme` | `dark`, `light` | `dark` | `--drawio-theme` |
+
+`AddressGroups` names groups of addresses and CIDR subnets for the group rule matrix of `export rules` (`--group-rules-output`). An address belongs to the group of its most precise range; a range given to two groups, or a range that cannot be read, stops `export rules` with exit code 1:
+
+```json
+{
+  "AddressGroups": {
+    "lab": [ "192.168.10.0/24" ],
+    "iot": [ "192.168.20.0/24", "192.168.21.0/24" ],
+    "nas": [ "192.168.10.20" ]
+  }
+}
+```
 
 An entry of `MapIncludedPorts` or `MapExcludedPorts` may hold several ports or ranges separated by `,` or `;` (`"80,443"`).
 

@@ -72,6 +72,7 @@ Ces clés sont lues par la carte de `audit`, par `map`, et pour les filtres par 
 | `MapDirection` | `all`, `in`, `out` | `all` | `--direction` |
 | `MapListenersOnly` | booléen | `false` | `--listeners-only` |
 | `MapExcludeEphemeralPorts` | booléen | `true` | `--include-ephemeral-ports` (carte uniquement) |
+| `AddressGroups` | objet `{ "groupe": ["plage", …] }` | `{}` | `--address-group` (`export rules` uniquement, s'ajoute au fichier) |
 | `MapLayoutMode` | voir `--layout` | `layered` | `--layout` |
 | `MapSortMethod` | voir `--sort` | `barycentric` | `--sort` |
 | `MapRoutingMode` | voir `--routing` | `bezier` | `--routing` |
@@ -80,6 +81,18 @@ Ces clés sont lues par la carte de `audit`, par `map`, et pour les filtres par 
 | `DrawioEdgeMode` | `adaptive`, `direction`, `pair`, `none` | `adaptive` | `--drawio-edges` |
 | `DrawioSubnets` | `on`, `off` | `on` | `--drawio-subnets` |
 | `DrawioTheme` | `dark`, `light` | `dark` | `--drawio-theme` |
+
+`AddressGroups` nomme des groupes d'adresses et de sous-réseaux CIDR pour la matrice de règles par groupe d'`export rules` (`--group-rules-output`). Une adresse appartient au groupe de sa plage la plus précise ; une plage donnée à deux groupes, ou une plage illisible, arrête `export rules` avec le code de sortie 1 :
+
+```json
+{
+  "AddressGroups": {
+    "lab": [ "192.168.10.0/24" ],
+    "iot": [ "192.168.20.0/24", "192.168.21.0/24" ],
+    "nas": [ "192.168.10.20" ]
+  }
+}
+```
 
 Une entrée de `MapIncludedPorts` ou `MapExcludedPorts` peut contenir plusieurs ports ou plages séparés par `,` ou `;` (`"80,443"`).
 

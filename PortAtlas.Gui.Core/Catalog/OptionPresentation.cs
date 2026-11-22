@@ -51,6 +51,8 @@ public static class OptionPresentation
         ["--flows-output"] = Output,
         ["--host-rules-output"] = Output,
         ["--listeners-output"] = Output,
+        ["--group-rules-output"] = Output,
+        ["--address-group"] = Output,
         ["--output-cache"] = Output,
 
         ["--in-place"] = Resolving,

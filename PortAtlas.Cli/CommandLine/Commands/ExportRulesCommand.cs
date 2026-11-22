@@ -20,6 +20,8 @@ public sealed class ExportRulesCommand : Command
     private readonly Option<string?> _flowsOutput = OptionFactory.CreatePath("--flows-output", "Also write a flow matrix CSV (one row per flow, the two ends of a connection merged: processes and observations of each end), with the same filters. Same tokens as --output. Default: not written.");
     private readonly Option<string?> _hostRulesOutput = OptionFactory.CreatePath("--host-rules-output", "Also write a host rule matrix CSV for network security groups (an outbound rule on the source and an inbound rule on the destination of each flow, private addresses only), with the same filters. Same tokens as --output. Default: not written.");
     private readonly Option<string?> _listenersOutput = OptionFactory.CreatePath("--listeners-output", "Also write the listening sockets CSV, as --listeners-only would, in the same pass. Same tokens as --output. Default: not written.");
+    private readonly Option<string?> _groupRulesOutput = OptionFactory.CreatePath("--group-rules-output", "Also write a group rule matrix CSV (one row per source group, destination group, protocol and port, from AddressGroups and --address-group; an address in no group stands for itself), with the same filters. Same tokens as --output. Default: not written.");
+    private readonly Option<string[]> _addressGroup = OptionFactory.CreateList("--address-group", "name=range", "Address group of the group rule matrix: an IP address or a CIDR subnet and the name of its group (lab=192.168.10.0/24), added to AddressGroups; an address belongs to the group of its most precise range. Repeatable.");
     private readonly Option<string?> _zone = OptionFactory.CreateChoice("--zone", "Destination zone to keep: internal (private address ranges), public, or all. Default: all.", "all", "internal", "public");
     private readonly Option<string?> _configFile;
 
@@ -37,6 +39,18 @@ public sealed class ExportRulesCommand : Command
         Options.Add(_flowsOutput);
         Options.Add(_hostRulesOutput);
         Options.Add(_listenersOutput);
+        Options.Add(_groupRulesOutput);
+        _addressGroup.Validators.Add(result =>
+        {
+            foreach (var value in result.GetValueOrDefault<string[]>() ?? [])
+            {
+                if (!AddressGroupParser.TryParseArgument(value, out _, out var error))
+                {
+                    result.AddError(error);
+                }
+            }
+        });
+        Options.Add(_addressGroup);
         Options.Add(_minObservations);
         Options.Add(_activeWithinDays);
         Options.Add(_zone);
@@ -63,6 +77,7 @@ public sealed class ExportRulesCommand : Command
             var flowsOutputPath = ResolveOptional(parseResult, _flowsOutput);
             var hostRulesOutputPath = ResolveOptional(parseResult, _hostRulesOutput);
             var listenersOutputPath = ResolveOptional(parseResult, _listenersOutput);
+            var groupRulesOutputPath = ResolveOptional(parseResult, _groupRulesOutput);
 
             (string Option, string? Path)[] requested =
             [
@@ -70,12 +85,20 @@ public sealed class ExportRulesCommand : Command
                 (_pairsOutput.Name, pairsOutputPath),
                 (_flowsOutput.Name, flowsOutputPath),
                 (_hostRulesOutput.Name, hostRulesOutputPath),
-                (_listenersOutput.Name, listenersOutputPath)
+                (_listenersOutput.Name, listenersOutputPath),
+                (_groupRulesOutput.Name, groupRulesOutputPath)
             ];
             var conflict = MatrixOutputPathValidator.FindConflict(requested, files);
             if (conflict is not null)
             {
                 await Console.Error.WriteLineAsync(conflict).ConfigureAwait(false);
+                return 1;
+            }
+
+            // Read before any log: a range given to two groups would otherwise be found once every log is read.
+            if (!AddressGroupParser.TryBuild(config.AddressGroups, parseResult.GetValue(_addressGroup) ?? [], out var addressGroups, out var groupError))
+            {
+                await Console.Error.WriteLineAsync(groupError).ConfigureAwait(false);
                 return 1;
             }
 
@@ -102,7 +125,9 @@ public sealed class ExportRulesCommand : Command
                 PairsOutputPath = pairsOutputPath,
                 FlowsOutputPath = flowsOutputPath,
                 HostRulesOutputPath = hostRulesOutputPath,
-                ListenersOutputPath = listenersOutputPath
+                ListenersOutputPath = listenersOutputPath,
+                GroupRulesOutputPath = groupRulesOutputPath,
+                AddressGroups = addressGroups
             };
 
             return await new FirewallRuleExportCommandRunner().RunAsync(files, outputPath, options, cancellationToken).ConfigureAwait(false);

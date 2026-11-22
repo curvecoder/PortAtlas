@@ -9,7 +9,7 @@
 | Journal d'audit CSV | `audit` | UTF-8 avec marque d'ordre des octets (BOM) | Une fois complet (voir [Cycle de réécriture](#cycle-de-réécriture)) |
 | Journal d'audit NDJSON | `audit --ndjson` | UTF-8 sans BOM | Une fois complet, comme le journal CSV |
 | Export NDJSON | `export ndjson` | UTF-8 sans BOM | Écrit sur place : un export interrompu laisse un fichier partiel |
-| Matrices de règles, des sockets en écoute, de flux, par paire et de règles par hôte | `export rules` | UTF-8 avec BOM | Une fois complètes |
+| Matrices de règles, des sockets en écoute, de flux, par paire, de règles par hôte et de règles par groupe | `export rules` | UTF-8 avec BOM | Une fois complètes |
 | Cache DNS | `audit`, `resolve` | UTF-8 sans BOM | Une fois complet ; quand il ne peut pas être écrit, le fichier précédent reste |
 | Copie enrichie | `resolve` | BOM du journal qu'elle copie | Une fois complète |
 | Carte HTML | `map --html`, `audit --html` | UTF-8 avec BOM | Écrite sur place |
@@ -200,6 +200,23 @@ Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'a
 | `FirstSeenUtc` | Première observation la plus ancienne du flux |
 | `LastSeenUtc` | Observation la plus récente du flux |
 | `FlowId` | Ligne de la matrice de flux d'où vient la règle |
+
+## Matrice de règles par groupe
+
+Écrite par `export rules --group-rules-output`, à partir des lignes de la matrice de règles de pare-feu (mêmes filtres), avec les groupes d'adresses d'`AddressGroups` et de `--address-group`. Une ligne par groupe source, groupe destination, protocole et port. Une adresse hors de tout groupe se représente elle-même, écrite comme dans la matrice de règles de pare-feu ; la source d'un socket en écoute est `Any`. Un flux relevé à ses deux bouts fait deux règles de la matrice de règles de pare-feu : la ligne compte les deux et additionne leurs observations. Les lignes sont triées par source et destination, comme du texte sans tenir compte de la casse, puis par port et protocole. Une valeur qui pourrait commencer une formule reçoit la même apostrophe initiale que dans la matrice de règles de pare-feu.
+
+| Colonne | Contenu |
+| :--- | :--- |
+| `GroupRuleId` | `GROUP-001`, `GROUP-002`… dans l'ordre du tri |
+| `SourceGroup` | Groupe de l'adresse cliente, son adresse quand elle n'est dans aucun groupe, ou `Any` |
+| `DestinationGroup` | Groupe de l'adresse serveur, ou son adresse quand elle n'est dans aucun groupe |
+| `Protocol` | `TCP` ou `UDP` |
+| `DestinationPort` | Port de destination |
+| `RuleCount` | Nombre de lignes de la matrice de règles de pare-feu réunies dans la ligne |
+| `ObservationCount` | Somme des observations de ces règles |
+| `FirstSeenUtc` | Première observation la plus ancienne |
+| `LastSeenUtc` | Observation la plus récente |
+| `Processes` | Noms de processus distincts de ces règles, dans l'ordre ordinal (`caddy, curl`) |
 
 ## Carte topologique
 

@@ -44,7 +44,7 @@ An option combines with the file as follows:
 
 ## File name tokens
 
-These tokens are replaced in the path keys of the configuration file (`OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath`, `DnsCacheFilePath`) and in the output options: `-o`, `--ndjson`, `--html` and `--drawio` of `audit`; `--html` and `--drawio` of `map`; `-o`, `--pairs-output`, `--flows-output`, `--host-rules-output` and `--listeners-output` of `export rules`; `-o` of `export ndjson`; `--output-cache` of `resolve`. They are not replaced in `--input`, `--cache`, `--config` or the path given to `config init`. An `--input` left to its default reads `OutputCsvPath` with `{ServerName}` and `{HostName}` replaced. With `{Date}` or `{Timestamp}` in `OutputCsvPath`, each audit start writes a new log, so `map`, `export rules`, `export ndjson` without `-i`, and `resolve` without `-i` or `--cache`, read none: they stop with `OutputCsvPath '<value>' names a new audit log at each audit start, so it names no log to read: give the logs with --input, for example --input "<pattern>".` and exit code 1, where `<pattern>` is the path with `*` in place of these tokens. With `{Timestamp}` in `DnsCacheFilePath`, each command starts from an empty cache and writes a new one, instead of reusing the previous cache.
+These tokens are replaced in the path keys of the configuration file (`OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath`, `DnsCacheFilePath`) and in the output options: `-o`, `--ndjson`, `--html` and `--drawio` of `audit`; `--html` and `--drawio` of `map`; `-o`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output` and `--group-rules-output` of `export rules`; `-o` of `export ndjson`; `--output-cache` of `resolve`. They are not replaced in `--input`, `--cache`, `--config` or the path given to `config init`. An `--input` left to its default reads `OutputCsvPath` with `{ServerName}` and `{HostName}` replaced. With `{Date}` or `{Timestamp}` in `OutputCsvPath`, each audit start writes a new log, so `map`, `export rules`, `export ndjson` without `-i`, and `resolve` without `-i` or `--cache`, read none: they stop with `OutputCsvPath '<value>' names a new audit log at each audit start, so it names no log to read: give the logs with --input, for example --input "<pattern>".` and exit code 1, where `<pattern>` is the path with `*` in place of these tokens. With `{Timestamp}` in `DnsCacheFilePath`, each command starts from an empty cache and writes a new one, instead of reusing the previous cache.
 
 | Token | Replaced by |
 | :--- | :--- |
@@ -188,6 +188,8 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 | `--flows-output` | `<path>` | not written | Also writes the flow matrix, one row per flow with the two ends of a connection merged ([columns](output-formats.md#flow-matrix)); same tokens as `--output` |
 | `--host-rules-output` | `<path>` | not written | Also writes the host rule matrix, an outbound rule on the source and an inbound rule on the destination of each flow, for network security groups ([columns](output-formats.md#host-rule-matrix)); same tokens as `--output` |
 | `--listeners-output` | `<path>` | not written | Also writes the listening sockets that `--listeners-only` would export, in the same pass ([columns](output-formats.md#listening-socket-matrix)); same tokens as `--output` |
+| `--group-rules-output` | `<path>` | not written | Also writes the group rule matrix, one row per source group, destination group, protocol and port ([columns](output-formats.md#group-rule-matrix)); same tokens as `--output` |
+| `--address-group` | `name=range`, repeatable | none | Puts an IP address or a CIDR subnet in a group of the group rule matrix (`lab=192.168.10.0/24`), in addition to `AddressGroups`; a value without a name or a readable range is refused |
 | `--min-observations` | number, at least 1 | `1` | Keep flows observed at least this number of times |
 | `--active-within-days` | number, at least 1 | no limit | Keep flows last seen during the last N days |
 | `--zone` | `all`, `internal`, `public` | `all` | Destination zone to keep |
@@ -207,9 +209,11 @@ A rule carries the server name, the remote name, the executable path and the acc
 
 A CSV log is read with the separator found on its own first line (`,`, `;`, tab or `|`), so logs written with different `CsvDelimiter` values can be consolidated together: the separator between the column names of the header or, in a log without header, the one that occurs most often outside the quoted fields. The matrix is written with `CsvDelimiter`.
 
+An address group is a set of addresses and CIDR subnets that share firewall rules, such as a VLAN or an application security group. Groups come from the `AddressGroups` key and from `--address-group`, which adds ranges to the groups of the file (a group named in both, whatever the case of its name, holds the ranges of both). An address belongs to the group of its most precise range: with `lab=192.168.10.0/24` and `nas=192.168.10.20`, the address `192.168.10.20` is in `nas`. A range given to two groups, whatever its spelling (`192.168.10.0/24` and `192.168.10.9/24` are one range), stops the command before any log is read, with `<range> is in two address groups, '<group>' and '<group>': give each address or subnet to one group only (AddressGroups, --address-group).` and exit code 1; so does a range of `AddressGroups` that cannot be read. The groups shape the group rule matrix only: the other matrices keep one row per address.
+
 The matrices are written once every log has been read. When an output option names one of the audit logs to read, given by its own path or found in a directory or a pattern, the command writes nothing and stops with `The output '<path>' is also an audit log to read: choose another path for <option>.` and exit code 1. When two output options name the same file, the command writes nothing and stops with `<option> and <option> name the same file '<path>': choose two different paths.` and exit code 1. File names are compared without case.
 
-Configuration keys read: `OutputCsvPath` (default input), `CsvDelimiter` (also the separator of the matrices), and the flow filter keys except `MapExcludeEphemeralPorts`. The map rendering keys, the recording filters and the name resolution keys are not read.
+Configuration keys read: `OutputCsvPath` (default input), `CsvDelimiter` (also the separator of the matrices), `AddressGroups`, and the flow filter keys except `MapExcludeEphemeralPorts`. The map rendering keys, the recording filters and the name resolution keys are not read.
 
 ## export ndjson
 
@@ -292,7 +296,7 @@ Configuration keys read: none.
 | `--dns-timeout-ms`, `--rdap-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
 | `--mask-server`, `--mask-ip`, `--obfuscate` | ✔ | | | | | | |
-| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output` | | | ✔ | | | | |
+| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output`, `--address-group` | | | ✔ | | | | |
 | `--cache`, `--output-cache`, `--in-place`, `--force-resolve`, `--rdap-delay-ms`, `--cache-only` | | | | | ✔ | | |
 
 `config init` accepts `--config` because the option is global, but does not read it.

@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
-using System.Net.Sockets;
+using PortAtlas.Core.Filtering;
 using TopologyForge.Filtering;
 
 namespace PortAtlas.Core.Resolution;
@@ -18,21 +18,14 @@ public sealed record HostAlias(IpAddressRange Range, string HostName);
 /// </summary>
 public sealed class HostAliasTable
 {
-    // Single addresses are looked up by key, since a configuration may still hold thousands of them; subnets are few
-    // and kept from the narrowest to the widest, so that the first one holding an address is the most precise.
-    private readonly Dictionary<IPAddress, HostAlias> _addresses;
-    private readonly IReadOnlyList<HostAlias> _subnets;
+    private readonly IpAddressRangeLookup<HostAlias> _aliases;
 
-    private HostAliasTable(Dictionary<IPAddress, HostAlias> addresses, IReadOnlyList<HostAlias> subnets)
-    {
-        _addresses = addresses;
-        _subnets = subnets;
-    }
+    private HostAliasTable(IpAddressRangeLookup<HostAlias> aliases) => _aliases = aliases;
 
     /// <summary>
     /// <see langword="true"/> when no alias is configured.
     /// </summary>
-    public bool IsEmpty => _addresses.Count == 0 && _subnets.Count == 0;
+    public bool IsEmpty => _aliases.IsEmpty;
 
     /// <summary>
     /// Reads the aliases of the configuration.
@@ -42,28 +35,20 @@ public sealed class HostAliasTable
     /// <remarks>
     /// A key that is neither an address nor a subnet, or an empty name, cannot name anything: it is left out rather than
     /// refused, so that one wrong line of the configuration file does not stop the audit or the resolve command. Two
-    /// keys naming the same range (<c>192.168.10.0/24</c> and <c>192.168.10.9/24</c>) keep the name read last, which
-    /// lets an <c>--alias</c> value replace the alias of the configuration file.
+    /// keys naming the same range (<c>192.168.10.0/24</c> and <c>192.168.10.9/24</c>) keep the name read last.
     /// </remarks>
     public static HostAliasTable Parse(IReadOnlyDictionary<string, string>? customHostAliases)
     {
-        var byRange = new Dictionary<IpAddressRange, HostAlias>();
+        var aliases = new List<(IpAddressRange Range, HostAlias Value)>();
         foreach (var (key, hostName) in customHostAliases ?? new Dictionary<string, string>())
         {
             if (IpAddressRange.TryParse(key, out var range) && !string.IsNullOrWhiteSpace(hostName))
             {
-                byRange[range] = new HostAlias(range, hostName.Trim());
+                aliases.Add((range, new HostAlias(range, hostName.Trim())));
             }
         }
 
-        var addresses = byRange.Values
-            .Where(alias => alias.Range.IsSingleAddress)
-            .ToDictionary(alias => alias.Range.NetworkAddress);
-        var subnets = byRange.Values
-            .Where(alias => !alias.Range.IsSingleAddress)
-            .OrderByDescending(alias => alias.Range.PrefixLength)
-            .ToList();
-        return new HostAliasTable(addresses, subnets);
+        return new HostAliasTable(new IpAddressRangeLookup<HostAlias>(aliases));
     }
 
     /// <summary>
@@ -73,39 +58,5 @@ public sealed class HostAliasTable
     /// <param name="alias">The alias found, otherwise <see langword="null"/>.</param>
     /// <returns><see langword="true"/> when an alias names the address.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="address"/> is <see langword="null"/>.</exception>
-    public bool TryFind(IPAddress address, [NotNullWhen(true)] out HostAlias? alias)
-    {
-        ArgumentNullException.ThrowIfNull(address);
-
-        if (_addresses.TryGetValue(AsRangeKey(address), out alias))
-        {
-            return true;
-        }
-
-        foreach (var subnet in _subnets)
-        {
-            if (subnet.Range.Contains(address))
-            {
-                alias = subnet;
-                return true;
-            }
-        }
-
-        alias = null;
-        return false;
-    }
-
-    // The single-address keys are kept in the form IpAddressRange gives them: IPv4 for an IPv4-mapped address, no zone
-    // for a link-local one. The address looked up is brought to that form, as IpAddressRange.Contains does.
-    private static IPAddress AsRangeKey(IPAddress address)
-    {
-        if (address.IsIPv4MappedToIPv6)
-        {
-            return address.MapToIPv4();
-        }
-
-        return address.AddressFamily == AddressFamily.InterNetworkV6 && address.ScopeId != 0
-            ? new IPAddress(address.GetAddressBytes())
-            : address;
-    }
+    public bool TryFind(IPAddress address, [NotNullWhen(true)] out HostAlias? alias) => _aliases.TryFind(address, out alias);
 }

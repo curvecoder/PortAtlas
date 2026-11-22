@@ -9,7 +9,7 @@
 | CSV audit log | `audit` | UTF-8 with byte order mark | Once complete (see [Rewrite cycle](#rewrite-cycle)) |
 | NDJSON audit log | `audit --ndjson` | UTF-8 without byte order mark | Once complete, as the CSV log |
 | NDJSON export | `export ndjson` | UTF-8 without byte order mark | Written in place: an interrupted export leaves a partial file |
-| Rule, listening socket, flow, pair and host rule matrices | `export rules` | UTF-8 with byte order mark | Once complete |
+| Rule, listening socket, flow, pair, host rule and group rule matrices | `export rules` | UTF-8 with byte order mark | Once complete |
 | DNS cache | `audit`, `resolve` | UTF-8 without byte order mark | Once complete; when it cannot be written, the previous file stays |
 | Enriched copy | `resolve` | Byte order mark of the log it copies | Once complete |
 | HTML map | `map --html`, `audit --html` | UTF-8 with byte order mark | Written in place |
@@ -200,6 +200,23 @@ Rows are sorted by host name, host address, direction (`Inbound` first), port, p
 | `FirstSeenUtc` | Earliest first observation of the flow |
 | `LastSeenUtc` | Latest observation of the flow |
 | `FlowId` | Row of the flow matrix the rule comes from |
+
+## Group rule matrix
+
+Written by `export rules --group-rules-output`, from the rows of the firewall rule matrix (same filters), with the address groups of `AddressGroups` and `--address-group`. One row per source group, destination group, protocol and port. An address in no group stands for itself, written as in the firewall rule matrix; the source of a listening socket is `Any`. A flow recorded at both of its ends is two rules of the firewall rule matrix: the row counts both and adds their observations. Rows are sorted by source and destination, as text without case, then by port and protocol. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+
+| Column | Content |
+| :--- | :--- |
+| `GroupRuleId` | `GROUP-001`, `GROUP-002`… in sort order |
+| `SourceGroup` | Group of the client address, its address when it is in no group, or `Any` |
+| `DestinationGroup` | Group of the server address, or its address when it is in no group |
+| `Protocol` | `TCP` or `UDP` |
+| `DestinationPort` | Destination port |
+| `RuleCount` | Number of firewall rule matrix rows merged into the row |
+| `ObservationCount` | Sum of the observations of those rules |
+| `FirstSeenUtc` | Earliest first observation |
+| `LastSeenUtc` | Latest observation |
+| `Processes` | Distinct process names of those rules, in ordinal order (`caddy, curl`) |
 
 ## Topology map
 

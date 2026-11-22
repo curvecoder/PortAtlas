@@ -34,6 +34,8 @@ public sealed class FirewallRuleExporter(
     private readonly FirewallFlowCsvFormatter _flowFormatter = new();
     private readonly FirewallHostRuleAggregator _hostRuleAggregator = new();
     private readonly FirewallHostRuleCsvFormatter _hostRuleFormatter = new();
+    private readonly FirewallGroupRuleAggregator _groupRuleAggregator = new();
+    private readonly FirewallGroupRuleCsvFormatter _groupRuleFormatter = new();
 
     /// <summary>
     /// Ingests audit files, aggregates firewall rules, and exports a formatted CSV matrix.
@@ -128,6 +130,14 @@ public sealed class FirewallRuleExporter(
             count => $"Host rule matrix with {count} rule(s)",
             cancellationToken).ConfigureAwait(false);
 
+        var groupRules = await WriteOptionalMatrixAsync(
+            options.GroupRulesOutputPath,
+            _groupRuleFormatter.BuildHeader(options.Delimiter),
+            () => _groupRuleAggregator.Aggregate(rules, options.AddressGroups),
+            row => _groupRuleFormatter.FormatRow(row, options.Delimiter),
+            count => $"Group rule matrix with {count} rule(s)",
+            cancellationToken).ConfigureAwait(false);
+
         return new FirewallRuleExportReport(
             validFiles,
             Path.GetFullPath(outputPath),
@@ -138,7 +148,8 @@ public sealed class FirewallRuleExporter(
         {
             Flows = flowFile,
             HostRules = hostRules,
-            Listeners = listeners
+            Listeners = listeners,
+            GroupRules = groupRules
         };
     }
 

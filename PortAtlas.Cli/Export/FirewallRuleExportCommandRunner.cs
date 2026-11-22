@@ -44,6 +44,7 @@ public sealed class FirewallRuleExportCommandRunner(FirewallRuleExporter? export
         WriteRequestedFile("Flow matrix file", options.FlowsOutputPath);
         WriteRequestedFile("Host rule matrix file", options.HostRulesOutputPath);
         WriteRequestedFile("Listening socket matrix file", options.ListenersOutputPath);
+        WriteRequestedFile("Group rule matrix file", options.GroupRulesOutputPath);
         Console.WriteLine();
 
         var report = await _exporter.ExportRulesAsync(auditFiles, outputPath, options, cancellationToken).ConfigureAwait(false);
@@ -63,6 +64,7 @@ public sealed class FirewallRuleExportCommandRunner(FirewallRuleExporter? export
         WriteExportedFile("Flows", report.Flows);
         WriteExportedFile("Host rules", report.HostRules);
         WriteExportedFile("Listening sockets", report.Listeners);
+        WriteExportedFile("Group rules", report.GroupRules);
         Console.WriteLine("------------------------------------------------------------------------");
 
         return 0;

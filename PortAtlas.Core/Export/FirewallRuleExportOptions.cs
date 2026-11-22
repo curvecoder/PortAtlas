@@ -108,4 +108,15 @@ public sealed record FirewallRuleExportOptions
     /// <see langword="null"/> skips it.
     /// </summary>
     public string? ListenersOutputPath { get; init; }
+
+    /// <summary>
+    /// Destination of the group rule matrix (one row per source group, destination group, protocol and port);
+    /// <see langword="null"/> skips it.
+    /// </summary>
+    public string? GroupRulesOutputPath { get; init; }
+
+    /// <summary>
+    /// Address groups of the group rule matrix; an address in no group stands for itself.
+    /// </summary>
+    public AddressGroupDirectory AddressGroups { get; init; } = AddressGroupDirectory.Empty;
 }

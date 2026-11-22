@@ -44,7 +44,7 @@ Une option se combine avec le fichier ainsi :
 
 ## Jetons de nom de fichier
 
-Ces jetons sont remplacés dans les clés de chemin du fichier de configuration (`OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath`, `DnsCacheFilePath`) et dans les options de sortie : `-o`, `--ndjson`, `--html` et `--drawio` d'`audit` ; `--html` et `--drawio` de `map` ; `-o`, `--pairs-output`, `--flows-output`, `--host-rules-output` et `--listeners-output` d'`export rules` ; `-o` d'`export ndjson` ; `--output-cache` de `resolve`. Ils ne sont pas remplacés dans `--input`, `--cache`, `--config` ni dans le chemin donné à `config init`. Un `--input` laissé à sa valeur par défaut lit `OutputCsvPath` avec `{ServerName}` et `{HostName}` remplacés. Avec `{Date}` ou `{Timestamp}` dans `OutputCsvPath`, chaque démarrage d'audit écrit un nouveau journal : `map`, `export rules` et `export ndjson` sans `-i`, et `resolve` sans `-i` ni `--cache`, n'en lisent donc aucun et s'arrêtent avec `OutputCsvPath '<value>' names a new audit log at each audit start, so it names no log to read: give the logs with --input, for example --input "<pattern>".` et le code de sortie 1, où `<pattern>` est le chemin avec `*` à la place de ces jetons. Avec `{Timestamp}` dans `DnsCacheFilePath`, chaque commande part d'un cache vide et en écrit un nouveau, au lieu de reprendre le cache précédent.
+Ces jetons sont remplacés dans les clés de chemin du fichier de configuration (`OutputCsvPath`, `OutputNdjsonPath`, `OutputHtmlMapPath`, `OutputDrawioPath`, `DnsCacheFilePath`) et dans les options de sortie : `-o`, `--ndjson`, `--html` et `--drawio` d'`audit` ; `--html` et `--drawio` de `map` ; `-o`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output` et `--group-rules-output` d'`export rules` ; `-o` d'`export ndjson` ; `--output-cache` de `resolve`. Ils ne sont pas remplacés dans `--input`, `--cache`, `--config` ni dans le chemin donné à `config init`. Un `--input` laissé à sa valeur par défaut lit `OutputCsvPath` avec `{ServerName}` et `{HostName}` remplacés. Avec `{Date}` ou `{Timestamp}` dans `OutputCsvPath`, chaque démarrage d'audit écrit un nouveau journal : `map`, `export rules` et `export ndjson` sans `-i`, et `resolve` sans `-i` ni `--cache`, n'en lisent donc aucun et s'arrêtent avec `OutputCsvPath '<value>' names a new audit log at each audit start, so it names no log to read: give the logs with --input, for example --input "<pattern>".` et le code de sortie 1, où `<pattern>` est le chemin avec `*` à la place de ces jetons. Avec `{Timestamp}` dans `DnsCacheFilePath`, chaque commande part d'un cache vide et en écrit un nouveau, au lieu de reprendre le cache précédent.
 
 | Jeton | Remplacé par |
 | :--- | :--- |
@@ -191,6 +191,8 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 | `--flows-output` | `<path>` | non écrite | Écrit aussi la matrice de flux, une ligne par flux, les deux bouts d'une connexion fusionnés ([colonnes](output-formats.fr.md#matrice-de-flux)) ; mêmes jetons que `--output` |
 | `--host-rules-output` | `<path>` | non écrite | Écrit aussi la matrice de règles par hôte, une règle sortante sur la source et une règle entrante sur la destination de chaque flux, pour les groupes de sécurité réseau ([colonnes](output-formats.fr.md#matrice-de-règles-par-hôte)) ; mêmes jetons que `--output` |
 | `--listeners-output` | `<path>` | non écrite | Écrit aussi les sockets en écoute qu'exporterait `--listeners-only`, dans la même passe ([colonnes](output-formats.fr.md#matrice-des-sockets-en-écoute)) ; mêmes jetons que `--output` |
+| `--group-rules-output` | `<path>` | non écrite | Écrit aussi la matrice de règles par groupe, une ligne par groupe source, groupe destination, protocole et port ([colonnes](output-formats.fr.md#matrice-de-règles-par-groupe)) ; mêmes jetons que `--output` |
+| `--address-group` | `nom=plage`, répétable | aucun | Place une adresse IP ou un sous-réseau CIDR dans un groupe de la matrice de règles par groupe (`lab=192.168.10.0/24`), en plus d'`AddressGroups` ; une valeur sans nom ou sans plage lisible est refusée |
 
 Familles lues : entrées (`.csv`, `.ndjson`, `.jsonl`) et filtres de flux, avec deux différences :
 
@@ -207,9 +209,11 @@ Une règle porte le nom du serveur, le nom distant, le chemin de l'exécutable e
 
 Un journal CSV est lu avec le séparateur trouvé sur sa propre première ligne (`,`, `;`, tabulation ou `|`) : des journaux écrits avec des valeurs différentes de `CsvDelimiter` peuvent donc être consolidés ensemble. C'est le séparateur placé entre les noms de colonnes de l'en-tête ou, dans un journal sans en-tête, celui qui revient le plus souvent hors des champs entre guillemets. La matrice est écrite avec `CsvDelimiter`.
 
+Un groupe d'adresses est un ensemble d'adresses et de sous-réseaux CIDR qui partagent des règles de pare-feu, comme un VLAN ou un groupe de sécurité d'application. Les groupes viennent de la clé `AddressGroups` et de `--address-group`, qui ajoute des plages aux groupes du fichier (un groupe nommé dans les deux, quelle que soit la casse de son nom, réunit les plages des deux). Une adresse appartient au groupe de sa plage la plus précise : avec `lab=192.168.10.0/24` et `nas=192.168.10.20`, l'adresse `192.168.10.20` est dans `nas`. Une plage donnée à deux groupes, quelle que soit son écriture (`192.168.10.0/24` et `192.168.10.9/24` sont une seule plage), arrête la commande avant toute lecture de journal, avec `<range> is in two address groups, '<group>' and '<group>': give each address or subnet to one group only (AddressGroups, --address-group).` et le code de sortie 1 ; de même pour une plage d'`AddressGroups` illisible. Les groupes ne façonnent que la matrice de règles par groupe : les autres matrices gardent une ligne par adresse.
+
 Les matrices sont écrites une fois tous les journaux lus. Quand une option de sortie désigne l'un des journaux d'audit à lire, donné par son chemin ou trouvé dans un dossier ou un motif, la commande n'écrit rien et s'arrête avec `The output '<path>' is also an audit log to read: choose another path for <option>.` et le code de sortie 1. Quand deux options de sortie désignent le même fichier, la commande n'écrit rien et s'arrête avec `<option> and <option> name the same file '<path>': choose two different paths.` et le code de sortie 1. Les noms de fichiers sont comparés sans tenir compte de la casse.
 
-Clés de configuration lues : `OutputCsvPath` (entrée par défaut), `CsvDelimiter` (aussi le séparateur des matrices), et les clés des filtres de flux sauf `MapExcludeEphemeralPorts`. Les clés du rendu de la carte, les filtres d'enregistrement et les clés de résolution de noms ne sont pas lus.
+Clés de configuration lues : `OutputCsvPath` (entrée par défaut), `CsvDelimiter` (aussi le séparateur des matrices), `AddressGroups`, et les clés des filtres de flux sauf `MapExcludeEphemeralPorts`. Les clés du rendu de la carte, les filtres d'enregistrement et les clés de résolution de noms ne sont pas lus.
 
 ## export ndjson
 
@@ -292,7 +296,7 @@ Clés de configuration lues : aucune.
 | `--dns-timeout-ms`, `--rdap-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
 | `--mask-server`, `--mask-ip`, `--obfuscate` | ✔ | | | | | | |
-| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output` | | | ✔ | | | | |
+| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output`, `--address-group` | | | ✔ | | | | |
 | `--cache`, `--output-cache`, `--in-place`, `--force-resolve`, `--rdap-delay-ms`, `--cache-only` | | | | | ✔ | | |
 
 `config init` accepte `--config` parce que l'option est globale, mais ne la lit pas.

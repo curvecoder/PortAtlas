@@ -31,4 +31,9 @@ public sealed record FirewallRuleExportReport(
     /// Listening socket matrix written, or <see langword="null"/> when it was not requested.
     /// </summary>
     public ExportedMatrixFile? Listeners { get; init; }
+
+    /// <summary>
+    /// Group rule matrix written, or <see langword="null"/> when it was not requested.
+    /// </summary>
+    public ExportedMatrixFile? GroupRules { get; init; }
 }

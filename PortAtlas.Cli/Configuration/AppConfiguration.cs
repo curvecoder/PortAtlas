@@ -99,6 +99,12 @@ public sealed record AppConfiguration
     public List<string> MapExcludedIps { get; init; } = [];
 
     /// <summary>
+    /// Address groups of the <c>export rules</c> group matrix: IP addresses or CIDR subnets by group name (VLAN,
+    /// application security group). An address belongs to the group of its most precise range.
+    /// </summary>
+    public Dictionary<string, List<string>> AddressGroups { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
     /// List of process names or application targets to include in the map.
     /// </summary>
     public List<string> MapIncludedProcesses { get; init; } = [];
