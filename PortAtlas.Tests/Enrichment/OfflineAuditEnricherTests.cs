@@ -12,10 +12,34 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 {
     private readonly string _tempDirectory;
 
+    // The enricher merges and writes its output cache, relative to the working directory by default: each test names
+    // one in its own folder, so that no test reads the names of another or writes beside the test binaries.
+    private readonly string _outputCachePath;
+
     public OfflineAuditEnricherTests()
     {
         _tempDirectory = Path.Combine(Path.GetTempPath(), "PortAtlas_EnricherTests_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_tempDirectory);
+        _outputCachePath = Path.Combine(_tempDirectory, "dns_cache.json");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenRunWithTheOptionsOfTheseTests_WritesTheCacheInTheFolderOfTheTest()
+    {
+        // Arrange
+        var csvPath = Path.Combine(_tempDirectory, "audit.csv");
+        await File.WriteAllLinesAsync(csvPath, ["RemoteIp,RemoteHostName,LocalPort,RemotePort", "10.0.0.9,,50000,443"]);
+        var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["10.0.0.9"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "CACHE-PROBE", Source = "DNS" }
+        };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, Isolated = true };
+
+        // Act
+        await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
+
+        // Assert
+        File.Exists(_outputCachePath).Should().BeTrue();
     }
 
     public void Dispose()
@@ -50,6 +74,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         var enricher = new OfflineAuditEnricher();
         var options = new OfflineAuditEnrichmentOptions
         {
+            OutputCachePath = _outputCachePath,
             InPlace = false,
             ForceResolve = false,
             Isolated = true
@@ -89,6 +114,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         var enricher = new OfflineAuditEnricher();
         var options = new OfflineAuditEnrichmentOptions
         {
+            OutputCachePath = _outputCachePath,
             InPlace = false,
             ForceResolve = false,
             Isolated = true
@@ -121,6 +147,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         var enricher = new OfflineAuditEnricher();
         var options = new OfflineAuditEnrichmentOptions
         {
+            OutputCachePath = _outputCachePath,
             InPlace = false,
             ForceResolve = true,
             Isolated = true
@@ -153,6 +180,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         var enricher = new OfflineAuditEnricher();
         var options = new OfflineAuditEnrichmentOptions
         {
+            OutputCachePath = _outputCachePath,
             InPlace = true,
             ForceResolve = false,
             Isolated = true
@@ -182,7 +210,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         {
             ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
-        var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, InPlace = true, ForceResolve = false, Isolated = true };
 
         // Act
         var report = await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
@@ -205,7 +233,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
             "2026-11-01T08:00:00Z,nas,51000,192.168.1.30,8007,pbs.home.arpa,java,\"java -jar backup.jar\r\n--target \"\"pbs\"\", now\"\r\n" +
             "2026-11-01T08:01:00Z,nas,51001,192.168.1.2,53,,dnsmasq,dnsmasq\r\n";
         await File.WriteAllTextAsync(csvPath, csvContent);
-        var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, InPlace = true, ForceResolve = false, Isolated = true };
 
         // Act
         var report = await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [new Dictionary<string, DnsCacheEntry>()], options);
@@ -227,7 +255,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         {
             ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
-        var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, InPlace = true, ForceResolve = false, Isolated = true };
 
         // Act
         await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
@@ -248,7 +276,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         {
             ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
-        var options = new OfflineAuditEnrichmentOptions { InPlace = inPlace, Isolated = true };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, InPlace = inPlace, Isolated = true };
 
         // Act
         var report = await new OfflineAuditEnricher().EnrichFilesAsync([csvPath], [cache], options);
@@ -271,7 +299,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         {
             ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
-        var options = new OfflineAuditEnrichmentOptions { InPlace = true, Isolated = true };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, InPlace = true, Isolated = true };
 
         // Act
         await new OfflineAuditEnricher().EnrichFilesAsync([path], [cache], options);
@@ -288,7 +316,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         // Arrange
         var path = Path.Combine(_tempDirectory, "audit_short.csv");
         await File.WriteAllBytesAsync(path, [0xEF, 0xBB]);
-        var options = new OfflineAuditEnrichmentOptions { InPlace = true, Isolated = true };
+        var options = new OfflineAuditEnrichmentOptions { OutputCachePath = _outputCachePath, InPlace = true, Isolated = true };
 
         // Act
         await new OfflineAuditEnricher().EnrichFilesAsync([path], [], options);
@@ -313,6 +341,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         var enricher = new OfflineAuditEnricher();
         var options = new OfflineAuditEnrichmentOptions
         {
+            OutputCachePath = _outputCachePath,
             InPlace = false,
             ForceResolve = false,
             Isolated = true
