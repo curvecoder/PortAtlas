@@ -1,3 +1,6 @@
+using System.Net;
+using PortAtlas.Core.Filtering;
+
 namespace PortAtlas.Core.Export;
 
 /// <summary>
@@ -5,7 +8,7 @@ namespace PortAtlas.Core.Export;
 /// </summary>
 public sealed class FirewallGroupRuleAggregator
 {
-    private const string AnySource = "Any";
+    internal const string AnySource = "Any";
 
     /// <summary>
     /// Groups the rules by the address groups of their ends.
@@ -24,7 +27,7 @@ public sealed class FirewallGroupRuleAggregator
         ArgumentNullException.ThrowIfNull(groups);
 
         var rows = rules
-            .Select(rule => (Rule: rule, Source: SourceOf(rule, groups), Destination: groups.FindGroup(rule.DestinationIp) ?? rule.DestinationIp))
+            .Select(rule => (Rule: rule, Source: SourceOf(rule, groups), Destination: EndpointOf(rule.DestinationIp, groups)))
             .GroupBy(item => (
                 Source: item.Source.ToUpperInvariant(),
                 Destination: item.Destination.ToUpperInvariant(),
@@ -55,5 +58,10 @@ public sealed class FirewallGroupRuleAggregator
 
     // A listening socket has no source host: its rule is written 0.0.0.0 or :: and stands for any peer.
     private static string SourceOf(FirewallRuleItem rule, AddressGroupDirectory groups) =>
-        groups.FindGroup(rule.SourceIp) ?? (AddressGroupDirectory.IsUnspecified(rule.SourceIp) ? AnySource : rule.SourceIp);
+        AddressGroupDirectory.IsUnspecified(rule.SourceIp) ? AnySource : EndpointOf(rule.SourceIp, groups);
+
+    // A host in no group is written in one form, so that ::ffff:10.0.0.5 and 10.0.0.5, or fe80::1%3 and fe80::1, give
+    // one row as they give one group.
+    private static string EndpointOf(string ip, AddressGroupDirectory groups) =>
+        groups.FindGroup(ip) ?? (IPAddress.TryParse(ip, out var address) ? IpAddressCanonicalForm.Of(address).ToString() : ip);
 }

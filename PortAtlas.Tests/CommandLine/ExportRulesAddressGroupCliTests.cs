@@ -122,6 +122,52 @@ public sealed class ExportRulesAddressGroupCliTests : IDisposable
         error.Should().Contain("--group-rules-output");
     }
 
+    [Fact]
+    public async Task ExportRules_WhenAGroupOfTheFileIsNull_StopsWithExitCodeOneNamingTheKey()
+    {
+        // Arrange
+        var config = await WriteConfigurationAsync(new { AddressGroups = new Dictionary<string, string[]?> { ["lab"] = null, ["servers"] = ["192.168.1.0/24"] } });
+
+        // Act
+        var (exitCode, error) = await RunAsync(config, []);
+
+        // Assert
+        exitCode.Should().Be(1);
+        error.Should().Contain("AddressGroups").And.Contain("null");
+        File.Exists(_rulesPath).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task ExportRules_WhenTheGroupMatrixIsNotAsked_IgnoresTheGroupsOfTheFile()
+    {
+        // Arrange
+        var config = await WriteConfigurationAsync(new { AddressGroups = new Dictionary<string, string[]> { ["lab"] = ["192.168.10.0/24"], ["vlan10"] = ["192.168.10.0/24"] } });
+
+        // Act
+        var (exitCode, error) = await RunAsync(config, [], writeGroupMatrix: false);
+
+        // Assert
+        exitCode.Should().Be(0, error);
+        error.Should().BeEmpty();
+        File.Exists(_rulesPath).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ExportRules_WhenAnAddressGroupIsGivenWithoutTheGroupMatrix_WarnsThatTheOptionIsUnused()
+    {
+        // Arrange
+        var config = await WriteConfigurationAsync(new { });
+
+        // Act
+        var (exitCode, error) = await RunAsync(config, ["--address-group", "lab=192.168.10.0/24"], writeGroupMatrix: false);
+
+        // Assert
+        exitCode.Should().Be(0, error);
+        error.Should().Contain("--address-group").And.Contain("--group-rules-output");
+        File.Exists(_rulesPath).Should().BeTrue();
+        File.Exists(_groupRulesPath).Should().BeFalse();
+    }
+
     private async Task<string> WriteConfigurationAsync(object values)
     {
         var path = Path.Combine(_root, "portatlas.json");
@@ -129,11 +175,13 @@ public sealed class ExportRulesAddressGroupCliTests : IDisposable
         return path;
     }
 
-    private async Task<(int ExitCode, string Error)> RunAsync(string configPath, string[] extraArguments, string? groupRulesPath = null)
+    private async Task<(int ExitCode, string Error)> RunAsync(
+        string configPath, string[] extraArguments, string? groupRulesPath = null, bool writeGroupMatrix = true)
     {
+        string[] groupMatrix = writeGroupMatrix ? ["--group-rules-output", groupRulesPath ?? _groupRulesPath] : [];
         string[] arguments =
         [
-            "export", "rules", "-i", _auditPath, "-o", _rulesPath, "--group-rules-output", groupRulesPath ?? _groupRulesPath,
+            "export", "rules", "-i", _auditPath, "-o", _rulesPath, .. groupMatrix,
             .. extraArguments, "--config", configPath
         ];
         var consoleOut = Console.Out;

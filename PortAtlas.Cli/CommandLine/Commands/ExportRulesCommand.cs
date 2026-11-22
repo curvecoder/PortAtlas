@@ -95,10 +95,9 @@ public sealed class ExportRulesCommand : Command
                 return 1;
             }
 
-            // Read before any log: a range given to two groups would otherwise be found once every log is read.
-            if (!AddressGroupParser.TryBuild(config.AddressGroups, parseResult.GetValue(_addressGroup) ?? [], out var addressGroups, out var groupError))
+            var addressGroups = await ReadAddressGroupsAsync(parseResult, config, groupRulesOutputPath).ConfigureAwait(false);
+            if (addressGroups is null)
             {
-                await Console.Error.WriteLineAsync(groupError).ConfigureAwait(false);
                 return 1;
             }
 
@@ -132,6 +131,30 @@ public sealed class ExportRulesCommand : Command
 
             return await new FirewallRuleExportCommandRunner().RunAsync(files, outputPath, options, cancellationToken).ConfigureAwait(false);
         });
+    }
+
+    // The groups serve the group rule matrix only: without it, a conflict in AddressGroups must not stop the other
+    // matrices. They are read before any log, so that a range given to two groups is not found once every log is read.
+    private async Task<AddressGroupDirectory?> ReadAddressGroupsAsync(ParseResult parseResult, AppConfiguration config, string? groupRulesOutputPath)
+    {
+        var optionValues = parseResult.GetValue(_addressGroup) ?? [];
+        if (groupRulesOutputPath is null)
+        {
+            if (optionValues.Length > 0)
+            {
+                await Console.Error.WriteLineAsync($"Warning: {_addressGroup.Name} is read with {_groupRulesOutput.Name} only; no group rule matrix is written.").ConfigureAwait(false);
+            }
+
+            return AddressGroupDirectory.Empty;
+        }
+
+        if (AddressGroupParser.TryBuild(config.AddressGroups, optionValues, out var addressGroups, out var groupError))
+        {
+            return addressGroups;
+        }
+
+        await Console.Error.WriteLineAsync(groupError).ConfigureAwait(false);
+        return null;
     }
 
     private static string? ResolveOptional(ParseResult parseResult, Option<string?> option) =>

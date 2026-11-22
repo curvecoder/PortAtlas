@@ -82,7 +82,7 @@ Ces clés sont lues par la carte de `audit`, par `map`, et pour les filtres par 
 | `DrawioSubnets` | `on`, `off` | `on` | `--drawio-subnets` |
 | `DrawioTheme` | `dark`, `light` | `dark` | `--drawio-theme` |
 
-`AddressGroups` nomme des groupes d'adresses et de sous-réseaux CIDR pour la matrice de règles par groupe d'`export rules` (`--group-rules-output`). Une adresse appartient au groupe de sa plage la plus précise ; une plage donnée à deux groupes, ou une plage illisible, arrête `export rules` avec le code de sortie 1 :
+`AddressGroups` nomme des groupes d'adresses et de sous-réseaux CIDR pour la matrice de règles par groupe d'`export rules` (`--group-rules-output`). Une adresse appartient au groupe de sa plage la plus précise ; une plage donnée à deux groupes, une plage illisible, ou un groupe nommé `Any` ou nommé comme une adresse, arrête `export rules` avec le code de sortie 1. Ces contrôles n'ont lieu qu'avec `--group-rules-output` :
 
 ```json
 {

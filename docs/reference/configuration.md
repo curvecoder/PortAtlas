@@ -82,7 +82,7 @@ These keys are read by the map of `audit`, by `map`, and for the filters by `exp
 | `DrawioSubnets` | `on`, `off` | `on` | `--drawio-subnets` |
 | `DrawioTheme` | `dark`, `light` | `dark` | `--drawio-theme` |
 
-`AddressGroups` names groups of addresses and CIDR subnets for the group rule matrix of `export rules` (`--group-rules-output`). An address belongs to the group of its most precise range; a range given to two groups, or a range that cannot be read, stops `export rules` with exit code 1:
+`AddressGroups` names groups of addresses and CIDR subnets for the group rule matrix of `export rules` (`--group-rules-output`). An address belongs to the group of its most precise range; a range given to two groups, a range that cannot be read, or a group named `Any` or named as an address, stops `export rules` with exit code 1. These checks run only when `--group-rules-output` is given:
 
 ```json
 {

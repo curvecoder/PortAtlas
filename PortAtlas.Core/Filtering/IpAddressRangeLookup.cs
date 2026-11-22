@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Net;
-using System.Net.Sockets;
 using TopologyForge.Filtering;
 
 namespace PortAtlas.Core.Filtering;
@@ -59,7 +58,7 @@ public sealed class IpAddressRangeLookup<T>
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (_addresses.TryGetValue(AsRangeKey(address), out value))
+        if (_addresses.TryGetValue(IpAddressCanonicalForm.Of(address), out value))
         {
             return true;
         }
@@ -75,19 +74,5 @@ public sealed class IpAddressRangeLookup<T>
 
         value = null;
         return false;
-    }
-
-    // The single-address keys are kept in the form IpAddressRange gives them: IPv4 for an IPv4-mapped address, no zone
-    // for a link-local one. The address looked up is brought to that form, as IpAddressRange.Contains does.
-    private static IPAddress AsRangeKey(IPAddress address)
-    {
-        if (address.IsIPv4MappedToIPv6)
-        {
-            return address.MapToIPv4();
-        }
-
-        return address.AddressFamily == AddressFamily.InterNetworkV6 && address.ScopeId != 0
-            ? new IPAddress(address.GetAddressBytes())
-            : address;
     }
 }

@@ -203,7 +203,7 @@ Rows are sorted by host name, host address, direction (`Inbound` first), port, p
 
 ## Group rule matrix
 
-Written by `export rules --group-rules-output`, from the rows of the firewall rule matrix (same filters), with the address groups of `AddressGroups` and `--address-group`. One row per source group, destination group, protocol and port. An address in no group stands for itself, written as in the firewall rule matrix; the source of a listening socket is `Any`. A flow recorded at both of its ends is two rules of the firewall rule matrix: the row counts both and adds their observations. Rows are sorted by source and destination, as text without case, then by port and protocol. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Written by `export rules --group-rules-output`, from the rows of the firewall rule matrix (same filters), with the address groups of `AddressGroups` and `--address-group`. One row per source group, destination group, protocol and port. An address in no group stands for itself, in one form: IPv4 for an IPv4-mapped address (`::ffff:192.168.1.53` is `192.168.1.53`), without the zone of a link-local address (`fe80::1%3` is `fe80::1`); the source of a listening socket is `Any`. A flow recorded at both of its ends is two rules of the firewall rule matrix: the row counts both and adds their observations. Rows are sorted by source and destination, as text without case, then by port and protocol. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
 
 | Column | Content |
 | :--- | :--- |

@@ -37,12 +37,15 @@ public sealed class AddressGroupDirectory
     /// </summary>
     /// <param name="ranges">Ranges of every group; a range may be repeated within one group.</param>
     /// <param name="directory">The directory, when every range belongs to one group only.</param>
-    /// <param name="conflict">The message naming a range given to two groups, otherwise <see langword="null"/>.</param>
+    /// <param name="conflict">The message naming a range given to two groups or a group name the matrix reserves,
+    /// otherwise <see langword="null"/>.</param>
     /// <returns><see langword="true"/> when the directory was built.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="ranges"/> is <see langword="null"/>.</exception>
     /// <remarks>
     /// A range given to two groups would put the same rules in a row picked by the order of the configuration: it is
     /// refused instead. A range written in two ways (<c>192.168.10.0/24</c> and <c>192.168.10.9/24</c>) is one range.
+    /// A group named <c>Any</c>, or named as an address or a subnet, is refused too: its rows could not be told apart
+    /// from those of a listening socket or of a host in no group.
     /// </remarks>
     public static bool TryCreate(
         IEnumerable<AddressGroupRange> ranges,
@@ -54,6 +57,13 @@ public sealed class AddressGroupDirectory
         var groupByRange = new Dictionary<IpAddressRange, string>();
         foreach (var (groupName, range) in ranges)
         {
+            if (IsReservedName(groupName))
+            {
+                directory = null;
+                conflict = $"'{groupName}' cannot name an address group: the group rule matrix writes {FirewallGroupRuleAggregator.AnySource} for the source of a listening socket and its address for a host in no group. Give the group another name (AddressGroups, --address-group).";
+                return false;
+            }
+
             if (groupByRange.TryGetValue(range, out var otherGroup) && !string.Equals(otherGroup, groupName, StringComparison.Ordinal))
             {
                 directory = null;
@@ -89,11 +99,18 @@ public sealed class AddressGroupDirectory
     /// Tells whether a rule address stands for any host, as the source of a listening socket does.
     /// </summary>
     /// <param name="ip">Address as written in a rule.</param>
-    /// <returns><see langword="true"/> for <c>0.0.0.0</c> and <c>::</c>.</returns>
+    /// <returns><see langword="true"/> for <c>0.0.0.0</c>, <c>::</c> and <c>::ffff:0.0.0.0</c>.</returns>
     public static bool IsUnspecified(string ip) => IPAddress.TryParse(ip, out var address) && IsUnspecified(address);
 
     // The source of a listening socket is written 0.0.0.0 or ::, which stands for any peer: it is no host of a group,
     // even of a group covering 0.0.0.0/0.
-    private static bool IsUnspecified(IPAddress address) =>
-        address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any);
+    private static bool IsUnspecified(IPAddress address)
+    {
+        var canonical = IpAddressCanonicalForm.Of(address);
+        return canonical.Equals(IPAddress.Any) || canonical.Equals(IPAddress.IPv6Any);
+    }
+
+    private static bool IsReservedName(string groupName) =>
+        string.Equals(groupName, FirewallGroupRuleAggregator.AnySource, StringComparison.OrdinalIgnoreCase)
+        || IpAddressRange.TryParse(groupName, out _);
 }

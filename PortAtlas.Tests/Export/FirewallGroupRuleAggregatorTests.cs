@@ -76,4 +76,39 @@ public sealed class FirewallGroupRuleAggregatorTests
         row.SourceGroup.Should().Be("Any");
         row.DestinationGroup.Should().Be("servers");
     }
+
+    [Fact]
+    public void Aggregate_WhenAnAddressInNoGroupIsWrittenInTwoForms_MergesItsRulesUnderOneForm()
+    {
+        // Arrange
+        var groups = AddressGroupDirectoryTests.Create(("lab", "192.168.10.0/24"));
+        FirewallRuleItem[] rules =
+        [
+            Outbound("192.168.10.21", "pc-21", "::ffff:192.168.1.53", "pihole", 53, "dnsmasq", 2),
+            Outbound("192.168.10.22", "pc-22", "192.168.1.53", "pihole", 53, "dnsmasq", 3),
+            Outbound("192.168.10.21", "pc-21", "fe80::1%3", "router", 22, "ssh", 4),
+            Outbound("192.168.10.22", "pc-22", "fe80::1", "router", 22, "ssh", 5)
+        ];
+
+        // Act
+        var rows = new FirewallGroupRuleAggregator().Aggregate(rules, groups);
+
+        // Assert
+        rows.Select(row => (row.SourceGroup, row.DestinationGroup, row.DestinationPort, row.RuleCount)).Should().BeEquivalentTo(
+            [("lab", "192.168.1.53", 53, 2), ("lab", "fe80::1", 22, 2)]);
+    }
+
+    [Fact]
+    public void Aggregate_WhenAListenerSourceIsTheIpv4MappedUnspecifiedAddress_WritesAnyAsItsSource()
+    {
+        // Arrange
+        var groups = AddressGroupDirectoryTests.Create(("everything", "0.0.0.0/0"), ("servers", "192.168.1.0/24"));
+        var listener = Inbound("::ffff:0.0.0.0", "Any", "192.168.1.50", "nas", 8080, "java");
+
+        // Act
+        var rows = new FirewallGroupRuleAggregator().Aggregate([listener], groups);
+
+        // Assert
+        rows.Should().ContainSingle().Which.SourceGroup.Should().Be("Any");
+    }
 }

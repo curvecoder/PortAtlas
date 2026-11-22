@@ -12,10 +12,14 @@ public sealed class AddressGroupDirectoryTests
     [InlineData("192.168.10.77", "lab")]
     [InlineData("192.168.30.5", "home")]
     [InlineData("::ffff:192.168.10.77", "lab")]
+    [InlineData("fd00:10::5", "lab-v6")]
+    [InlineData("fd00:10::20", "nas-v6")]
     public void FindGroup_WhenTheAddressIsInSeveralRanges_ReturnsTheGroupOfTheMostPreciseOne(string address, string expected)
     {
         // Arrange
-        var directory = Create(("home", "192.168.0.0/16"), ("lab", "192.168.10.0/24"), ("nas", "192.168.10.20"));
+        var directory = Create(
+            ("home", "192.168.0.0/16"), ("lab", "192.168.10.0/24"), ("nas", "192.168.10.20"),
+            ("lab-v6", "fd00:10::/64"), ("nas-v6", "fd00:10::20"));
 
         // Act
         var group = directory.FindGroup(address);
@@ -70,6 +74,27 @@ public sealed class AddressGroupDirectoryTests
         created.Should().BeTrue();
         conflict.Should().BeNull();
         directory!.FindGroup("192.168.10.1").Should().Be("lab");
+    }
+
+    [Theory]
+    [InlineData("Any")]
+    [InlineData("ANY")]
+    [InlineData("192.168.1.50")]
+    [InlineData("192.168.1.0/24")]
+    [InlineData("fe80::1")]
+    public void TryCreate_WhenAGroupIsNamedAnyOrLikeAnAddress_RefusesNamingTheGroup(string groupName)
+    {
+        // Arrange
+        // In the group matrix, Any stands for the source of a listening socket and an address for a host in no group.
+        var ranges = Ranges(("lab", "192.168.10.0/24"), (groupName, "192.168.20.0/24"));
+
+        // Act
+        var created = AddressGroupDirectory.TryCreate(ranges, out var directory, out var conflict);
+
+        // Assert
+        created.Should().BeFalse();
+        directory.Should().BeNull();
+        conflict.Should().Contain($"'{groupName}'");
     }
 
     [Fact]
