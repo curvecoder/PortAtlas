@@ -36,15 +36,29 @@ public sealed class LookupCommand : Command
 
         SetAction(async (parseResult, cancellationToken) =>
         {
-            var fileConfiguration = AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration;
-            var config = fileConfiguration with
-            {
-                DnsResolutionTimeoutMs = parseResult.GetValue(_dnsTimeout) ?? fileConfiguration.DnsResolutionTimeoutMs,
-                RdapTimeoutMs = parseResult.GetValue(_rdapTimeout) ?? fileConfiguration.RdapTimeoutMs
-            };
+            var config = BuildConfiguration(parseResult, AppConfigurationFile.Load(parseResult.GetValue(_configFile)).Configuration);
             var address = parseResult.GetValue(_address) ?? string.Empty;
             await new IpResolutionDiagnosticReporter().RunDiagnosticAsync(address, config, cancellationToken).ConfigureAwait(false);
             return 0;
         });
+    }
+
+    /// <summary>
+    /// Overrides the configuration file values with the options given on the command line.
+    /// </summary>
+    /// <param name="parseResult">Parsed command line of this command.</param>
+    /// <param name="fileConfiguration">Values read from the configuration file.</param>
+    /// <returns>The configuration the diagnostic runs with.</returns>
+    /// <exception cref="ArgumentNullException">When an argument is null.</exception>
+    public AppConfiguration BuildConfiguration(ParseResult parseResult, AppConfiguration fileConfiguration)
+    {
+        ArgumentNullException.ThrowIfNull(parseResult);
+        ArgumentNullException.ThrowIfNull(fileConfiguration);
+
+        return fileConfiguration with
+        {
+            DnsResolutionTimeoutMs = parseResult.GetValue(_dnsTimeout) ?? fileConfiguration.DnsResolutionTimeoutMs,
+            RdapTimeoutMs = parseResult.GetValue(_rdapTimeout) ?? fileConfiguration.RdapTimeoutMs
+        };
     }
 }

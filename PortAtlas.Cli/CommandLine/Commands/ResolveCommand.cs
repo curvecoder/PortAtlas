@@ -49,7 +49,7 @@ public sealed class ResolveCommand : Command
         SetAction(async (parseResult, cancellationToken) =>
         {
             var loaded = AppConfigurationFile.Load(parseResult.GetValue(_configFile));
-            var config = loaded.Configuration;
+            var config = BuildConfiguration(parseResult, loaded.Configuration);
             var cacheGiven = parseResult.GetValue(_cache) is { Length: > 0 };
             var caches = parseResult.GetValue(_cache) is { Length: > 0 } given ? given : [config.DnsCacheFilePath];
 
@@ -84,13 +84,31 @@ public sealed class ResolveCommand : Command
                 CustomHostAliases = config.CustomHostAliases
             };
 
-            var dnsTimeout = TimeSpan.FromMilliseconds(parseResult.GetValue(_dnsTimeout) ?? config.DnsResolutionTimeoutMs);
             var runner = new OfflineResolutionCommandRunner(
-                dnsResolutionTimeout: dnsTimeout,
+                dnsResolutionTimeout: TimeSpan.FromMilliseconds(config.DnsResolutionTimeoutMs),
                 resolveHostNames: config.ResolveRemoteHostNames,
                 resolveIpOwners: config.ResolveIpOwners,
-                rdapTimeout: TimeSpan.FromMilliseconds(parseResult.GetValue(_rdapTimeout) ?? config.RdapTimeoutMs));
+                rdapTimeout: TimeSpan.FromMilliseconds(config.RdapTimeoutMs));
             return await runner.RunAsync(auditFiles, caches, options, cancellationToken).ConfigureAwait(false);
         });
+    }
+
+    /// <summary>
+    /// Overrides the configuration file values with the options given on the command line.
+    /// </summary>
+    /// <param name="parseResult">Parsed command line of this command.</param>
+    /// <param name="fileConfiguration">Values read from the configuration file.</param>
+    /// <returns>The configuration the resolution runs with.</returns>
+    /// <exception cref="ArgumentNullException">When an argument is null.</exception>
+    public AppConfiguration BuildConfiguration(ParseResult parseResult, AppConfiguration fileConfiguration)
+    {
+        ArgumentNullException.ThrowIfNull(parseResult);
+        ArgumentNullException.ThrowIfNull(fileConfiguration);
+
+        return fileConfiguration with
+        {
+            DnsResolutionTimeoutMs = parseResult.GetValue(_dnsTimeout) ?? fileConfiguration.DnsResolutionTimeoutMs,
+            RdapTimeoutMs = parseResult.GetValue(_rdapTimeout) ?? fileConfiguration.RdapTimeoutMs
+        };
     }
 }

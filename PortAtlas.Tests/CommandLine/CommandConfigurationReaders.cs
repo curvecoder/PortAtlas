@@ -32,3 +32,31 @@ internal static class MapCommandConfiguration
         return command.BuildConfiguration(parseResult, fileConfiguration);
     }
 }
+
+/// <summary>
+/// Parses a command line with the real root command and returns the configuration the lookup command would run with.
+/// </summary>
+internal static class LookupCommandConfiguration
+{
+    public static AppConfiguration Build(AppConfiguration fileConfiguration, params string[] args)
+    {
+        var parseResult = PortAtlasCommandLine.CreateRootCommand().Parse(args);
+        parseResult.Errors.Should().BeEmpty();
+        var command = parseResult.CommandResult.Command.Should().BeOfType<LookupCommand>().Subject;
+        return command.BuildConfiguration(parseResult, fileConfiguration);
+    }
+}
+
+/// <summary>
+/// Parses a command line with the real root command and returns the configuration the resolve command would run with.
+/// </summary>
+internal static class ResolveCommandConfiguration
+{
+    public static AppConfiguration Build(AppConfiguration fileConfiguration, params string[] args)
+    {
+        var parseResult = PortAtlasCommandLine.CreateRootCommand().Parse(args);
+        parseResult.Errors.Should().BeEmpty();
+        var command = parseResult.CommandResult.Command.Should().BeOfType<ResolveCommand>().Subject;
+        return command.BuildConfiguration(parseResult, fileConfiguration);
+    }
+}
