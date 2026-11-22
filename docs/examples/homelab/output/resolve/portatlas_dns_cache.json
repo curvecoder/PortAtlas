@@ -1,0 +1,10 @@
+{
+  "198.51.100.53": {
+    "HostName": "dot.resolver.example",
+    "Organization": null,
+    "Country": null,
+    "NetworkRange": null,
+    "Source": "DNS",
+    "ResolvedAtUtc": "2026-11-09T21:00:00+00:00"
+  }
+}
