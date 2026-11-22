@@ -165,6 +165,23 @@ public sealed class FirewallFlowAggregatorTests
     }
 
     [Fact]
+    public void Aggregate_WhenSourcesDifferInTheLastByte_NumbersTheFlowsInAddressOrder()
+    {
+        // Arrange
+        FirewallRuleItem[] rules =
+        [
+            Outbound("192.168.1.10", "desktop", "192.168.1.50", "nas", 443),
+            Outbound("192.168.1.9", "laptop", "192.168.1.50", "nas", 443)
+        ];
+
+        // Act
+        var flows = new FirewallFlowAggregator().Aggregate(rules, AuditedServerDirectory.Empty);
+
+        // Assert
+        flows.Select(f => (f.FlowId, f.SourceIp)).Should().Equal(("FLOW-001", "192.168.1.9"), ("FLOW-002", "192.168.1.10"));
+    }
+
+    [Fact]
     public void Aggregate_WhenTheRulesComeInAnotherOrder_NumbersTheFlowsTheSameWay()
     {
         // Arrange

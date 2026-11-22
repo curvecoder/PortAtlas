@@ -116,6 +116,22 @@ public sealed class FirewallHostRuleAggregatorTests
             "HOST-005 Outbound 53");
     }
 
+    [Fact]
+    public void Aggregate_WhenPeersDifferInTheLastByte_SortsThemInAddressOrder()
+    {
+        // Arrange
+        var flows = Flows(
+            AuditedServerDirectory.Empty,
+            Inbound("192.168.1.10", "desktop", "192.168.1.50", "nas", 443, "caddy"),
+            Inbound("192.168.1.9", "laptop", "192.168.1.50", "nas", 443, "caddy"));
+
+        // Act
+        var rules = new FirewallHostRuleAggregator().Aggregate(flows, AuditedServerDirectory.Empty);
+
+        // Assert
+        rules.Where(r => r.Host == "nas").Select(r => r.PeerIp).Should().Equal("192.168.1.9", "192.168.1.10");
+    }
+
     private static IReadOnlyList<FirewallFlowItem> Flows(AuditedServerDirectory servers, params FirewallRuleItem[] rules) =>
         new FirewallFlowAggregator().Aggregate(rules, servers);
 }

@@ -1,4 +1,5 @@
 using System.Net;
+using PortAtlas.Core.Filtering;
 
 namespace PortAtlas.Core.Export;
 
@@ -39,11 +40,11 @@ public sealed class FirewallHostRuleAggregator
 
         var sorted = rules
             .OrderBy(r => r.Host, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => r.HostIp, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.HostIp, IpAddressTextComparer.OrdinalIgnoreCase)
             .ThenBy(r => r.Direction, StringComparer.Ordinal)
             .ThenBy(r => r.Port)
             .ThenBy(r => r.Protocol, StringComparer.Ordinal)
-            .ThenBy(r => r.PeerIp, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.PeerIp, IpAddressTextComparer.OrdinalIgnoreCase)
             .Select((rule, index) => rule with { HostRuleId = $"HOST-{index + 1:D3}" });
 
         return [.. sorted];

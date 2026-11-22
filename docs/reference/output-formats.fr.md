@@ -109,7 +109,7 @@ Dans `export rules` et `export ndjson`, une valeur illisible prend une valeur pa
 
 Écrite par `export rules`. Une ligne par sens, adresse source, adresse de destination, port de destination, protocole et processus ; les noms de processus sont comparés en tenant compte de la casse. Par défaut, les écoutes et les ports de destination éphémères (49152 et au-delà) sont écartés : `--listeners-only` n'exporte que les écoutes, et `--include-ephemeral-ports` garde les ports éphémères (voir la [référence de la ligne de commande](cli.fr.md)).
 
-Les lignes sont triées par sens, zone, port, adresse de destination, adresse source, protocole et processus : la numérotation ne dépend pas de l'ordre des journaux donnés à `--input`. Les adresses sont triées comme du texte : `192.168.1.10` vient avant `192.168.1.2`. Le séparateur est `CsvDelimiter`. L'`ExecutablePath`, l'`UserName` et les noms d'hôte d'une ligne viennent de la ligne de journal vue le plus récemment qui a une valeur.
+Les lignes sont triées par sens, zone, port, adresse de destination, adresse source, protocole et processus : la numérotation ne dépend pas de l'ordre des journaux donnés à `--input`. Les adresses sont triées par valeur, IPv4 avant IPv6 : `192.168.1.2` vient avant `192.168.1.10`. Le séparateur est `CsvDelimiter`. L'`ExecutablePath`, l'`UserName` et les noms d'hôte d'une ligne viennent de la ligne de journal vue le plus récemment qui a une valeur.
 
 Une valeur qui commence par `=`, `+`, `-`, `@` (ou leurs formes pleine chasse), une tabulation ou un retour chariot est écrite précédée d'une apostrophe, pour qu'un tableur l'affiche comme du texte, apostrophe comprise, au lieu de l'exécuter comme une formule : un nom de processus ou d'hôte peut être choisi par un tiers. Le journal d'audit garde ses valeurs telles quelles, puisque PortAtlas le relit.
 
@@ -140,7 +140,7 @@ Une valeur qui commence par `=`, `+`, `-`, `@` (ou leurs formes pleine chasse), 
 
 Écrite par `export rules --flows-output`, à partir des lignes de la matrice de règles après filtrage. Une ligne par adresse source, adresse de destination, protocole et port de destination : une connexion relevée par le journal de sa source (une règle `Outbound`) et par celui de sa destination (une règle `Inbound`) ne fait qu'une ligne, de même qu'un flux ouvert par plusieurs processus. Une destination de bouclage ou `0.0.0.0` / `::` ne désigne aucune machine : le même flux local sur deux serveurs reste sur deux lignes.
 
-Les lignes sont triées par zone, port, adresse de destination, adresse source, protocole et serveur, comme du texte : la numérotation ne dépend pas de l'ordre des journaux. Une adresse qui appartient à un serveur audité, trouvée comme adresse locale dans son propre journal, porte le nom de ce serveur, quel que soit le journal qui a vu le flux ; toute autre adresse prend le nom donné par le journal de son propre bout, sinon celui donné par l'autre bout, sinon l'adresse. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
+Les lignes sont triées par zone, port, adresse de destination, adresse source, protocole et serveur, les adresses par valeur comme dans la matrice de règles de pare-feu : la numérotation ne dépend pas de l'ordre des journaux. Une adresse qui appartient à un serveur audité, trouvée comme adresse locale dans son propre journal, porte le nom de ce serveur, quel que soit le journal qui a vu le flux ; toute autre adresse prend le nom donné par le journal de son propre bout, sinon celui donné par l'autre bout, sinon l'adresse. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
 
 | Colonne | Contenu |
 | :--- | :--- |
@@ -163,7 +163,7 @@ Les lignes sont triées par zone, port, adresse de destination, adresse source, 
 
 ## Matrice par paire
 
-Écrite par `export rules --pairs-output`, à partir des lignes de la matrice de flux. Une ligne par adresse source et adresse de destination : les deux sens entre deux serveurs restent sur deux lignes, comme des règles de pare-feu. Triée par adresse source puis de destination, comme du texte. Les noms d'hôte sont ceux du premier flux de la paire. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
+Écrite par `export rules --pairs-output`, à partir des lignes de la matrice de flux. Une ligne par adresse source et adresse de destination : les deux sens entre deux serveurs restent sur deux lignes, comme des règles de pare-feu. Triée par adresse source puis de destination, par valeur. Les noms d'hôte sont ceux du premier flux de la paire. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
 
 | Colonne | Contenu |
 | :--- | :--- |
@@ -181,7 +181,7 @@ Les lignes sont triées par zone, port, adresse de destination, adresse source, 
 
 Écrite par `export rules --host-rules-output`, à partir des lignes de la matrice de flux, pour les groupes de sécurité réseau (NSG) et les listes de sécurité, qui se posent par ressource et par sens. Chaque flux donne une règle `Outbound` à sa source et une règle `Inbound` à sa destination. Seule une adresse privée (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fc00::/7`, `fe80::/10`) porte des règles : une adresse publique n'apparaît que comme pair d'un hôte privé, et un flux de bouclage ou `0.0.0.0` / `::` ne traverse jamais le réseau.
 
-Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'abord), port, protocole et adresse du pair, comme du texte. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
+Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'abord), port, protocole et adresse du pair ; les adresses par valeur, les autres valeurs comme du texte. Une valeur qui pourrait commencer une formule reçoit la même apostrophe que dans la matrice de règles de pare-feu.
 
 | Colonne | Contenu |
 | :--- | :--- |
@@ -203,7 +203,7 @@ Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'a
 
 ## Matrice de règles par groupe
 
-Écrite par `export rules --group-rules-output`, à partir des lignes de la matrice de règles de pare-feu (mêmes filtres), avec les groupes d'adresses d'`AddressGroups` et de `--address-group`. Une ligne par groupe source, groupe destination, protocole et port. Une adresse hors de tout groupe se représente elle-même, sous une seule forme : IPv4 pour une adresse IPv4-mappée (`::ffff:192.168.1.53` devient `192.168.1.53`), sans la zone d'une adresse de lien local (`fe80::1%3` devient `fe80::1`) ; la source d'un socket en écoute est `Any`. Un flux relevé à ses deux bouts fait deux règles de la matrice de règles de pare-feu : la ligne compte les deux et additionne leurs observations. Les lignes sont triées par source et destination, comme du texte sans tenir compte de la casse, puis par port et protocole. Une valeur qui pourrait commencer une formule reçoit la même apostrophe initiale que dans la matrice de règles de pare-feu.
+Écrite par `export rules --group-rules-output`, à partir des lignes de la matrice de règles de pare-feu (mêmes filtres), avec les groupes d'adresses d'`AddressGroups` et de `--address-group`. Une ligne par groupe source, groupe destination, protocole et port. Une adresse hors de tout groupe se représente elle-même, sous une seule forme : IPv4 pour une adresse IPv4-mappée (`::ffff:192.168.1.53` devient `192.168.1.53`), sans la zone d'une adresse de lien local (`fe80::1%3` devient `fe80::1`) ; la source d'un socket en écoute est `Any`. Un flux relevé à ses deux bouts fait deux règles de la matrice de règles de pare-feu : la ligne compte les deux et additionne leurs observations. Les lignes sont triées par source et destination, puis par port et protocole : les adresses par valeur et avant les noms de groupe, les noms de groupe comme du texte sans tenir compte de la casse. Une valeur qui pourrait commencer une formule reçoit la même apostrophe initiale que dans la matrice de règles de pare-feu.
 
 | Colonne | Contenu |
 | :--- | :--- |

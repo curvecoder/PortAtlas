@@ -1,3 +1,5 @@
+using PortAtlas.Core.Filtering;
+
 namespace PortAtlas.Core.Export;
 
 /// <summary>
@@ -30,8 +32,8 @@ public sealed class FirewallFlowAggregator
             .Select(group => Merge([.. group], servers))
             .OrderBy(f => f.DestinationZone, StringComparer.Ordinal)
             .ThenBy(f => f.DestinationPort)
-            .ThenBy(f => f.DestinationIp, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(f => f.SourceIp, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(f => f.DestinationIp, IpAddressTextComparer.OrdinalIgnoreCase)
+            .ThenBy(f => f.SourceIp, IpAddressTextComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.Protocol, StringComparer.Ordinal)
             .ThenBy(f => f.LocalServer, StringComparer.OrdinalIgnoreCase)
             .Select((flow, index) => flow with { FlowId = $"FLOW-{index + 1:D3}" });

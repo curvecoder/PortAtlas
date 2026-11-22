@@ -33,8 +33,8 @@ public sealed class FirewallGroupRuleAggregator
                 Destination: item.Destination.ToUpperInvariant(),
                 item.Rule.Protocol,
                 item.Rule.DestinationPort))
-            .OrderBy(group => group.Key.Source, StringComparer.Ordinal)
-            .ThenBy(group => group.Key.Destination, StringComparer.Ordinal)
+            .OrderBy(group => group.Key.Source, IpAddressTextComparer.Ordinal)
+            .ThenBy(group => group.Key.Destination, IpAddressTextComparer.Ordinal)
             .ThenBy(group => group.Key.DestinationPort)
             .ThenBy(group => group.Key.Protocol, StringComparer.Ordinal)
             .Select((group, index) =>

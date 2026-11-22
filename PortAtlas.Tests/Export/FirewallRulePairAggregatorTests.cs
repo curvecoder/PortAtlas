@@ -71,6 +71,21 @@ public sealed class FirewallRulePairAggregatorTests
         pairs.Select(p => p.SourceHost).Should().Equal("nas", "proxmox");
     }
 
+    [Fact]
+    public void Aggregate_WhenDestinationsDifferInTheLastByte_NumbersThePairsInAddressOrder()
+    {
+        // Arrange
+        var flows = Flows(
+            Outbound("192.168.1.20", "proxmox", "192.168.1.10", "desktop", 22, "ssh"),
+            Outbound("192.168.1.20", "proxmox", "192.168.1.9", "laptop", 22, "ssh"));
+
+        // Act
+        var pairs = new FirewallRulePairAggregator().Aggregate(flows);
+
+        // Assert
+        pairs.Select(p => (p.PairId, p.DestinationIp)).Should().Equal(("PAIR-001", "192.168.1.9"), ("PAIR-002", "192.168.1.10"));
+    }
+
     private static IReadOnlyList<FirewallFlowItem> Flows(params FirewallRuleItem[] rules) =>
         new FirewallFlowAggregator().Aggregate(rules, AuditedServerDirectory.Empty);
 }

@@ -62,6 +62,28 @@ public sealed class FirewallGroupRuleAggregatorTests
     }
 
     [Fact]
+    public void Aggregate_WhenHostsInNoGroupDifferInTheLastByte_NumbersTheRowsInAddressOrderBeforeTheGroups()
+    {
+        // Arrange
+        var groups = AddressGroupDirectoryTests.Create(("lab", "192.168.10.0/24"));
+        FirewallRuleItem[] rules =
+        [
+            Outbound("192.168.10.21", "pc-21", "192.168.1.50", "nas", 443, "curl"),
+            Outbound("192.168.1.10", "desktop", "192.168.1.50", "nas", 443, "curl"),
+            Outbound("192.168.1.9", "laptop", "192.168.1.50", "nas", 443, "curl")
+        ];
+
+        // Act
+        var rows = new FirewallGroupRuleAggregator().Aggregate(rules, groups);
+
+        // Assert
+        rows.Select(row => (row.GroupRuleId, row.SourceGroup)).Should().Equal(
+            ("GROUP-001", "192.168.1.9"),
+            ("GROUP-002", "192.168.1.10"),
+            ("GROUP-003", "lab"));
+    }
+
+    [Fact]
     public void Aggregate_WhenTheRulesComeInAnyOrder_NumbersTheRowsInTheOrderOfTheMatrix()
     {
         // Arrange

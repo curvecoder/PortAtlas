@@ -405,6 +405,23 @@ public sealed class FirewallRuleAggregatorTests
     }
 
 
+    [Fact]
+    public void Aggregate_WhenDestinationsDifferInTheLastByte_NumbersThemInAddressOrder()
+    {
+        // Arrange
+        NetworkAuditEntry[] entries =
+        [
+            CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.10", 443),
+            CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51001, "192.168.1.2", 443)
+        ];
+
+        // Act
+        var rules = new FirewallRuleAggregator().Aggregate(entries, new FirewallRuleExportOptions());
+
+        // Assert
+        rules.Select(rule => (rule.RuleId, rule.DestinationIp)).Should().Equal(("RULE-001", "192.168.1.2"), ("RULE-002", "192.168.1.10"));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

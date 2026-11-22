@@ -109,7 +109,7 @@ Written by `audit --ndjson` and by `export ndjson`. One JSON object per line, al
 
 Written by `export rules`. One row per direction, source address, destination address, destination port, protocol and process; process names are compared with case. By default, listeners and ephemeral destination ports (49152 and above) are left out: `--listeners-only` exports only the listeners, and `--include-ephemeral-ports` keeps the ephemeral ports (see the [command line reference](cli.md)).
 
-Rows are sorted by direction, zone, port, destination address, source address, protocol and process: the numbering does not depend on the order of the audit logs given to `--input`. Addresses are sorted as text, so `192.168.1.10` comes before `192.168.1.2`. The separator is `CsvDelimiter`. The `ExecutablePath`, `UserName` and host names of a row come from the most recently seen log row that has a value.
+Rows are sorted by direction, zone, port, destination address, source address, protocol and process: the numbering does not depend on the order of the audit logs given to `--input`. Addresses are sorted by value, IPv4 before IPv6, so `192.168.1.2` comes before `192.168.1.10`. The separator is `CsvDelimiter`. The `ExecutablePath`, `UserName` and host names of a row come from the most recently seen log row that has a value.
 
 A value that starts with `=`, `+`, `-`, `@` (or their full-width forms), a tab or a carriage return is written with a leading apostrophe, so that a spreadsheet shows it as text, apostrophe included, instead of running it as a formula: a process name or a host name can be chosen by a third party. The audit log keeps its values as they are, since PortAtlas reads it back.
 
@@ -140,7 +140,7 @@ Written by `export rules --listeners-output`, in the same columns as the firewal
 
 Written by `export rules --flows-output`, from the rows of the firewall rule matrix after filtering. One row per source address, destination address, protocol and destination port: a connection recorded by the log of its source (an `Outbound` rule) and by the log of its destination (an `Inbound` rule) is one row, and so is a flow opened by several processes. A loopback or `0.0.0.0` / `::` destination names no machine: the same local flow on two servers stays on two rows.
 
-Rows are sorted by zone, port, destination address, source address, protocol and server, as text: the numbering does not depend on the order of the logs. An address that belongs to an audited server, found as a local address in its own log, is named after that server, whichever log saw the flow; any other address takes the name given by the log of its own end, otherwise the name given by the other end, otherwise the address. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Rows are sorted by zone, port, destination address, source address, protocol and server, addresses by value as in the firewall rule matrix: the numbering does not depend on the order of the logs. An address that belongs to an audited server, found as a local address in its own log, is named after that server, whichever log saw the flow; any other address takes the name given by the log of its own end, otherwise the name given by the other end, otherwise the address. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
 
 | Column | Content |
 | :--- | :--- |
@@ -163,7 +163,7 @@ Rows are sorted by zone, port, destination address, source address, protocol and
 
 ## Pair matrix
 
-Written by `export rules --pairs-output`, from the rows of the flow matrix. One row per source address and destination address: the two directions between two servers stay on two rows, as firewall rules do. Sorted by source then destination address, as text. The host names are those of the first flow of the pair. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Written by `export rules --pairs-output`, from the rows of the flow matrix. One row per source address and destination address: the two directions between two servers stay on two rows, as firewall rules do. Sorted by source then destination address, by value. The host names are those of the first flow of the pair. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
 
 | Column | Content |
 | :--- | :--- |
@@ -181,7 +181,7 @@ Written by `export rules --pairs-output`, from the rows of the flow matrix. One 
 
 Written by `export rules --host-rules-output`, from the rows of the flow matrix, for network security groups and security lists, which are set per resource and per direction. Each flow gives an `Outbound` rule to its source and an `Inbound` rule to its destination. Only a private address (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`, `fc00::/7`, `fe80::/10`) carries rules: a public address shows only as the peer of a private host, and a loopback or `0.0.0.0` / `::` flow never crosses the network.
 
-Rows are sorted by host name, host address, direction (`Inbound` first), port, protocol and peer address, as text. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Rows are sorted by host name, host address, direction (`Inbound` first), port, protocol and peer address; addresses by value, other values as text. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
 
 | Column | Content |
 | :--- | :--- |
@@ -203,7 +203,7 @@ Rows are sorted by host name, host address, direction (`Inbound` first), port, p
 
 ## Group rule matrix
 
-Written by `export rules --group-rules-output`, from the rows of the firewall rule matrix (same filters), with the address groups of `AddressGroups` and `--address-group`. One row per source group, destination group, protocol and port. An address in no group stands for itself, in one form: IPv4 for an IPv4-mapped address (`::ffff:192.168.1.53` is `192.168.1.53`), without the zone of a link-local address (`fe80::1%3` is `fe80::1`); the source of a listening socket is `Any`. A flow recorded at both of its ends is two rules of the firewall rule matrix: the row counts both and adds their observations. Rows are sorted by source and destination, as text without case, then by port and protocol. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
+Written by `export rules --group-rules-output`, from the rows of the firewall rule matrix (same filters), with the address groups of `AddressGroups` and `--address-group`. One row per source group, destination group, protocol and port. An address in no group stands for itself, in one form: IPv4 for an IPv4-mapped address (`::ffff:192.168.1.53` is `192.168.1.53`), without the zone of a link-local address (`fe80::1%3` is `fe80::1`); the source of a listening socket is `Any`. A flow recorded at both of its ends is two rules of the firewall rule matrix: the row counts both and adds their observations. Rows are sorted by source and destination, then by port and protocol: addresses by value and before the group names, group names as text without case. A value that could start a formula gets the same leading apostrophe as in the firewall rule matrix.
 
 | Column | Content |
 | :--- | :--- |

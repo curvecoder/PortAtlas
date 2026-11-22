@@ -1,3 +1,5 @@
+using PortAtlas.Core.Filtering;
+
 namespace PortAtlas.Core.Export;
 
 /// <summary>
@@ -20,8 +22,8 @@ public sealed class FirewallRulePairAggregator
         // pair counts it and its observations once.
         var pairs = flows
             .GroupBy(f => (Source: f.SourceIp.ToUpperInvariant(), Destination: f.DestinationIp.ToUpperInvariant(), Server: f.LocalServer.ToUpperInvariant()))
-            .OrderBy(g => g.Key.Source, StringComparer.Ordinal)
-            .ThenBy(g => g.Key.Destination, StringComparer.Ordinal)
+            .OrderBy(g => g.Key.Source, IpAddressTextComparer.Ordinal)
+            .ThenBy(g => g.Key.Destination, IpAddressTextComparer.Ordinal)
             .ThenBy(g => g.Key.Server, StringComparer.Ordinal)
             .Select((group, index) =>
             {
