@@ -49,6 +49,9 @@ public sealed class CachedHostNameResolver(
     // timer firing a few milliseconds early would find the address not due yet and the retry would be lost.
     internal static readonly TimeSpan RetryTimerMargin = TimeSpan.FromSeconds(1);
 
+    // Several resolutions finishing together give a single write of the cache file.
+    internal static readonly TimeSpan CacheSaveDelay = TimeSpan.FromMilliseconds(500);
+
     private const string CustomSource = "Custom";
     private const string ExcludedSource = "Excluded";
 
@@ -548,13 +551,16 @@ public sealed class CachedHostNameResolver(
 
         if (Interlocked.Increment(ref _pendingSaves) == 1)
         {
-            _ = Task.Run(async () =>
-            {
-                await Task.Delay(500, CancellationToken.None).ConfigureAwait(false);
-                Interlocked.Exchange(ref _pendingSaves, 0);
-                await SaveCacheAsync(_cacheStore, isFinalSave: false).ConfigureAwait(false);
-            }, CancellationToken.None);
+            _ = SaveCacheAfterDelayAsync(_cacheStore);
         }
+    }
+
+    // The delay starts before the first await, so it is measured on the injected clock from the resolution itself.
+    private async Task SaveCacheAfterDelayAsync(PersistentDnsCacheStore cacheStore)
+    {
+        await Task.Delay(CacheSaveDelay, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+        Interlocked.Exchange(ref _pendingSaves, 0);
+        await SaveCacheAsync(cacheStore, isFinalSave: false).ConfigureAwait(false);
     }
 
     private async Task SaveCacheAsync(PersistentDnsCacheStore cacheStore, bool isFinalSave)

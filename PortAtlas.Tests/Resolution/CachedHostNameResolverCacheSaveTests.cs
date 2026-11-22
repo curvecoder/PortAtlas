@@ -1,5 +1,6 @@
 using System.Net;
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Resolution;
 using Xunit;
 
@@ -11,8 +12,11 @@ namespace PortAtlas.Tests.Resolution;
 /// </summary>
 public sealed class CachedHostNameResolverCacheSaveTests : IDisposable
 {
-    // Longer than the delay of the save scheduled after a resolution.
-    private static readonly TimeSpan ScheduledSaveWindow = TimeSpan.FromSeconds(1.5);
+    private static readonly DateTimeOffset StartTime = new(2026, 11, 22, 8, 0, 0, TimeSpan.Zero);
+
+    // Longer than CacheSaveDelay in real time: a save timed by the system clock instead of the injected one, or a
+    // save started by the clock, would have written the file by then.
+    private static readonly TimeSpan RealTimeSaveWindow = TimeSpan.FromSeconds(1);
 
     private readonly string _directory;
     private readonly string _cachePath;
@@ -40,20 +44,70 @@ public sealed class CachedHostNameResolverCacheSaveTests : IDisposable
     public async Task DisposeAsync_WhenASaveIsScheduled_WritesTheCacheNoMoreAfterReturning()
     {
         // Arrange
-        var resolver = new CachedHostNameResolver(
-            TimeSpan.FromSeconds(2),
-            cacheStore: new PersistentDnsCacheStore(_cachePath),
-            reverseDnsLookup: new FixedReverseDnsLookup("nas.home.arpa"));
+        var clock = new FakeTimeProvider(StartTime);
+        var resolver = CreateResolver(clock);
         await resolver.ResolveHostNameAsync(IPAddress.Parse("192.168.1.40"));
 
         // Act
         await resolver.DisposeAsync();
         await File.WriteAllTextAsync(_cachePath, "written after disposal");
-        await Task.Delay(ScheduledSaveWindow);
+        clock.Advance(CachedHostNameResolver.CacheSaveDelay);
+        // The delayed save starts on Advance but would write the file asynchronously.
+        await Task.Delay(RealTimeSaveWindow);
 
         // Assert
         (await File.ReadAllTextAsync(_cachePath)).Should().Be("written after disposal");
     }
+
+    [Fact]
+    public async Task ResolveHostNameAsync_WhenTheClockHasNotReachedTheSaveDelay_WritesNoCacheFile()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider(StartTime);
+        await using var resolver = CreateResolver(clock);
+        await resolver.ResolveHostNameAsync(IPAddress.Parse("192.168.1.40"));
+
+        // Act
+        clock.Advance(CachedHostNameResolver.CacheSaveDelay - TimeSpan.FromMilliseconds(1));
+        await Task.Delay(RealTimeSaveWindow);
+
+        // Assert
+        File.Exists(_cachePath).Should().BeFalse("the save delay is measured on the injected clock");
+    }
+
+    [Fact]
+    public async Task ResolveHostNameAsync_WhenTheClockReachesTheSaveDelay_WritesTheResolvedName()
+    {
+        // Arrange
+        var clock = new FakeTimeProvider(StartTime);
+        await using var resolver = CreateResolver(clock);
+        await resolver.ResolveHostNameAsync(IPAddress.Parse("192.168.1.40"));
+
+        // Act
+        clock.Advance(CachedHostNameResolver.CacheSaveDelay);
+        var cacheText = await WaitForCacheFileAsync();
+
+        // Assert
+        cacheText.Should().Contain("nas.home.arpa");
+    }
+
+    // The save runs once the clock has advanced, but writes the file asynchronously.
+    private async Task<string> WaitForCacheFileAsync()
+    {
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!File.Exists(_cachePath) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(20);
+        }
+
+        return File.Exists(_cachePath) ? await File.ReadAllTextAsync(_cachePath) : string.Empty;
+    }
+
+    private CachedHostNameResolver CreateResolver(TimeProvider clock) => new(
+        TimeSpan.FromSeconds(2),
+        cacheStore: new PersistentDnsCacheStore(_cachePath),
+        reverseDnsLookup: new FixedReverseDnsLookup("nas.home.arpa"),
+        timeProvider: clock);
 
     private sealed class FixedReverseDnsLookup(string hostName) : IReverseDnsLookup
     {
