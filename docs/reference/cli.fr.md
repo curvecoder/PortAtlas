@@ -32,7 +32,7 @@ La clé du fichier de configuration correspondant à chaque option figure dans l
 
 Une option se combine avec le fichier ainsi :
 
-- Une option qui prend une valeur remplace la valeur du fichier. Une option de liste remplace toute la liste du fichier : `--exclude-ports 53` écarte les ports listés dans `MapExcludedPorts`. `--alias` fait exception : ses paires s'ajoutent à `CustomHostAliases` et l'emportent sur le fichier pour la même adresse.
+- Une option qui prend une valeur remplace la valeur du fichier. Une option de liste remplace toute la liste du fichier : `--exclude-ports 53` écarte les ports listés dans `MapExcludedPorts`. `--alias` fait exception : ses paires s'ajoutent à `CustomHostAliases` et l'emportent sur le fichier pour la même adresse ou le même sous-réseau.
 - Une option sans valeur qui correspond à une clé du fichier ne la bascule que dans un sens. `--listeners-only` active `MapListenersOnly` mais ne peut pas le désactiver ; `--no-tui`, `--no-dns`, `--no-rdap` et `--include-ephemeral-ports` désactivent ce que le fichier active, jamais l'inverse. Pour annuler un tel réglage du fichier, modifiez le fichier ou donnez un autre fichier avec `--config`. `export rules` ne lit pas `MapExcludeEphemeralPorts` : seul `--include-ephemeral-ports` y décide. `--obfuscate` remplace `MaskServerName` et `MaskLocalIp`, sauf si `--mask-server` ou `--mask-ip` est donné.
 
 ## Option globale
@@ -135,7 +135,7 @@ PortAtlas audit [options]
 | `--dns-timeout-ms` | millisecondes, au moins 1 | `DnsResolutionTimeoutMs` | `3000` | Délai d'attente d'une réponse DNS inverse |
 | `--rdap-timeout-ms` | millisecondes, au moins 1 | `RdapTimeoutMs` | `4000` | Délai d'attente d'une réponse RDAP, redirection vers le registre comprise |
 | `--exclude-remote-ips` | adresses ou CIDR | `ExcludedRemoteIps` | aucune | Adresses distantes non enregistrées |
-| `--alias` | `ip=host` (IPv4 ou IPv6), ou `ip:host` pour IPv4, répétable | `CustomHostAliases` | aucun | Nom d'hôte utilisé à la place du DNS inverse ; une paire sans adresse IP ou sans nom est refusée |
+| `--alias` | `plage=host`, la plage étant une adresse ou un sous-réseau CIDR (IPv4 ou IPv6), ou `plage:host` pour IPv4, répétable | `CustomHostAliases` | aucun | Nom d'hôte utilisé à la place du DNS inverse pour l'adresse, ou pour chaque adresse du sous-réseau (`192.168.10.0/24=lab.home.arpa`) ; la plage la plus précise l'emporte ; une paire sans plage lisible ou sans nom est refusée |
 | `--mask-server` | `<name>` | `MaskServerName` | aucun | Nom de serveur affiché par le tableau de bord |
 | `--mask-ip` | `<address>` | `MaskLocalIp` | aucune | Adresse locale affichée par le tableau de bord |
 | `--obfuscate` | aucune | aucune | inactif | Affiche `HOMELAB-01` et `192.168.1.10`, sauf si `--mask-server` ou `--mask-ip` est donné |
@@ -264,7 +264,7 @@ Affiche un diagnostic en six étapes de la résolution d'une adresse : classific
 PortAtlas lookup <ip> [--dns-timeout-ms <milliseconds>] [--rdap-timeout-ms <milliseconds>]
 ```
 
-`<ip>` doit être une adresse IPv4 ou IPv6. La commande lit `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath`, `DnsResolutionTimeoutMs` et `RdapTimeoutMs` dans la configuration. Comme dans l'audit, une adresse nommée par `CustomHostAliases` prend ce nom, et une adresse de `DnsExcludedNetworks` ne reçoit aucun nom : pour les deux, les étapes DNS inverse et RDAP affichent `SKIPPED` et n'envoient aucune requête. L'étape 1 dit aussi si `ExcludedRemoteIps` fait écarter par l'audit les flux de l'adresse. Sinon, la commande envoie la requête DNS inverse avec le même délai que `audit`, si bien qu'un `SUCCESS` ici signifie que l'audit nomme aussi l'adresse, et la requête RDAP pour les adresses publiques uniquement, avec le même `RdapTimeoutMs` ; `ResolveIpOwners` et `--no-rdap` ne s'y appliquent pas, pas plus que `ResolveRemoteHostNames`. Les paires d'`audit --alias` ne sont pas connues de `lookup`, qui ne lit `CustomHostAliases` que dans le fichier.
+`<ip>` doit être une adresse IPv4 ou IPv6. La commande lit `CustomHostAliases`, `DnsExcludedNetworks`, `ExcludedRemoteIps`, `DnsCacheFilePath`, `DnsResolutionTimeoutMs` et `RdapTimeoutMs` dans la configuration. Comme dans l'audit, une adresse nommée par `CustomHostAliases` prend ce nom (l'étape 1 cite le sous-réseau quand l'alias en nomme un), et une adresse de `DnsExcludedNetworks` ne reçoit aucun nom : pour les deux, les étapes DNS inverse et RDAP affichent `SKIPPED` et n'envoient aucune requête. L'étape 1 dit aussi si `ExcludedRemoteIps` fait écarter par l'audit les flux de l'adresse. Sinon, la commande envoie la requête DNS inverse avec le même délai que `audit`, si bien qu'un `SUCCESS` ici signifie que l'audit nomme aussi l'adresse, et la requête RDAP pour les adresses publiques uniquement, avec le même `RdapTimeoutMs` ; `ResolveIpOwners` et `--no-rdap` ne s'y appliquent pas, pas plus que `ResolveRemoteHostNames`. Les paires d'`audit --alias` ne sont pas connues de `lookup`, qui ne lit `CustomHostAliases` que dans le fichier.
 
 ## config init
 

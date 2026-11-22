@@ -484,6 +484,53 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         SavedCache(options).Should().NotContainKey("192.168.1.20");
     }
 
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task EnrichFilesAsync_WhenAnAliasNamesTheSubnetOfTheAddress_WritesTheAliasWithoutResolvingOrCachingIt(bool isolated, bool forceResolve)
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.20");
+        var resolver = new ScriptedIpResolver();
+        var options = Options(forceResolve) with
+        {
+            Isolated = isolated,
+            CustomHostAliases = new Dictionary<string, string> { ["192.168.1.0/24"] = "lab.home.arpa" }
+        };
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([auditPath], [], options);
+
+        // Assert
+        resolver.ResolvedAddresses.Should().BeEmpty();
+        var lines = await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject);
+        lines[1].Should().Contain(",192.168.1.20,443,lab.home.arpa,");
+        SavedCache(options).Should().NotContainKey("192.168.1.20");
+    }
+
+    [Fact]
+    public async Task EnrichFilesAsync_WhenTheCacheNamesAnAddressOfAnAliasedSubnet_WritesTheAliasAndKeepsTheCachedName()
+    {
+        // Arrange
+        var auditPath = await WriteAuditAsync("192.168.1.20");
+        var resolver = new ScriptedIpResolver();
+        var options = Options() with
+        {
+            CustomHostAliases = new Dictionary<string, string> { ["192.168.1.0/24"] = "lab.home.arpa" }
+        };
+
+        // Act
+        var report = await new OfflineAuditEnricher(offlineResolver: resolver)
+            .EnrichFilesAsync([auditPath], [Cache(("192.168.1.20", "nas.home.arpa"))], options);
+
+        // Assert
+        var lines = await File.ReadAllLinesAsync(report.GeneratedAuditFiles.Should().ContainSingle().Subject);
+        lines[1].Should().Contain(",lab.home.arpa,");
+        SavedCache(options)["192.168.1.20"].HostName.Should().Be("nas.home.arpa");
+    }
+
     [Fact]
     public async Task EnrichFilesAsync_WhenAliasedAddressIsAlreadyNamedAndForceResolve_ReplacesTheNameWithTheAlias()
     {

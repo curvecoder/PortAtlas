@@ -66,7 +66,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
         var isPublic = RdapIpOrganizationResolver.IsPublicRoutable(address);
         // The same three settings as the audit: an alias names the address and DnsExcludedNetworks stops its queries,
         // while ExcludedRemoteIps drops its flows before any resolution.
-        var alias = HostAliasParser.Parse(config.CustomHostAliases).GetValueOrDefault(address);
+        HostAliasTable.Parse(config.CustomHostAliases).TryFind(address, out var alias);
         var isDnsExcluded = new DnsAddressExclusionEvaluator(config.DnsExcludedNetworks).ShouldExclude(address);
         var areFlowsDropped = new DnsAddressExclusionEvaluator(config.ExcludedRemoteIps).ShouldExclude(address);
         var auditSkipReason = alias is not null
@@ -78,7 +78,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
         await _output.WriteLineAsync($"  * Unspecified / Any      : {(isAny ? "YES (0.0.0.0 / ::)" : "NO")}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Broadcast / None       : {(isNone ? "YES (255.255.255.255)" : "NO")}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Publicly routable      : {(isPublic ? "YES (Public WAN / Internet)" : "NO (Private RFC 1918 / CGNAT / Link-Local / Reserved)")}").ConfigureAwait(false);
-        await _output.WriteLineAsync($"  * Alias in config        : {(alias is null ? "NO" : $"{alias} (CustomHostAliases)")}").ConfigureAwait(false);
+        await _output.WriteLineAsync($"  * Alias in config        : {DescribeAlias(alias)}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Excluded from DNS      : {(isDnsExcluded ? "YES (DnsExcludedNetworks)" : "NO")}").ConfigureAwait(false);
         await _output.WriteLineAsync($"  * Flows dropped by audit : {(areFlowsDropped ? "YES (ExcludedRemoteIps)" : "NO")}").ConfigureAwait(false);
 
@@ -293,7 +293,7 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
 
         if (alias is not null)
         {
-            synthesizedHostName = alias;
+            synthesizedHostName = alias.HostName;
             synthesizedSource = "Custom";
         }
         else if (isLoopback)
@@ -335,4 +335,12 @@ public sealed class IpResolutionDiagnosticReporter(TextWriter? output = null)
 
         await _output.WriteLineAsync("================================================================================").ConfigureAwait(false);
     }
+
+    // A subnet key names many addresses: citing it tells which line of the configuration gave the name.
+    private static string DescribeAlias(HostAlias? alias) => alias switch
+    {
+        null => "NO",
+        { Range.IsSingleAddress: true } => $"{alias.HostName} (CustomHostAliases)",
+        _ => $"{alias.HostName} (CustomHostAliases, {alias.Range})"
+    };
 }

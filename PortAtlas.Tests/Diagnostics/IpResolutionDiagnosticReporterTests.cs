@@ -100,6 +100,28 @@ public sealed class IpResolutionDiagnosticReporterTests
     }
 
     [Fact]
+    public async Task RunDiagnosticAsync_WhenAnAliasNamesTheSubnetOfTheAddress_SendsNoQueryAndNamesTheSubnet()
+    {
+        // Arrange
+        using var output = new StringWriter();
+        var reporter = new IpResolutionDiagnosticReporter(output);
+        var config = new AppConfiguration
+        {
+            CustomHostAliases = new() { ["8.8.8.0/24"] = "resolvers.home.arpa" },
+            DnsResolutionTimeoutMs = 500
+        };
+
+        // Act
+        await reporter.RunDiagnosticAsync("8.8.8.8", config);
+
+        // Assert
+        var report = output.ToString();
+        report.Should().Contain("Alias in config        : resolvers.home.arpa (CustomHostAliases, 8.8.8.0/24)");
+        report.Split("SKIPPED (CustomHostAliases names the address; the audit sends no query)").Should().HaveCount(3);
+        report.Should().Contain("Synthesized HostName   : resolvers.home.arpa");
+    }
+
+    [Fact]
     public async Task RunDiagnosticAsync_WhenTheAddressHasAnAlias_SendsNoQueryAndSynthesizesTheAliasLikeTheAudit()
     {
         // Arrange

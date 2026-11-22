@@ -1,6 +1,8 @@
+using System.Net;
 using AwesomeAssertions;
 using PortAtlas.Cli.CommandLine;
 using PortAtlas.Cli.Configuration;
+using PortAtlas.Core.Resolution;
 using Xunit;
 
 namespace PortAtlas.Tests.CommandLine;
@@ -67,6 +69,54 @@ public sealed class AuditCommandTests
             .Which.Should().Be(new KeyValuePair<string, string>("fe80::10", "nas.home.arpa"));
     }
 
+    [Fact]
+    public void BuildConfiguration_WhenTheFileNamesTheSameSubnetUnderAnotherSpelling_LetsTheAliasOptionWin()
+    {
+        // Arrange
+        // Both keys name 192.168.10.0/24: the file alone would keep its last line.
+        var configuration = new AppConfiguration
+        {
+            CustomHostAliases = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["192.168.10.0/24"] = "first.home.arpa",
+                ["192.168.10.9/24"] = "second.home.arpa"
+            }
+        };
+
+        // Act
+        var updated = AuditCommandConfiguration.Build(configuration, "audit", "--alias", "192.168.10.0/24=lab.home.arpa");
+
+        // Assert
+        HostAliasTable.Parse(updated.CustomHostAliases).TryFind(IPAddress.Parse("192.168.10.1"), out var alias).Should().BeTrue();
+        alias!.HostName.Should().Be("lab.home.arpa");
+    }
+
+    [Theory]
+    [InlineData("192.168.10.0/24=lab.home.arpa", "192.168.10.0/24")]
+    [InlineData("192.168.10.0/24:lab.home.arpa", "192.168.10.0/24")]
+    [InlineData("fd00:10::/64=lab.home.arpa", "fd00:10::/64")]
+    public void BuildConfiguration_WhenAliasNamesASubnet_KeepsTheSubnetAsTheKey(string pair, string expectedKey)
+    {
+        // Act
+        var updated = AuditCommandConfiguration.Build(new AppConfiguration(), "audit", "--alias", pair);
+
+        // Assert
+        updated.CustomHostAliases.Should().ContainSingle()
+            .Which.Should().Be(new KeyValuePair<string, string>(expectedKey, "lab.home.arpa"));
+    }
+
+    [Theory]
+    [InlineData("192.168.10.0/24=lab.home.arpa")]
+    [InlineData("fd00:10::/64=lab.home.arpa")]
+    public void Parse_WhenAliasNamesASubnet_ReportsNoError(string pair)
+    {
+        // Act
+        var parseResult = PortAtlasCommandLine.CreateRootCommand().Parse(["audit", "--alias", pair]);
+
+        // Assert
+        parseResult.Errors.Should().BeEmpty();
+    }
+
     [Theory]
     [InlineData("nas")]
     [InlineData("=nas")]
@@ -77,6 +127,8 @@ public sealed class AuditCommandTests
     [InlineData("2001:db8::1")]
     [InlineData("10:nas")]
     [InlineData("10=nas")]
+    [InlineData("192.168.10.0/33=lab")]
+    [InlineData("192.168.10/24=lab")]
     public void Parse_WhenAliasIsMalformed_ReportsErrorNamingThePair(string pair)
     {
         // Act

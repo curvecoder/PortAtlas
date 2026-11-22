@@ -51,7 +51,7 @@ These keys decide which sockets are recorded by `audit`. The dashboard adds entr
 | `RdapTimeoutMs` | integer | `4000` | Milliseconds to wait for an RDAP answer, redirect from `rdap.org` to the registry included; used by `audit`, `resolve` and `lookup`; at least 1 | `--rdap-timeout-ms` |
 | `DnsCacheFilePath` | path | `portatlas_dns_cache.json` | Persistent DNS cache; default cache of `resolve` and `lookup` | `--cache`, `--output-cache` (`resolve`) |
 | `DnsExcludedNetworks` | list of addresses or CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Addresses never resolved by `audit`, `resolve` and `lookup` | none |
-| `CustomHostAliases` | object `{ "ip": "name" }` | `{}` | Names used instead of reverse DNS by `audit`, `resolve` and `lookup`; never written to the DNS cache | `--alias` (`audit`, adds to the file) |
+| `CustomHostAliases` | object `{ "range": "name" }` | `{}` | Names used instead of reverse DNS by `audit`, `resolve` and `lookup`; never written to the DNS cache. A key is an address (`192.168.1.25`) or a CIDR subnet (`192.168.10.0/24`) whose addresses all take the name; an address in several ranges takes the name of the most precise one. A key that cannot be read, or an empty name, is ignored | `--alias` (`audit`, adds to the file) |
 
 ## Topology map and rule matrix
 

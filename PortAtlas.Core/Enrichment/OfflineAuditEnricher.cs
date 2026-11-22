@@ -97,6 +97,8 @@ public sealed class OfflineAuditEnricher(
             }
         }
 
+        // Kept before the aliased and excluded addresses are taken out: the aliases name them in the logs.
+        var addressesRead = distinctUnresolvedIps.ToList();
         distinctUnresolvedIps.RemoveWhere(ip => !namingPolicy.AllowsLookup(ip));
 
         // 3. Online resolution of missing IPs if not isolated
@@ -122,7 +124,7 @@ public sealed class OfflineAuditEnricher(
         var totalScanned = 0;
         var totalUpdated = 0;
         var enrichedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var namingCache = namingPolicy.WithAliases(activeCache);
+        var namingCache = namingPolicy.WithAliases(activeCache, addressesRead);
 
         foreach (var auditFile in auditFiles)
         {

@@ -4,6 +4,7 @@ using PortAtlas.Cli.Audit;
 using PortAtlas.Cli.CommandLine.OptionSets;
 using PortAtlas.Cli.Configuration;
 using PortAtlas.Core.Export;
+using TopologyForge.Filtering;
 
 namespace PortAtlas.Cli.CommandLine.Commands;
 
@@ -28,7 +29,7 @@ public sealed class AuditCommand : Command
     private readonly Option<int?> _rdapTimeout = OptionFactory.CreateRdapTimeout();
     private readonly Option<bool> _noRdap = new("--no-rdap") { Description = "Do not query RDAP registries (Internet) for address owners; reverse DNS stays active." };
     private readonly Option<string[]> _excludeRemoteIps = OptionFactory.CreateList("--exclude-remote-ips", "addresses", "Remote IP addresses or CIDR subnets that are not recorded.");
-    private readonly Option<string[]> _alias = OptionFactory.CreateList("--alias", "ip=host", "Host name used for an IP address instead of reverse DNS (ip=host, or ip:host for IPv4). Repeatable.");
+    private readonly Option<string[]> _alias = OptionFactory.CreateList("--alias", "range=host", "Host name used instead of reverse DNS for an IP address or the addresses of a CIDR subnet (range=host, or range:host for IPv4); the most precise range wins. Repeatable.");
     private readonly Option<string?> _maskServer = new("--mask-server") { Description = "Server name displayed by the dashboard instead of the real one (screenshots).", HelpName = "name" };
     private readonly Option<string?> _maskIp = new("--mask-ip") { Description = "Local IP address displayed by the dashboard instead of the real one (screenshots).", HelpName = "address" };
     private readonly Option<bool> _obfuscate = new("--obfuscate") { Description = "Display HOMELAB-01 and 192.168.1.10 unless --mask-server or --mask-ip is given." };
@@ -124,10 +125,19 @@ public sealed class AuditCommand : Command
         foreach (var pair in pairs)
         {
             // The option's validator has refused a malformed pair before the command runs.
-            if (HostAliasArgument.TryParse(pair, out var alias, out _))
+            if (!HostAliasArgument.TryParse(pair, out var alias, out _) || !IpAddressRange.TryParse(alias.Range, out var range))
             {
-                aliases[alias.Ip] = alias.Host;
+                continue;
             }
+
+            // The file may name the same range under another spelling (192.168.10.9/24 for 192.168.10.0/24): those
+            // keys are dropped, since the table keeps the key read last and the option must win over the file.
+            foreach (var sameRange in aliases.Keys.Where(key => IpAddressRange.TryParse(key, out var other) && other == range).ToList())
+            {
+                aliases.Remove(sameRange);
+            }
+
+            aliases[alias.Range] = alias.Host;
         }
 
         return aliases;

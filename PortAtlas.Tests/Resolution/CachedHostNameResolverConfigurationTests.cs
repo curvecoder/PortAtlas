@@ -128,6 +128,24 @@ public sealed class CachedHostNameResolverConfigurationTests : IDisposable
         entry.Source.Should().Be("Custom");
     }
 
+    [Fact]
+    public async Task ResolveHostNameAsync_WhenAnAliasNamesTheSubnetOfTheAddress_ReturnsTheAliasWithoutQueryingDns()
+    {
+        // Arrange
+        var aliases = new Dictionary<string, string> { ["192.168.1.0/24"] = "lab.home.arpa" };
+        await using var resolver = CreateResolver(new FixedReverseDnsLookup("nas.home.arpa"), aliases: aliases);
+
+        // Act
+        var name = await resolver.ResolveHostNameAsync(Server);
+        var found = resolver.TryGetCachedEntry(Server, out var entry);
+
+        // Assert
+        name.Should().Be("lab.home.arpa");
+        found.Should().BeTrue();
+        entry!.Source.Should().Be("Custom");
+        resolver.IsQueued(Server).Should().BeFalse();
+    }
+
     private CachedHostNameResolver CreateResolver(
         IReverseDnsLookup dns,
         DnsAddressExclusionEvaluator? exclusion = null,

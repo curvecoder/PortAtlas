@@ -42,5 +42,15 @@ On Windows, `ping -a` asks the hosts file, the DNS cache, NetBIOS, LLMNR and the
   ```
 
   or on the command line: `PortAtlas audit --alias 192.168.1.25=nas`.
+- Or name a whole subnet whose machines have no `PTR` record, such as a lab VLAN. Every address of the subnet takes the name, and an alias of a single address inside it still wins:
+
+  ```json
+  {
+    "CustomHostAliases": {
+      "192.168.10.0/24": "lab.home.arpa",
+      "192.168.10.20": "nas.home.arpa"
+    }
+  }
+  ```
 
 Aliases take precedence over DNS. `lookup` reads the aliases of the configuration file only: a pair given to `audit --alias` does not show in its report. Addresses that are never resolved (broadcast, multicast, link-local by default) are listed in `DnsExcludedNetworks`; for them, and for an address with an alias, `lookup` prints `SKIPPED` at the reverse DNS and RDAP steps.

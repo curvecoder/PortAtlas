@@ -61,7 +61,7 @@ public sealed class CachedHostNameResolver(
     private readonly DnsAddressExclusionEvaluator _exclusionEvaluator = exclusionEvaluator ?? new DnsAddressExclusionEvaluator([]);
     private readonly PersistentDnsCacheStore? _cacheStore = cacheStore;
     private readonly IIpOrganizationResolver? _organizationResolver = organizationResolver;
-    private readonly IReadOnlyDictionary<IPAddress, string> _customAliases = HostAliasParser.Parse(customHostAliases);
+    private readonly HostAliasTable _customAliases = HostAliasTable.Parse(customHostAliases);
     private readonly ConcurrentDictionary<IPAddress, DnsCacheEntry> _cache = LoadCache(cacheStore);
     private readonly ConcurrentDictionary<IPAddress, byte> _queuedAddresses = new();
     // Addresses whose last resolution got no answer (DNS timeout or RDAP unavailable), with the time before which they
@@ -178,9 +178,9 @@ public sealed class CachedHostNameResolver(
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (_customAliases.TryGetValue(address, out var alias))
+        if (_customAliases.TryFind(address, out var alias))
         {
-            entry = new DnsCacheEntry { HostName = alias, Source = CustomSource, ResolvedAtUtc = _timeProvider.GetUtcNow() };
+            entry = new DnsCacheEntry { HostName = alias.HostName, Source = CustomSource, ResolvedAtUtc = _timeProvider.GetUtcNow() };
             return true;
         }
 
@@ -270,9 +270,9 @@ public sealed class CachedHostNameResolver(
 
     private bool IsFastTrackAddress(IPAddress address, out string hostName)
     {
-        if (_customAliases.TryGetValue(address, out var alias))
+        if (_customAliases.TryFind(address, out var alias))
         {
-            hostName = alias;
+            hostName = alias.HostName;
             return true;
         }
 

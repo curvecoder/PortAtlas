@@ -51,7 +51,7 @@ Ces clés décident quels sockets `audit` enregistre. Le tableau de bord en comp
 | `RdapTimeoutMs` | entier | `4000` | Millisecondes d'attente d'une réponse RDAP, redirection de `rdap.org` vers le registre comprise ; utilisé par `audit`, `resolve` et `lookup` ; au moins 1 | `--rdap-timeout-ms` |
 | `DnsCacheFilePath` | chemin | `portatlas_dns_cache.json` | Cache DNS persistant ; cache par défaut de `resolve` et `lookup` | `--cache`, `--output-cache` (`resolve`) |
 | `DnsExcludedNetworks` | liste d'adresses ou CIDR | `["0.0.0.0", "255.255.255.255", "169.254.0.0/16", "224.0.0.0/4", "fe80::/10", "ff00::/8"]` | Adresses jamais résolues par `audit`, `resolve` et `lookup` | aucune |
-| `CustomHostAliases` | objet `{ "ip": "nom" }` | `{}` | Noms utilisés à la place du DNS inverse par `audit`, `resolve` et `lookup` ; jamais écrits dans le cache DNS | `--alias` (`audit`, s'ajoute au fichier) |
+| `CustomHostAliases` | objet `{ "plage": "nom" }` | `{}` | Noms utilisés à la place du DNS inverse par `audit`, `resolve` et `lookup` ; jamais écrits dans le cache DNS. Une clé est une adresse (`192.168.1.25`) ou un sous-réseau CIDR (`192.168.10.0/24`) dont toutes les adresses prennent le nom ; une adresse comprise dans plusieurs plages prend le nom de la plus précise. Une clé illisible ou un nom vide est ignoré | `--alias` (`audit`, s'ajoute au fichier) |
 
 ## Carte topologique et matrice de règles
 

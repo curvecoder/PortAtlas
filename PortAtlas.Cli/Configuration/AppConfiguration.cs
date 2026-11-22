@@ -252,7 +252,8 @@ public sealed record AppConfiguration
     public string MaskLocalIp { get; init; } = string.Empty;
 
     /// <summary>
-    /// User-defined static IP-to-hostname mappings taking precedence over DNS reverse PTR records.
+    /// Fixed host names by IP address or CIDR subnet, taking precedence over reverse DNS; an address in several ranges
+    /// takes the name of the most precise one.
     /// </summary>
     public Dictionary<string, string> CustomHostAliases { get; init; } = new(StringComparer.OrdinalIgnoreCase);
 }

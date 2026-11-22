@@ -14,23 +14,32 @@ internal sealed class ConfiguredAddressNamingPolicy(OfflineAuditEnrichmentOption
     // after its removal from the configuration.
     private const string AliasSource = "Custom";
 
-    private readonly IReadOnlyDictionary<IPAddress, string> _aliases = HostAliasParser.Parse(options.CustomHostAliases);
+    private readonly HostAliasTable _aliases = HostAliasTable.Parse(options.CustomHostAliases);
     private readonly DnsAddressExclusionEvaluator _exclusions = new(options.DnsExcludedNetworks);
 
     public bool AllowsLookup(string ip) =>
-        !IPAddress.TryParse(ip, out var address) || (!_aliases.ContainsKey(address) && !_exclusions.ShouldExclude(address));
+        !IPAddress.TryParse(ip, out var address) || (!_aliases.TryFind(address, out _) && !_exclusions.ShouldExclude(address));
 
-    public IReadOnlyDictionary<string, DnsCacheEntry> WithAliases(IReadOnlyDictionary<string, DnsCacheEntry> cache)
+    // An alias may name a whole subnet, so its addresses cannot be listed: each address that the enrichment pass may
+    // look up is named instead, under the spelling it has in the cache or in the logs. Those are the cache entries and
+    // the addresses read in the logs without a name (or all of them with --force-resolve), since a log line that
+    // already holds a name is not renamed otherwise.
+    public IReadOnlyDictionary<string, DnsCacheEntry> WithAliases(
+        IReadOnlyDictionary<string, DnsCacheEntry> cache,
+        IEnumerable<string> addressesRead)
     {
-        if (_aliases.Count == 0)
+        if (_aliases.IsEmpty)
         {
             return cache;
         }
 
         var named = new Dictionary<string, DnsCacheEntry>(cache, StringComparer.OrdinalIgnoreCase);
-        foreach (var (address, hostName) in _aliases)
+        foreach (var ip in cache.Keys.Concat(addressesRead))
         {
-            named[address.ToString()] = new DnsCacheEntry { HostName = hostName, Source = AliasSource };
+            if (IPAddress.TryParse(ip, out var address) && _aliases.TryFind(address, out var alias))
+            {
+                named[ip] = new DnsCacheEntry { HostName = alias.HostName, Source = AliasSource };
+            }
         }
 
         return named;

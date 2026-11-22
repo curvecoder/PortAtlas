@@ -34,7 +34,7 @@ public sealed record OfflineAuditEnrichmentOptions
     public IReadOnlyList<string> DnsExcludedNetworks { get; init; } = [];
 
     /// <summary>
-    /// Fixed host names by IP address, as for the audit's <c>CustomHostAliases</c>: an aliased address is never resolved,
+    /// Fixed host names by IP address or CIDR subnet, as for the audit's <c>CustomHostAliases</c>: an aliased address is never resolved,
     /// its alias names it in the audit logs (under the same rule as a resolved name: it fills a missing name, and replaces
     /// a known one only with <see cref="ForceResolve"/>), and the alias is not written to the master cache.
     /// </summary>
