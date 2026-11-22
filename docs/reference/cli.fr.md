@@ -35,6 +35,45 @@ Une option se combine avec le fichier ainsi :
 - Une option qui prend une valeur remplace la valeur du fichier. Une option de liste remplace toute la liste du fichier : `--exclude-ports 53` écarte les ports listés dans `MapExcludedPorts`. `--alias` fait exception : ses paires s'ajoutent à `CustomHostAliases` et l'emportent sur le fichier pour la même adresse ou le même sous-réseau.
 - Une option sans valeur qui correspond à une clé du fichier ne la bascule que dans un sens. `--listeners-only` active `MapListenersOnly` mais ne peut pas le désactiver ; `--no-tui`, `--no-dns`, `--no-rdap` et `--include-ephemeral-ports` désactivent ce que le fichier active, jamais l'inverse. Pour annuler un tel réglage du fichier, modifiez le fichier ou donnez un autre fichier avec `--config`. `export rules` ne lit pas `MapExcludeEphemeralPorts` : seul `--include-ephemeral-ports` y décide. `--obfuscate` remplace `MaskServerName` et `MaskLocalIp`, sauf si `--mask-server` ou `--mask-ip` est donné.
 
+Par exemple, `filters.json` du [homelab d'exemple](../examples/homelab/README.fr.md) écarte le port DNS :
+
+```json
+{
+  "MapExcludedPorts": [ "53" ]
+}
+```
+
+```bash
+PortAtlas export rules -i logs -o rules.csv --config filters.json
+```
+
+Les règles sortantes de la matrice ne contiennent plus les requêtes DNS que `nas` et `pve` envoient à `pihole` :
+
+<!-- example-output: config-file/rules.csv -->
+
+| RuleId | Direction | DestinationHost | Protocol | DestinationPort |
+| :--- | :--- | :--- | :--- | ---: |
+| RULE-006 | Outbound | localhost | TCP | 85 |
+| RULE-007 | Outbound | nas.home.arpa | TCP | 873 |
+| RULE-008 | Outbound | 0.debian.pool.ntp.org | UDP | 123 |
+| RULE-009 | Outbound | 198.51.100.53 | TCP | 853 |
+
+Ajouter `--exclude-ports 123` n'ajoute pas le port 123 à la liste du fichier : cette liste est remplacée. Les requêtes DNS reviennent et la règle NTP disparaît :
+
+```bash
+PortAtlas export rules -i logs -o rules.csv --config filters.json --exclude-ports 123
+```
+
+<!-- example-output: config-override/rules.csv -->
+
+| RuleId | Direction | DestinationHost | Protocol | DestinationPort |
+| :--- | :--- | :--- | :--- | ---: |
+| RULE-006 | Outbound | pihole.home.arpa | UDP | 53 |
+| RULE-007 | Outbound | pihole.home.arpa | UDP | 53 |
+| RULE-008 | Outbound | localhost | TCP | 85 |
+| RULE-009 | Outbound | nas.home.arpa | TCP | 873 |
+| RULE-010 | Outbound | 198.51.100.53 | TCP | 853 |
+
 ## Option globale
 
 | Option | Valeur | Défaut | Effet |
@@ -70,6 +109,26 @@ Un dossier ou un motif apporte ses fichiers portant les extensions lues par la c
 Chaque journal CSV est lu avec le séparateur trouvé sur sa propre première ligne (`,`, `;`, tabulation ou `|`) : des journaux écrits avec des valeurs différentes de `CsvDelimiter` peuvent donc être lus ensemble ; `CsvDelimiter` n'est retenu que lorsque la première ligne ne tranche pas (fichier vide, ou égalité).
 
 Parmi les fichiers d'un dossier ou d'un motif, la commande ne lit que les journaux d'audit : un CSV dont la première ligne nomme la colonne `ServerName` ou `LocalPort`, un NDJSON dont le premier enregistrement porte l'une de ces deux propriétés. Une matrice écrite par `export rules`, un journal sans ligne d'en-tête, un fichier vide ou un fichier qui ne peut pas être ouvert (tenu par un autre programme, accès refusé) est écarté. Quand plusieurs fichiers d'un dossier portent le même audit, la commande n'en garde qu'un : `map`, `export rules` et `export ndjson` lisent la copie écrite par `resolve` (`<name>_enriched.<ext>`) plutôt que l'original, et `export rules` et `export ndjson` lisent le CSV plutôt que le NDJSON de même nom ; `resolve` enrichit chaque original, CSV comme NDJSON, et écarte une copie enrichie dont l'original est présent. Chaque fichier écarté est nommé à l'écran avec sa raison. Un fichier dont le chemin est donné tel quel à `--input` est toujours lu, quel que soit son contenu ; s'il ne peut pas être ouvert, la commande s'arrête avec `The audit log '<path>' cannot be read: …` et le code de sortie 1. La copie enrichie ne reçoit pas les flux observés après le passage de `resolve` : relancez `resolve`, ou nommez l'original, pour les lire.
+
+Sur le homelab d'exemple, le motif ci-dessous lit `logs/pihole.csv` et `logs/pve.csv`, pas `logs/nas.csv`. Mettez un motif entre guillemets, pour que le shell le transmette tel quel à PortAtlas :
+
+```bash
+PortAtlas export rules -i "logs/p*.csv" -o rules.csv
+```
+
+La matrice contient les flux vus par `pihole` et `pve`. Les sessions SSH et SMB ouvertes sur `nas`, enregistrées dans son seul journal, n'y figurent pas ; la sauvegarde que `pve` envoie à `nas` y figure, d'après le journal de `pve` :
+
+<!-- example-output: input-pattern/rules.csv complete -->
+
+| RuleId | Direction | DestinationHost | Protocol | DestinationPort |
+| :--- | :--- | :--- | :--- | ---: |
+| RULE-001 | Inbound | pihole | TCP | 80 |
+| RULE-002 | Inbound | pve | TCP | 8006 |
+| RULE-003 | Outbound | pihole.home.arpa | UDP | 53 |
+| RULE-004 | Outbound | localhost | TCP | 85 |
+| RULE-005 | Outbound | nas.home.arpa | TCP | 873 |
+| RULE-006 | Outbound | 0.debian.pool.ntp.org | UDP | 123 |
+| RULE-007 | Outbound | 198.51.100.53 | TCP | 853 |
 
 ### Filtres de flux
 
@@ -215,6 +274,21 @@ Les matrices sont écrites une fois tous les journaux lus. Quand une option de s
 
 Clés de configuration lues : `OutputCsvPath` (entrée par défaut), `CsvDelimiter` (aussi le séparateur des matrices), `AddressGroups`, et les clés des filtres de flux sauf `MapExcludeEphemeralPorts`. Les clés du rendu de la carte, les filtres d'enregistrement et les clés de résolution de noms ne sont pas lus.
 
+Sur le [homelab d'exemple](../examples/homelab/README.fr.md), chaque option ci-dessous modifie ainsi la matrice de `PortAtlas export rules -i logs -o rules.csv`. Le [guide](../how-to/export-firewall-rules.fr.md) montre chaque matrice obtenue.
+
+| Option ajoutée | Ce qui change dans la matrice | Résultat |
+| :--- | :--- | :--- |
+| `--min-observations 5 --exclude-ports 53,123` | La session SSH vue une seule fois, les règles DNS et la règle NTP disparaissent | [Réduire le bruit](../how-to/export-firewall-rules.fr.md#réduire-le-bruit) |
+| `--zone public` | Seules restent les règles vers des adresses publiques : NTP et DNS sur TLS | [Garder une zone](../how-to/export-firewall-rules.fr.md#garder-une-zone) |
+| `--include-hosts "nas*"` | Seules restent les règles dont une extrémité est `nas`, tous journaux confondus | [Garder un serveur](../how-to/export-firewall-rules.fr.md#garder-un-serveur) |
+| `--direction out` | Seules restent les règles sortantes | [Garder un sens](../how-to/export-firewall-rules.fr.md#garder-un-sens) |
+| `--include-ephemeral-ports` | La connexion de `pve` au port 51234 de `nas` (montage NFS) revient | [Garder les ports éphémères](../how-to/export-firewall-rules.fr.md#garder-les-ports-éphémères) |
+| `--listeners-only` | La matrice liste les sockets en écoute des trois serveurs au lieu des flux | [Lister les services offerts](../how-to/export-firewall-rules.fr.md#lister-les-services-offerts) |
+| `--flows-output`, `--pairs-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output` | `rules.csv` ne change pas ; chaque option écrit une matrice de plus | [Écrire toutes les matrices en une passe](../how-to/export-firewall-rules.fr.md#écrire-toutes-les-matrices-en-une-passe) |
+| `--address-group upstream=198.51.100.0/24` | Seule la matrice de règles par groupe change : `198.51.100.53` est dans le groupe `upstream` | [Matrice de règles par groupe](../how-to/export-firewall-rules.fr.md#matrice-de-règles-par-groupe--les-règles-entre-groupes-dadresses) |
+
+`--active-within-days` compte à partir du moment où la commande s'exécute. Les journaux du homelab s'arrêtent le 9 novembre 2026 à 20:00 UTC, et la session SSH de `laptop` vers `nas` a été vue pour la dernière fois le 7 novembre à 21:30 UTC. Lancée le 12 novembre 2026 à 08:00 UTC, `--active-within-days 4` garde les flux vus depuis le 8 novembre à 08:00 UTC : cette session quitte la matrice. Lancée après le 13 novembre 2026 à 20:00 UTC, la même option ne garde aucun flux du homelab.
+
 ## export ndjson
 
 Convertit des journaux CSV et NDJSON en un seul fichier NDJSON, un objet JSON par flux.
@@ -232,6 +306,18 @@ Famille lue : entrées (`.csv`, `.ndjson`, `.jsonl`). Un fichier `.ndjson` ou `.
 Une ligne non vide d'un journal NDJSON qui n'est pas un enregistrement d'audit JSON, comme une ligne coupée par un arrêt brutal, est écartée, et la commande affiche `Skipped <n> line(s) of <path> that are not valid JSON: lines <numbers>.` La sortie ne remplace le fichier précédent qu'une fois tous les journaux lus : un journal illisible, `Ctrl+C` ou un disque plein laissent le fichier précédent tel quel ; après `Ctrl+C`, la sortie partielle peut rester à côté, sous le nom `<path>.pending`.
 
 Clés de configuration lues : `OutputCsvPath` (entrée par défaut) et `CsvDelimiter`. Aucun filtre ne s'applique.
+
+Sur le homelab d'exemple, la commande ci-dessous écrit une ligne par flux de `pve`, comme sa sauvegarde nocturne vers `nas` :
+
+```bash
+PortAtlas export ndjson -i logs/pve.csv -o pve.ndjson
+```
+
+<!-- example-output: ndjson/pve.ndjson -->
+
+```json
+{"firstSeenUtc":"2026-11-03T02:00:05+00:00","lastSeenUtc":"2026-11-09T02:14:30+00:00","observationCount":96,"serverName":"pve","serverOsVersion":"Debian GNU/Linux 12 (bookworm)","serverPrimaryIp":"192.168.1.20","protocol":"Tcp","direction":"Outbound","tcpState":"Established","localIp":"192.168.1.20","localPort":41822,"remoteIp":"192.168.1.10","remotePort":873,"remoteHostName":"nas.home.arpa","processId":3092,"processName":"rsync","executablePath":"/usr/bin/rsync","commandLine":"rsync -a /var/lib/vz/dump/ nas.home.arpa::backup","targetExecutable":"","userName":"root"}
+```
 
 ## resolve
 
@@ -259,6 +345,34 @@ Les journaux d'audit sont facultatifs. Quand `--cache` est donné sans `-i`, les
 `Ctrl+C`, et `SIGTERM` sous Linux et macOS, arrêtent les résolutions : les adresses résolues avant l'arrêt sont enregistrées dans le cache nommé par `--output-cache`, les journaux pas encore traités restent tels quels et la commande se termine avec le code de sortie `130`. Une nouvelle exécution reprend à partir de ce cache.
 
 Clés de configuration lues : `OutputCsvPath` (entrée par défaut), `DnsCacheFilePath`, `DnsResolutionTimeoutMs`, `ResolveRemoteHostNames`, `ResolveIpOwners`, `RdapTimeoutMs`, `DnsExcludedNetworks` et `CustomHostAliases`. `CsvDelimiter` n'est pas lu : chaque journal est lu avec le séparateur de sa première ligne, ou `,` quand cette ligne ne l'indique pas. `ResolveRemoteHostNames: false` arrête seulement les requêtes DNS inverses ; les requêtes RDAP suivent toujours `ResolveIpOwners`, alors que dans `audit` la même valeur désactive tout nommage. Une adresse nommée par `CustomHostAliases` ou comprise dans `DnsExcludedNetworks` ne reçoit aucune requête, comme dans l'audit, et un alias n'est pas écrit dans le cache. `--cache-only` n'envoie aucune requête, quelles que soient ces clés.
+
+Sur le [homelab d'exemple](../examples/homelab/README.fr.md), `logs/pihole.csv` ne contient aucun nom pour `198.51.100.53`, le résolveur DNS sur TLS vers lequel `pihole` relaie ses requêtes. `dns_cache.json`, rapporté d'un poste connecté, le nomme :
+
+```json
+{
+  "198.51.100.53": {
+    "HostName": "dot.resolver.example",
+    "Organization": null,
+    "Country": null,
+    "NetworkRange": null,
+    "Source": "DNS",
+    "ResolvedAtUtc": "2026-11-09T21:00:00.0000000+00:00"
+  }
+}
+```
+
+```bash
+PortAtlas resolve -i logs/pihole.csv --cache dns_cache.json --cache-only
+```
+
+La commande n'envoie aucune requête. Elle écrit `logs/pihole_enriched.csv` à côté du journal, avec le nom dans `RemoteHostName`, et le cache fusionné dans `portatlas_dns_cache.json` (`DnsCacheFilePath`). Le nom de `laptop`, déjà présent dans le journal, est conservé :
+
+<!-- example-output: resolve/logs/pihole_enriched.csv -->
+
+| Direction | RemoteIp | RemotePort | RemoteHostName |
+| :--- | :--- | ---: | :--- |
+| Outbound | 198.51.100.53 | 853 | dot.resolver.example |
+| Inbound | 192.168.1.50 | 52390 | laptop.home.arpa |
 
 ## lookup
 

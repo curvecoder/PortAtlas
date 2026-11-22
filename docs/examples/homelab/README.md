@@ -15,7 +15,7 @@ The examples of the documentation run on the audit logs of this folder, so that 
 
 The logs cover 2 to 9 November 2026. Public addresses are documentation addresses (`203.0.113.10`, `198.51.100.53`).
 
-`portatlas.json` puts the addresses in three groups for the group rule matrix: `dns`, `servers` and `clients`.
+`portatlas.json` puts the addresses in three groups for the group rule matrix: `dns`, `servers` and `clients`. Two more files serve single examples of the [command-line reference](../../reference/cli.md): `filters.json`, a configuration that removes the DNS port, and `dns_cache.json`, a DNS cache that names `198.51.100.53`.
 
 ## Run the examples
 

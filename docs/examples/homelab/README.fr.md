@@ -15,7 +15,7 @@ Les exemples de la documentation s'exécutent sur les journaux d'audit de ce dos
 
 Les journaux couvrent la période du 2 au 9 novembre 2026. Les adresses publiques sont des adresses de documentation (`203.0.113.10`, `198.51.100.53`).
 
-`portatlas.json` range les adresses dans trois groupes pour la matrice de règles par groupe : `dns`, `servers` et `clients`.
+`portatlas.json` range les adresses dans trois groupes pour la matrice de règles par groupe : `dns`, `servers` et `clients`. Deux autres fichiers servent chacun à un exemple de la [référence de la ligne de commande](../../reference/cli.fr.md) : `filters.json`, une configuration qui écarte le port DNS, et `dns_cache.json`, un cache DNS qui nomme `198.51.100.53`.
 
 ## Lancer les exemples
 

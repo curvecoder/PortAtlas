@@ -9,5 +9,9 @@
   { "name": "listeners", "command": "export rules -i logs -o services.csv --listeners-only" },
   { "name": "all-matrices", "command": "export rules -i logs -o rules.csv --flows-output flows.csv --pairs-output pairs.csv --host-rules-output host_rules.csv --listeners-output services.csv --group-rules-output group_rules.csv" },
   { "name": "groups-option", "command": "export rules -i logs -o rules.csv --group-rules-output group_rules.csv --address-group upstream=198.51.100.0/24 --address-group upstream=203.0.113.0/24" },
-  { "name": "ndjson", "command": "export ndjson -i logs/pve.csv -o pve.ndjson" }
+  { "name": "ndjson", "command": "export ndjson -i logs/pve.csv -o pve.ndjson" },
+  { "name": "input-pattern", "command": "export rules -i \"logs/p*.csv\" -o rules.csv" },
+  { "name": "config-file", "command": "export rules -i logs -o rules.csv --config filters.json" },
+  { "name": "config-override", "command": "export rules -i logs -o rules.csv --config filters.json --exclude-ports 123" },
+  { "name": "resolve", "command": "resolve -i logs/pihole.csv --cache dns_cache.json --cache-only" }
 ]
