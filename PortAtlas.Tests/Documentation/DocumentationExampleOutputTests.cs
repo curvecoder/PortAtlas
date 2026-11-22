@@ -46,18 +46,18 @@ public sealed class DocumentationExampleOutputTests
         try
         {
             // Act
-            var (exitCode, console) = await ExampleScenarioRunner.RunAsync(scenario!, runDirectory);
+            var run = await ExampleScenarioRunner.RunAsync(scenario!, runDirectory);
 
             // Assert
-            exitCode.Should().Be(0, console);
+            run.ExitCode.Should().Be(0, run.Console);
             if (Environment.GetEnvironmentVariable(UpdateVariable) == "1")
             {
-                ReplaceCommittedOutputs(runDirectory, committedDirectory);
+                ReplaceCommittedOutputs(runDirectory, run.WrittenFiles, committedDirectory);
                 return;
             }
 
-            FileNames(runDirectory).Should().Equal(FileNames(committedDirectory), $"scenario '{name}' writes these files; run scripts/Update-DocExamples.ps1 after a reviewed change");
-            foreach (var fileName in FileNames(runDirectory))
+            run.WrittenFiles.Should().Equal(ExampleScenarioRunner.ListFiles(committedDirectory), $"scenario '{name}' writes these files; run scripts/Update-DocExamples.ps1 after a reviewed change");
+            foreach (var fileName in run.WrittenFiles)
             {
                 ReadNormalized(Path.Combine(runDirectory, fileName)).Should().Be(
                     ReadNormalized(Path.Combine(committedDirectory, fileName)),
@@ -80,18 +80,18 @@ public sealed class DocumentationExampleOutputTests
         var scenario = ExampleScenarioCatalog.Find(excerpt.Scenario);
         var where = $"{location}:{lineNumber}";
 
+        var path = Path.Combine(ExampleScenarioCatalog.OutputDirectory, excerpt.Scenario, excerpt.FileName);
+
         // Act
-        var file = ReadTable(Path.Combine(ExampleScenarioCatalog.OutputDirectory, excerpt.Scenario, excerpt.FileName));
+        var (quoted, written) = excerpt.Lines.Count > 0
+            ? (excerpt.Lines, ReadNormalized(path).Split('\n'))
+            : QuoteRows(excerpt, ReadTable(path), where);
 
         // Assert
         scenario.Should().NotBeNull($"{where} quotes scenario '{excerpt.Scenario}'");
-        excerpt.Rows.Should().NotBeEmpty($"{where} must be followed by a Markdown table");
+        quoted.Should().NotBeEmpty($"{where} must be followed by a Markdown table or a fenced code block");
         MarkdownExampleExtractor.ExtractCommandLines(markdown).Select(line => line.Arguments)
             .Should().Contain(scenario!.Command, $"{where} quotes the output of a command that the page must show");
-        file.Columns.Should().Contain(excerpt.Columns, $"{where} names columns of {excerpt.FileName}");
-
-        var quoted = excerpt.Rows.Select(row => string.Join(" | ", row)).ToList();
-        var written = file.Rows.Select(row => string.Join(" | ", excerpt.Columns.Select(column => row[file.Columns.IndexOf(column)]))).ToList();
         if (excerpt.IsComplete)
         {
             quoted.Should().Equal(written, $"{where} quotes every row of {excerpt.FileName}");
@@ -115,13 +115,20 @@ public sealed class DocumentationExampleOutputTests
         folders.Should().Equal(names);
     }
 
-    private static List<string> FileNames(string directory) =>
-        Directory.Exists(directory)
-            ? [.. Directory.EnumerateFiles(directory).Select(path => Path.GetFileName(path)).Order(StringComparer.Ordinal)]
-            : [];
-
     // Git checks the outputs out with the line ends of the platform, while PortAtlas writes those of the machine.
     private static string ReadNormalized(string path) => File.ReadAllText(path).Replace("\r\n", "\n", StringComparison.Ordinal);
+
+    // A table quotes some columns of the file: the rows of the file are cut to those columns before they are compared.
+    private static (IReadOnlyList<string> Quoted, IReadOnlyList<string> Written) QuoteRows(
+        DocumentedOutputExcerpt excerpt,
+        (List<string> Columns, List<IReadOnlyList<string>> Rows) file,
+        string where)
+    {
+        file.Columns.Should().Contain(excerpt.Columns, $"{where} names columns of {excerpt.FileName}");
+        var quoted = excerpt.Rows.Select(row => string.Join(" | ", row)).ToList();
+        var written = file.Rows.Select(row => string.Join(" | ", excerpt.Columns.Select(column => row[file.Columns.IndexOf(column)]))).ToList();
+        return (quoted, written);
+    }
 
     private static (List<string> Columns, List<IReadOnlyList<string>> Rows) ReadTable(string path)
     {
@@ -130,17 +137,18 @@ public sealed class DocumentationExampleOutputTests
         return records.Count == 0 ? ([], []) : ([.. records[0]], [.. records.Skip(1)]);
     }
 
-    private static void ReplaceCommittedOutputs(string runDirectory, string committedDirectory)
+    private static void ReplaceCommittedOutputs(string runDirectory, IReadOnlyList<string> writtenFiles, string committedDirectory)
     {
         if (Directory.Exists(committedDirectory))
         {
             Directory.Delete(committedDirectory, recursive: true);
         }
 
-        Directory.CreateDirectory(committedDirectory);
-        foreach (var path in Directory.EnumerateFiles(runDirectory))
+        foreach (var file in writtenFiles)
         {
-            File.Copy(path, Path.Combine(committedDirectory, Path.GetFileName(path)));
+            var target = Path.Combine(committedDirectory, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(target) ?? committedDirectory);
+            File.Copy(Path.Combine(runDirectory, file), target);
         }
     }
 }

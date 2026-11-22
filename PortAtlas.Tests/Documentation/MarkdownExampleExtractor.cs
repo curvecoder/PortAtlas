@@ -25,13 +25,15 @@ internal sealed record DocumentedJsonBlock(int LineNumber, string Json);
 /// <param name="IsComplete">True when the table holds every row of the file, in order.</param>
 /// <param name="Columns">Column names of the table header.</param>
 /// <param name="Rows">Cell values of each row, without inline code marks.</param>
+/// <param name="Lines">Lines of the fenced code block that follows the marker in place of a table.</param>
 internal sealed record DocumentedOutputExcerpt(
     int LineNumber,
     string Scenario,
     string FileName,
     bool IsComplete,
     IReadOnlyList<string> Columns,
-    IReadOnlyList<IReadOnlyList<string>> Rows);
+    IReadOnlyList<IReadOnlyList<string>> Rows,
+    IReadOnlyList<string> Lines);
 
 /// <summary>
 /// Reads the command lines and the JSON examples of a Markdown page.
@@ -84,11 +86,16 @@ internal static partial class MarkdownExampleExtractor
                 continue;
             }
 
-            var table = lines.Skip(index + 1)
-                .SkipWhile(string.IsNullOrWhiteSpace)
+            var following = lines.Skip(index + 1).SkipWhile(string.IsNullOrWhiteSpace).ToList();
+            var table = following
                 .TakeWhile(line => line.TrimStart().StartsWith('|'))
                 .Select(SplitTableRow)
                 .ToList();
+
+            // A file that is not a table (NDJSON, or a CSV too wide to read) is quoted as a fenced block of its lines.
+            IReadOnlyList<string> block = following.Count > 0 && FencePattern().IsMatch(following[0])
+                ? [.. following.Skip(1).TakeWhile(line => !FencePattern().IsMatch(line))]
+                : [];
 
             // The second line of a Markdown table aligns the columns; it holds no value.
             excerpts.Add(new DocumentedOutputExcerpt(
@@ -97,7 +104,8 @@ internal static partial class MarkdownExampleExtractor
                 marker.Groups["file"].Value,
                 marker.Groups["complete"].Success,
                 table.Count > 0 ? table[0] : [],
-                [.. table.Skip(2)]));
+                [.. table.Skip(2)],
+                block));
         }
 
         return excerpts;
@@ -149,8 +157,9 @@ internal static partial class MarkdownExampleExtractor
     [GeneratedRegex(@"^(?:sudo\s+|ExecStart=)?(?:\S*[/\\])?PortAtlas(?:\.exe)?\s+(?<arguments>\S.*)$")]
     private static partial Regex CommandLinePattern();
 
-    // <!-- example-output: <scenario>/<file> [complete] --> introduces a table quoted from a scenario output.
-    [GeneratedRegex(@"^<!--\s*example-output:\s*(?<scenario>[\w-]+)/(?<file>[\w.-]+)(?<complete>\s+complete)?\s*-->$")]
+    // <!-- example-output: <scenario>/<file> [complete] --> introduces a table or a fenced block quoted from a scenario
+    // output; the file path is relative to the folder of the run, such as logs/pihole_enriched.csv.
+    [GeneratedRegex(@"^<!--\s*example-output:\s*(?<scenario>[\w-]+)/(?<file>[\w./-]+)(?<complete>\s+complete)?\s*-->$")]
     private static partial Regex OutputMarkerPattern();
 
     // A cell separator is a pipe that no backslash escapes.

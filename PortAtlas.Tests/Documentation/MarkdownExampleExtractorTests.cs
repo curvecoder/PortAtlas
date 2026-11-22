@@ -169,6 +169,31 @@ public sealed class MarkdownExampleExtractorTests
     }
 
     [Fact]
+    public void ExtractOutputExcerpts_WhenACodeBlockFollowsTheMarkerOfAFileInAFolder_ReturnsItsLines()
+    {
+        // Arrange
+        const string markdown = """
+            <!-- example-output: resolve/logs/pihole_enriched.csv -->
+
+            ```text
+            first line
+              second line
+            ```
+
+            After the block.
+            """;
+
+        // Act
+        var excerpts = MarkdownExampleExtractor.ExtractOutputExcerpts(markdown);
+
+        // Assert
+        var excerpt = excerpts.Should().ContainSingle().Subject;
+        excerpt.FileName.Should().Be("logs/pihole_enriched.csv");
+        excerpt.Lines.Should().Equal("first line", "  second line");
+        excerpt.Rows.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ExtractOutputExcerpts_WhenNoTableFollowsTheMarker_ReturnsAnExcerptWithoutColumns()
     {
         // Arrange
