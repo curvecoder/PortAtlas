@@ -102,7 +102,12 @@ public sealed record AppConfiguration
     /// Address groups of the <c>export rules</c> group matrix: IP addresses or CIDR subnets by group name (VLAN,
     /// application security group). An address belongs to the group of its most precise range.
     /// </summary>
-    public Dictionary<string, List<string>> AddressGroups { get; init; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <remarks>
+    /// The keys are compared with their case: System.Text.Json replaces this dictionary with its own, so a comparer set
+    /// here would not survive reading the file. <see cref="AddressGroupParser.TryBuild"/> joins the names that differ
+    /// only in case.
+    /// </remarks>
+    public Dictionary<string, List<string>> AddressGroups { get; init; } = [];
 
     /// <summary>
     /// List of process names or application targets to include in the map.

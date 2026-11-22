@@ -67,7 +67,8 @@ internal static class AddressGroupParser
             {
                 if (string.IsNullOrWhiteSpace(name) || !IpAddressRange.TryParse(value, out var range))
                 {
-                    error = $"{OptionName} (configuration key {nameof(AppConfiguration.AddressGroups)}): '{value?.Trim()}' in the group '{name}' is not an IP address or a CIDR subnet of a named group. Expected an address (192.168.1.50) or a subnet (192.168.1.0/24) under a group name.";
+                    var entry = value is null ? "a null entry" : $"'{value.Trim()}'";
+                    error = $"{OptionName} (configuration key {nameof(AppConfiguration.AddressGroups)}): {entry} in the group '{name}' is not an IP address or a CIDR subnet of a named group. Expected an address (192.168.1.50) or a subnet (192.168.1.0/24) under a group name.";
                     return false;
                 }
 

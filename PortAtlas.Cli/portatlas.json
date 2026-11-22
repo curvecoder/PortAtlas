@@ -17,6 +17,7 @@
   "MapExcludedHosts": [],
   "MapIncludedIps": [],
   "MapExcludedIps": [],
+  "AddressGroups": {},
   "MapIncludedProcesses": [],
   "MapExcludedProcesses": [],
   "MapLayoutMode": "layered",

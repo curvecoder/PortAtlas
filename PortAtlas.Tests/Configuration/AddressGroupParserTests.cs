@@ -1,3 +1,4 @@
+using System.Text.Json;
 using AwesomeAssertions;
 using PortAtlas.Cli.Configuration;
 using TopologyForge.Filtering;
@@ -47,5 +48,33 @@ public sealed class AddressGroupParserTests
         directory!.FindGroup("192.168.10.5").Should().Be("Lab");
         directory.FindGroup("192.168.20.5").Should().Be("Lab");
         directory.FindGroup("192.168.1.50").Should().Be("servers");
+    }
+
+    [Fact]
+    public void TryBuild_WhenAGroupOfTheFileHoldsANullEntry_NamesTheNullEntryAndItsGroup()
+    {
+        // Arrange: System.Text.Json reads a null item of a list of strings as null, whatever its nullability.
+        var configured = JsonSerializer.Deserialize<Dictionary<string, List<string>>>("""{ "lab": [null] }""") ?? new();
+
+        // Act
+        var built = AddressGroupParser.TryBuild(configured, [], out _, out var error);
+
+        // Assert
+        built.Should().BeFalse();
+        error.Should().Contain("a null entry in the group 'lab'");
+    }
+
+    [Fact]
+    public void TryBuild_WhenAGroupOfTheFileHasAnEmptyName_RefusesItsRanges()
+    {
+        // Arrange
+        var configured = new Dictionary<string, List<string>> { [" "] = ["192.168.10.0/24"] };
+
+        // Act
+        var built = AddressGroupParser.TryBuild(configured, [], out _, out var error);
+
+        // Assert
+        built.Should().BeFalse();
+        error.Should().Contain("'192.168.10.0/24'").And.Contain("AddressGroups");
     }
 }
