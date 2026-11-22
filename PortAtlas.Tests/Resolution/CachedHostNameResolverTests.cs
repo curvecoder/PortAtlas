@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Sockets;
 using AwesomeAssertions;
 using PortAtlas.Core.Resolution;
 using Xunit;
@@ -32,6 +33,19 @@ public sealed class CachedHostNameResolverTests
         {
             // No resources to release for test mock
         }
+    }
+
+    // The real reverse DNS of the test machine is never asked: under load (coverage, parallel tests) a PTR query can
+    // outlast the resolution timeout, and the resolver then returns "" on purpose without asking RDAP.
+    private sealed class FakeReverseDnsLookup(Func<IPAddress, string> answer) : IReverseDnsLookup
+    {
+        public static FakeReverseDnsLookup NoRecord() =>
+            new(_ => throw new SocketException((int)SocketError.HostNotFound));
+
+        public static FakeReverseDnsLookup Returns(string hostName) => new(_ => hostName);
+
+        public Task<string> LookupAsync(IPAddress address, CancellationToken cancellationToken) =>
+            Task.FromResult(answer(address));
     }
 
     [Fact]
@@ -95,10 +109,12 @@ public sealed class CachedHostNameResolverTests
     }
 
     [Fact]
-    public async Task ResolveHostNameAsync_WhenNonRoutableOrTimeoutAddress_ReturnsEmptyAndCachesNegativeResult()
+    public async Task ResolveHostNameAsync_WhenNoPtrRecordExists_ReturnsEmptyAndCachesNegativeResult()
     {
-        // Arrange: Use a short timeout (10 ms) and a reserved documentation address (TEST-NET)
-        await using var resolver = new CachedHostNameResolver(TimeSpan.FromMilliseconds(10));
+        // Arrange: reserved documentation address (TEST-NET) without PTR record
+        await using var resolver = new CachedHostNameResolver(
+            TimeSpan.FromMilliseconds(10),
+            reverseDnsLookup: FakeReverseDnsLookup.NoRecord());
         var dummyIp = IPAddress.Parse("192.0.2.1");
 
         // Act
@@ -108,6 +124,7 @@ public sealed class CachedHostNameResolverTests
         // Assert
         firstResult.Should().BeEmpty();
         secondResult.Should().BeEmpty();
+        resolver.TryGetCachedHostName(dummyIp, out _).Should().BeTrue();
     }
 
     [Fact]
@@ -121,7 +138,8 @@ public sealed class CachedHostNameResolverTests
             resolutionTimeout: TimeSpan.FromMilliseconds(10),
             exclusionEvaluator: null,
             cacheStore: null,
-            organizationResolver: fakeOrgResolver);
+            organizationResolver: fakeOrgResolver,
+            reverseDnsLookup: FakeReverseDnsLookup.NoRecord());
 
         // Act
         var result = await resolver.ResolveHostNameAsync(testIp);
@@ -149,7 +167,8 @@ public sealed class CachedHostNameResolverTests
             resolutionTimeout: TimeSpan.FromMilliseconds(10),
             exclusionEvaluator: null,
             cacheStore: null,
-            organizationResolver: failingOrgResolver);
+            organizationResolver: failingOrgResolver,
+            reverseDnsLookup: FakeReverseDnsLookup.NoRecord());
 
         // Act
         var result = await resolver.ResolveHostNameAsync(testIp);
@@ -179,7 +198,8 @@ public sealed class CachedHostNameResolverTests
             resolutionTimeout: TimeSpan.FromSeconds(2),
             exclusionEvaluator: null,
             cacheStore: null,
-            organizationResolver: orgResolver);
+            organizationResolver: orgResolver,
+            reverseDnsLookup: FakeReverseDnsLookup.NoRecord());
 
         var ip = IPAddress.Parse("52.123.242.181");
 
@@ -265,7 +285,8 @@ public sealed class CachedHostNameResolverTests
             resolutionTimeout: TimeSpan.FromSeconds(2),
             exclusionEvaluator: null,
             cacheStore: null,
-            organizationResolver: fakeOrg);
+            organizationResolver: fakeOrg,
+            reverseDnsLookup: FakeReverseDnsLookup.Returns("dns.google"));
 
         // Act
         var result = await resolver.ResolveHostNameAsync(ip);
