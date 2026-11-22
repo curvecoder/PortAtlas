@@ -1,0 +1,12 @@
+﻿RuleId,Direction,SourceIp,SourceHost,DestinationIp,DestinationHost,DestinationZone,Protocol,DestinationPort,ServiceName,ProcessName,ExecutablePath,UserName,ObservationCount,FirstSeenUtc,LastSeenUtc
+RULE-001,Inbound,192.168.1.50,laptop.home.arpa,192.168.1.10,nas,Internal,TCP,22,SSH,sshd,/usr/sbin/sshd,root,1,2026-11-07T21:30:00.0000000+00:00,2026-11-07T21:30:00.0000000+00:00
+RULE-002,Inbound,192.168.1.50,laptop.home.arpa,192.168.1.2,pihole,Internal,TCP,80,HTTP,lighttpd,/usr/sbin/lighttpd,www-data,35,2026-11-03T19:05:00.0000000+00:00,2026-11-08T21:10:00.0000000+00:00
+RULE-003,Inbound,192.168.1.50,laptop.home.arpa,192.168.1.10,nas,Internal,TCP,445,SMB,smbd,/usr/sbin/smbd,root,240,2026-11-02T18:12:40.0000000+00:00,2026-11-09T19:41:15.0000000+00:00
+RULE-004,Inbound,192.168.1.20,pve.home.arpa,192.168.1.10,nas,Internal,TCP,873,rsync,rsync,/usr/bin/rsync,root,96,2026-11-03T02:00:10.0000000+00:00,2026-11-09T02:14:30.0000000+00:00
+RULE-005,Inbound,192.168.1.50,laptop.home.arpa,192.168.1.20,pve,Internal,TCP,8006,pveproxy,pveproxy,/usr/bin/perl,www-data,310,2026-11-02T18:20:00.0000000+00:00,2026-11-09T19:40:00.0000000+00:00
+RULE-006,Outbound,192.168.1.10,nas,192.168.1.2,pihole.home.arpa,Internal,UDP,53,DNS,systemd-resolved,/usr/lib/systemd/systemd-resolved,systemd-resolve,2016,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-007,Outbound,192.168.1.20,pve,192.168.1.2,pihole.home.arpa,Internal,UDP,53,DNS,systemd-resolved,/usr/lib/systemd/systemd-resolved,systemd-resolve,2016,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-008,Outbound,127.0.0.1,pve,127.0.0.1,localhost,Internal,TCP,85,pveproxy,pveproxy,/usr/bin/perl,www-data,620,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-009,Outbound,192.168.1.20,pve,192.168.1.10,nas.home.arpa,Internal,TCP,873,rsync,rsync,/usr/bin/rsync,root,96,2026-11-03T02:00:05.0000000+00:00,2026-11-09T02:14:30.0000000+00:00
+RULE-010,Outbound,192.168.1.20,pve,203.0.113.10,0.debian.pool.ntp.org,Public,UDP,123,NTP,chronyd,/usr/sbin/chronyd,_chrony,48,2026-11-02T08:01:00.0000000+00:00,2026-11-09T19:45:00.0000000+00:00
+RULE-011,Outbound,192.168.1.2,pihole,198.51.100.53,198.51.100.53,Public,TCP,853,unbound,unbound,/usr/sbin/unbound,unbound,2016,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00

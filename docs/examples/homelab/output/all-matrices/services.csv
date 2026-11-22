@@ -1,0 +1,10 @@
+﻿RuleId,Direction,SourceIp,SourceHost,DestinationIp,DestinationHost,DestinationZone,Protocol,DestinationPort,ServiceName,ProcessName,ExecutablePath,UserName,ObservationCount,FirstSeenUtc,LastSeenUtc
+RULE-001,Inbound,0.0.0.0,Any,0.0.0.0,nas,Internal,TCP,22,SSH,sshd,/usr/sbin/sshd,root,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-002,Inbound,0.0.0.0,Any,0.0.0.0,pve,Internal,TCP,22,SSH,sshd,/usr/sbin/sshd,root,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-003,Inbound,0.0.0.0,Any,0.0.0.0,pihole,Internal,TCP,53,DNS,pihole-FTL,/usr/bin/pihole-FTL,pihole,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-004,Inbound,0.0.0.0,Any,0.0.0.0,pihole,Internal,UDP,53,DNS,pihole-FTL,/usr/bin/pihole-FTL,pihole,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-005,Inbound,0.0.0.0,Any,0.0.0.0,pihole,Internal,TCP,80,HTTP,lighttpd,/usr/sbin/lighttpd,www-data,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-006,Inbound,0.0.0.0,Any,127.0.0.1,pve,Internal,TCP,85,pvedaemon,pvedaemon,/usr/bin/perl,root,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-007,Inbound,0.0.0.0,Any,0.0.0.0,nas,Internal,TCP,445,SMB,smbd,/usr/sbin/smbd,root,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-008,Inbound,0.0.0.0,Any,0.0.0.0,nas,Internal,TCP,873,rsync,rsync,/usr/bin/rsync,root,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-009,Inbound,0.0.0.0,Any,0.0.0.0,pve,Internal,TCP,8006,pveproxy,pveproxy,/usr/bin/perl,www-data,2016,2026-11-02T08:00:00.0000000+00:00,2026-11-09T20:00:00.0000000+00:00

@@ -43,3 +43,6 @@ portatlas_dns_cache.json
 
 # CodeGraph index (local, rebuilt by codegraph)
 .codegraph/
+
+# Example logs of the documentation, read by PortAtlas.Tests
+!docs/examples/**/*.csv

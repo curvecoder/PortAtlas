@@ -1,0 +1,3 @@
+﻿RuleId,Direction,SourceIp,SourceHost,DestinationIp,DestinationHost,DestinationZone,Protocol,DestinationPort,ServiceName,ProcessName,ExecutablePath,UserName,ObservationCount,FirstSeenUtc,LastSeenUtc
+RULE-001,Outbound,192.168.1.20,pve,203.0.113.10,0.debian.pool.ntp.org,Public,UDP,123,NTP,chronyd,/usr/sbin/chronyd,_chrony,48,2026-11-02T08:01:00.0000000+00:00,2026-11-09T19:45:00.0000000+00:00
+RULE-002,Outbound,192.168.1.2,pihole,198.51.100.53,198.51.100.53,Public,TCP,853,unbound,unbound,/usr/sbin/unbound,unbound,2016,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00

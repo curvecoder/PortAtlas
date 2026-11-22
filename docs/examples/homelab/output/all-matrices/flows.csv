@@ -1,0 +1,11 @@
+﻿FlowId,SourceIp,SourceHost,DestinationIp,DestinationHost,DestinationZone,Protocol,DestinationPort,ServiceName,SourceProcesses,DestinationProcesses,SeenFrom,SourceObservationCount,DestinationObservationCount,FirstSeenUtc,LastSeenUtc
+FLOW-001,192.168.1.50,laptop.home.arpa,192.168.1.10,nas,Internal,TCP,22,SSH,,sshd,Destination,0,1,2026-11-07T21:30:00.0000000+00:00,2026-11-07T21:30:00.0000000+00:00
+FLOW-002,192.168.1.10,nas,192.168.1.2,pihole,Internal,UDP,53,DNS,systemd-resolved,,Source,2016,0,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+FLOW-003,192.168.1.20,pve,192.168.1.2,pihole,Internal,UDP,53,DNS,systemd-resolved,,Source,2016,0,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+FLOW-004,192.168.1.50,laptop.home.arpa,192.168.1.2,pihole,Internal,TCP,80,HTTP,,lighttpd,Destination,0,35,2026-11-03T19:05:00.0000000+00:00,2026-11-08T21:10:00.0000000+00:00
+FLOW-005,127.0.0.1,pve,127.0.0.1,localhost,Internal,TCP,85,pveproxy,pveproxy,,Source,620,0,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+FLOW-006,192.168.1.50,laptop.home.arpa,192.168.1.10,nas,Internal,TCP,445,SMB,,smbd,Destination,0,240,2026-11-02T18:12:40.0000000+00:00,2026-11-09T19:41:15.0000000+00:00
+FLOW-007,192.168.1.20,pve,192.168.1.10,nas,Internal,TCP,873,rsync,rsync,rsync,Both,96,96,2026-11-03T02:00:05.0000000+00:00,2026-11-09T02:14:30.0000000+00:00
+FLOW-008,192.168.1.50,laptop.home.arpa,192.168.1.20,pve,Internal,TCP,8006,pveproxy,,pveproxy,Destination,0,310,2026-11-02T18:20:00.0000000+00:00,2026-11-09T19:40:00.0000000+00:00
+FLOW-009,192.168.1.20,pve,203.0.113.10,0.debian.pool.ntp.org,Public,UDP,123,NTP,chronyd,,Source,48,0,2026-11-02T08:01:00.0000000+00:00,2026-11-09T19:45:00.0000000+00:00
+FLOW-010,192.168.1.2,pihole,198.51.100.53,198.51.100.53,Public,TCP,853,unbound,unbound,,Source,2016,0,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00

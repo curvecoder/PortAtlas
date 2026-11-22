@@ -1,0 +1,6 @@
+﻿RuleId,Direction,SourceIp,SourceHost,DestinationIp,DestinationHost,DestinationZone,Protocol,DestinationPort,ServiceName,ProcessName,ExecutablePath,UserName,ObservationCount,FirstSeenUtc,LastSeenUtc
+RULE-001,Inbound,192.168.1.50,laptop.home.arpa,192.168.1.10,nas,Internal,TCP,22,SSH,sshd,/usr/sbin/sshd,root,1,2026-11-07T21:30:00.0000000+00:00,2026-11-07T21:30:00.0000000+00:00
+RULE-002,Inbound,192.168.1.50,laptop.home.arpa,192.168.1.10,nas,Internal,TCP,445,SMB,smbd,/usr/sbin/smbd,root,240,2026-11-02T18:12:40.0000000+00:00,2026-11-09T19:41:15.0000000+00:00
+RULE-003,Inbound,192.168.1.20,pve.home.arpa,192.168.1.10,nas,Internal,TCP,873,rsync,rsync,/usr/bin/rsync,root,96,2026-11-03T02:00:10.0000000+00:00,2026-11-09T02:14:30.0000000+00:00
+RULE-004,Outbound,192.168.1.10,nas,192.168.1.2,pihole.home.arpa,Internal,UDP,53,DNS,systemd-resolved,/usr/lib/systemd/systemd-resolved,systemd-resolve,2016,2026-11-02T08:00:05.0000000+00:00,2026-11-09T20:00:00.0000000+00:00
+RULE-005,Outbound,192.168.1.20,pve,192.168.1.10,nas.home.arpa,Internal,TCP,873,rsync,rsync,/usr/bin/rsync,root,96,2026-11-03T02:00:05.0000000+00:00,2026-11-09T02:14:30.0000000+00:00

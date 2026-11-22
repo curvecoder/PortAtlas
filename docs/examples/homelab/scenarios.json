@@ -1,0 +1,13 @@
+[
+  { "name": "rules", "command": "export rules -i logs -o rules.csv" },
+  { "name": "rules-noise", "command": "export rules -i logs -o rules.csv --min-observations 5 --exclude-ports 53,123" },
+  { "name": "rules-internal", "command": "export rules -i logs -o rules.csv --zone internal" },
+  { "name": "rules-public", "command": "export rules -i logs -o rules.csv --zone public" },
+  { "name": "rules-ephemeral", "command": "export rules -i logs -o rules.csv --include-ephemeral-ports" },
+  { "name": "rules-nas", "command": "export rules -i logs -o rules.csv --include-hosts \"nas*\"" },
+  { "name": "rules-outbound", "command": "export rules -i logs -o rules.csv --direction out" },
+  { "name": "listeners", "command": "export rules -i logs -o services.csv --listeners-only" },
+  { "name": "all-matrices", "command": "export rules -i logs -o rules.csv --flows-output flows.csv --pairs-output pairs.csv --host-rules-output host_rules.csv --listeners-output services.csv --group-rules-output group_rules.csv" },
+  { "name": "groups-option", "command": "export rules -i logs -o rules.csv --group-rules-output group_rules.csv --address-group upstream=198.51.100.0/24 --address-group upstream=203.0.113.0/24" },
+  { "name": "ndjson", "command": "export ndjson -i logs/pve.csv -o pve.ndjson" }
+]

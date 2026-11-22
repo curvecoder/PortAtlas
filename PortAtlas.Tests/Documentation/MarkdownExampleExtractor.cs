@@ -17,6 +17,23 @@ internal sealed record DocumentedCommandLine(int LineNumber, string Arguments);
 internal sealed record DocumentedJsonBlock(int LineNumber, string Json);
 
 /// <summary>
+/// A Markdown table that quotes the rows of a file written by a documented example scenario.
+/// </summary>
+/// <param name="LineNumber">One-based line of the <c>example-output</c> marker.</param>
+/// <param name="Scenario">Name of the scenario in <c>docs/examples/homelab/scenarios.json</c>.</param>
+/// <param name="FileName">File written by the scenario.</param>
+/// <param name="IsComplete">True when the table holds every row of the file, in order.</param>
+/// <param name="Columns">Column names of the table header.</param>
+/// <param name="Rows">Cell values of each row, without inline code marks.</param>
+internal sealed record DocumentedOutputExcerpt(
+    int LineNumber,
+    string Scenario,
+    string FileName,
+    bool IsComplete,
+    IReadOnlyList<string> Columns,
+    IReadOnlyList<IReadOnlyList<string>> Rows);
+
+/// <summary>
 /// Reads the command lines and the JSON examples of a Markdown page.
 /// </summary>
 internal static partial class MarkdownExampleExtractor
@@ -56,6 +73,43 @@ internal static partial class MarkdownExampleExtractor
                 block.Key!.LineNumber,
                 string.Join('\n', block.Select(line => RemoveIndentation(line.Text, block.Key.Indentation)))))];
 
+    public static IReadOnlyList<DocumentedOutputExcerpt> ExtractOutputExcerpts(string markdown)
+    {
+        var lines = markdown.Split('\n').Select(text => text.TrimEnd('\r')).ToList();
+        var excerpts = new List<DocumentedOutputExcerpt>();
+        for (var index = 0; index < lines.Count; index++)
+        {
+            if (OutputMarkerPattern().Match(lines[index].Trim()) is not { Success: true } marker)
+            {
+                continue;
+            }
+
+            var table = lines.Skip(index + 1)
+                .SkipWhile(string.IsNullOrWhiteSpace)
+                .TakeWhile(line => line.TrimStart().StartsWith('|'))
+                .Select(SplitTableRow)
+                .ToList();
+
+            // The second line of a Markdown table aligns the columns; it holds no value.
+            excerpts.Add(new DocumentedOutputExcerpt(
+                index + 1,
+                marker.Groups["scenario"].Value,
+                marker.Groups["file"].Value,
+                marker.Groups["complete"].Success,
+                table.Count > 0 ? table[0] : [],
+                [.. table.Skip(2)]));
+        }
+
+        return excerpts;
+    }
+
+    private static IReadOnlyList<string> SplitTableRow(string line)
+    {
+        var cells = CellSeparatorPattern().Split(line.Trim().Trim('|'))
+            .Select(cell => cell.Replace(@"\|", "|", StringComparison.Ordinal).Trim());
+        return [.. cells.Select(cell => cell.Length > 1 && cell[0] == '`' && cell[^1] == '`' ? cell[1..^1] : cell)];
+    }
+
     // An inline span such as `PortAtlas was not found …`, `PortAtlas.exe was not found … path.` or
     // `PortAtlas v<version>` quotes a message, not a command: a command line has no placeholder and ends without a period.
     private static bool IsPlaceholderOrMessage(string arguments) =>
@@ -94,6 +148,14 @@ internal static partial class MarkdownExampleExtractor
     // The executable is named alone, after sudo, with a path (./, .\, C:\Tools\PortAtlas\) or in a systemd ExecStart line.
     [GeneratedRegex(@"^(?:sudo\s+|ExecStart=)?(?:\S*[/\\])?PortAtlas(?:\.exe)?\s+(?<arguments>\S.*)$")]
     private static partial Regex CommandLinePattern();
+
+    // <!-- example-output: <scenario>/<file> [complete] --> introduces a table quoted from a scenario output.
+    [GeneratedRegex(@"^<!--\s*example-output:\s*(?<scenario>[\w-]+)/(?<file>[\w.-]+)(?<complete>\s+complete)?\s*-->$")]
+    private static partial Regex OutputMarkerPattern();
+
+    // A cell separator is a pipe that no backslash escapes.
+    [GeneratedRegex(@"(?<!\\)\|")]
+    private static partial Regex CellSeparatorPattern();
 
     private sealed record FencedBlock(int LineNumber, int Indentation, string Language);
 

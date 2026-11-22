@@ -16,7 +16,7 @@ public sealed class DocumentationExampleTests
     public static TheoryData<string, string> CommandLines()
     {
         var data = new TheoryData<string, string>();
-        foreach (var (location, markdown) in CurrentPages())
+        foreach (var (location, markdown) in DocumentationPageProvider.CurrentPages())
         {
             foreach (var commandLine in MarkdownExampleExtractor.ExtractCommandLines(markdown))
             {
@@ -33,7 +33,7 @@ public sealed class DocumentationExampleTests
             .Select(property => property.Name)
             .ToHashSet(StringComparer.Ordinal);
         var data = new TheoryData<string, string>();
-        foreach (var (location, markdown) in CurrentPages())
+        foreach (var (location, markdown) in DocumentationPageProvider.CurrentPages())
         {
             foreach (var block in MarkdownExampleExtractor.ExtractJsonBlocks(markdown).Where(block => NamesAConfigurationKey(block.Json, keys)))
             {
@@ -96,33 +96,5 @@ public sealed class DocumentationExampleTests
             // as a configuration file; it is not checked.
             return false;
         }
-    }
-
-    // The upgrade guides describe the options of earlier versions on purpose, so only the current pages are read.
-    private static IEnumerable<(string Location, string Markdown)> CurrentPages()
-    {
-        var root = FindRepositoryRoot();
-        var docs = Path.Combine(root, "docs");
-        var pages = new[] { "how-to", "reference", "explanation" }
-            .SelectMany(folder => Directory.EnumerateFiles(Path.Combine(docs, folder), "*.md"))
-            .Concat(Directory.EnumerateFiles(docs, "getting-started*.md"))
-            .Concat(Directory.EnumerateFiles(root, "README*.md"))
-            .Where(path => !Path.GetFileName(path).StartsWith("upgrade-to-", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal);
-
-        return pages.Select(path => (Path.GetRelativePath(root, path).Replace('\\', '/'), File.ReadAllText(path)));
-    }
-
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "PortAtlas.slnx")))
-            {
-                return directory.FullName;
-            }
-        }
-
-        throw new DirectoryNotFoundException($"No PortAtlas.slnx above {AppContext.BaseDirectory}.");
     }
 }
