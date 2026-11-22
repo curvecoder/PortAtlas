@@ -33,5 +33,5 @@ public sealed record DnsCacheEntry
     /// <summary>
     /// UTC timestamp of resolution completion.
     /// </summary>
-    public DateTimeOffset ResolvedAtUtc { get; init; } = DateTimeOffset.UtcNow;
+    public required DateTimeOffset ResolvedAtUtc { get; init; }
 }

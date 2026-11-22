@@ -10,9 +10,11 @@ namespace PortAtlas.Core.Export;
 /// <summary>
 /// Normalizes and aggregates raw network connection flows into consolidated firewall rule records.
 /// </summary>
-public sealed class FirewallRuleAggregator
+public sealed class FirewallRuleAggregator(TimeProvider? timeProvider = null)
 {
     private const string AnySourceHost = "Any";
+
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     private static readonly Dictionary<int, string> WellKnownServices = new()
     {
@@ -140,7 +142,7 @@ public sealed class FirewallRuleAggregator
         }
 
         var results = new List<FirewallRuleItem>();
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
 
         foreach (var acc in groups.Values)
         {

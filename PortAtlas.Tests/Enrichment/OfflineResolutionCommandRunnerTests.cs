@@ -95,7 +95,7 @@ public sealed class OfflineResolutionCommandRunnerTests : IDisposable
                 cancellationToken.ThrowIfCancellationRequested();
             }
 
-            return new DnsCacheEntry { HostName = "nas.home.arpa", Source = "DNS" };
+            return new DnsCacheEntry { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "nas.home.arpa", Source = "DNS" };
         }
     }
 }

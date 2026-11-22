@@ -283,7 +283,7 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
     public async Task EnrichFilesAsync_WhenForceResolveOnlyFindsRegistryOwner_KeepsTheReverseDnsName()
     {
         // Arrange
-        var resolver = new ScriptedIpResolver { ["10.0.0.5"] = new DnsCacheEntry { HostName = "Example Org", Source = "RDAP" } };
+        var resolver = new ScriptedIpResolver { ["10.0.0.5"] = new DnsCacheEntry { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "Example Org", Source = "RDAP" } };
         var options = Options(forceResolve: true);
 
         // Act
@@ -626,10 +626,10 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
     private static Dictionary<string, DnsCacheEntry> Cache(params (string Ip, string HostName)[] entries) =>
         entries.ToDictionary(
             entry => entry.Ip,
-            entry => new DnsCacheEntry { HostName = entry.HostName, Source = entry.HostName.Length > 0 ? "DNS" : "None" },
+            entry => new DnsCacheEntry { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = entry.HostName, Source = entry.HostName.Length > 0 ? "DNS" : "None" },
             StringComparer.OrdinalIgnoreCase);
 
-    private static DnsCacheEntry Resolved(string hostName) => new() { HostName = hostName, Source = "DNS" };
+    private static DnsCacheEntry Resolved(string hostName) => new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = hostName, Source = "DNS" };
 
     // Answers the first lookup, then stops the run as a Ctrl+C would during the second one.
     private sealed class InterruptedIpResolver(CancellationTokenSource interruption) : IOfflineIpResolver
@@ -665,7 +665,7 @@ public sealed class OfflineAuditEnricherCacheResolutionTests : IDisposable
         {
             var ip = address.ToString();
             _resolvedAddresses.Add(ip);
-            var answer = _answers.TryGetValue(ip, out var known) ? known : new DnsCacheEntry { HostName = string.Empty, Source = "None" };
+            var answer = _answers.TryGetValue(ip, out var known) ? known : new DnsCacheEntry { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = string.Empty, Source = "None" };
             return Task.FromResult(answer);
         }
     }

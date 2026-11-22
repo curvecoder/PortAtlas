@@ -42,9 +42,9 @@ public static class OutputFilePathResolver
     /// </summary>
     /// <param name="template">The raw path template containing zero or more placeholder tokens.</param>
     /// <param name="machineName">The target machine or server name (defaults to Environment.MachineName).</param>
-    /// <param name="nowUtc">The reference UTC time for date and timestamp resolution (defaults to DateTime.UtcNow).</param>
+    /// <param name="timeProvider">Clock that gives the date and time of the {Date} and {Timestamp} tokens; the system clock by default.</param>
     /// <returns>The resolved file path with all tokens evaluated and sanitized.</returns>
-    public static string Resolve(string template, string? machineName = null, DateTime? nowUtc = null)
+    public static string Resolve(string template, string? machineName = null, TimeProvider? timeProvider = null)
     {
         if (string.IsNullOrWhiteSpace(template))
         {
@@ -54,7 +54,7 @@ public static class OutputFilePathResolver
         var effectiveMachineName = string.IsNullOrWhiteSpace(machineName) ? Environment.MachineName : machineName;
         var sanitizedMachineName = SanitizeForFileName(effectiveMachineName);
 
-        var effectiveNowUtc = nowUtc ?? DateTime.UtcNow;
+        var effectiveNowUtc = (timeProvider ?? TimeProvider.System).GetUtcNow().UtcDateTime;
         // The Gregorian calendar whatever the culture of the account (th-TH counts years from 543 BC): the names must sort
         // and read the same on every server of the audit.
         var formattedDate = effectiveNowUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

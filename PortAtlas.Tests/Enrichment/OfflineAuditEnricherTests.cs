@@ -44,7 +44,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["10.0.0.5"] = new() { HostName = "SRV-TARGET-05", Source = "DNS" }
+            ["10.0.0.5"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "SRV-TARGET-05", Source = "DNS" }
         };
 
         var enricher = new OfflineAuditEnricher();
@@ -83,7 +83,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["10.0.0.5"] = new() { HostName = "CACHE-NAME", Source = "DNS" }
+            ["10.0.0.5"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "CACHE-NAME", Source = "DNS" }
         };
 
         var enricher = new OfflineAuditEnricher();
@@ -115,7 +115,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["10.0.0.5"] = new() { HostName = "OVERWRITTEN-NAME", Source = "DNS" }
+            ["10.0.0.5"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "OVERWRITTEN-NAME", Source = "DNS" }
         };
 
         var enricher = new OfflineAuditEnricher();
@@ -147,7 +147,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["10.0.0.5"] = new() { HostName = "INPLACE-NAME", Source = "DNS" }
+            ["10.0.0.5"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "INPLACE-NAME", Source = "DNS" }
         };
 
         var enricher = new OfflineAuditEnricher();
@@ -180,7 +180,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+            ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
         var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
 
@@ -225,7 +225,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         File.CreateSymbolicLink(csvPath, linked);
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+            ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
         var options = new OfflineAuditEnrichmentOptions { InPlace = true, ForceResolve = false, Isolated = true };
 
@@ -246,7 +246,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         await File.WriteAllTextAsync(csvPath, "FirstSeenUtc,RemoteIp,RemoteHostName\r\n2026-11-01T08:00:00Z,192.168.1.30,\r\n", Encoding.UTF8);
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+            ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
         var options = new OfflineAuditEnrichmentOptions { InPlace = inPlace, Isolated = true };
 
@@ -269,7 +269,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
         await File.WriteAllTextAsync(path, content);
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["192.168.1.30"] = new() { HostName = "pbs.home.arpa", Source = "DNS" }
+            ["192.168.1.30"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pbs.home.arpa", Source = "DNS" }
         };
         var options = new OfflineAuditEnrichmentOptions { InPlace = true, Isolated = true };
 
@@ -307,7 +307,7 @@ public sealed class OfflineAuditEnricherTests : IDisposable
 
         var cache = new Dictionary<string, DnsCacheEntry>(StringComparer.OrdinalIgnoreCase)
         {
-            ["10.0.0.8"] = new() { HostName = "NDJSON-SERVER", Source = "DNS" }
+            ["10.0.0.8"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "NDJSON-SERVER", Source = "DNS" }
         };
 
         var enricher = new OfflineAuditEnricher();

@@ -3,8 +3,11 @@ namespace PortAtlas.Core.Resolution;
 /// <summary>
 /// Consolidates multiple DNS cache sources into a single deduplicated mapping, arbitrating conflicting hostnames and tracking anomalies.
 /// </summary>
-public sealed class DnsCacheConsolidator
+/// <param name="timeProvider">Clock that dates the undated entries of the cache files read; the system clock by default.</param>
+public sealed class DnsCacheConsolidator(TimeProvider? timeProvider = null)
 {
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
+
     /// <summary>
     /// Merges multiple DNS cache dictionaries into a consolidated report.
     /// </summary>
@@ -64,7 +67,7 @@ public sealed class DnsCacheConsolidator
                 continue;
             }
 
-            var store = new PersistentDnsCacheStore(path);
+            var store = new PersistentDnsCacheStore(path, _timeProvider);
             var loaded = store.Load();
             caches.Add(loaded);
         }

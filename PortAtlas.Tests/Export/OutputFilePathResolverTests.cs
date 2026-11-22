@@ -1,5 +1,6 @@
 using System.Globalization;
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Export;
 using Xunit;
 
@@ -46,7 +47,7 @@ public sealed class OutputFilePathResolverTests
     {
         const string template = "audit_{Date}.csv";
         var fixedDate = new DateTime(2026, 10, 24, 14, 30, 45, DateTimeKind.Utc);
-        var resolved = OutputFilePathResolver.Resolve(template, nowUtc: fixedDate);
+        var resolved = OutputFilePathResolver.Resolve(template, timeProvider: new FakeTimeProvider(new DateTimeOffset(fixedDate)));
         resolved.Should().Be("audit_2026-10-24.csv");
     }
 
@@ -55,7 +56,7 @@ public sealed class OutputFilePathResolverTests
     {
         const string template = "audit_{Timestamp}.csv";
         var fixedDate = new DateTime(2026, 10, 24, 14, 30, 45, DateTimeKind.Utc);
-        var resolved = OutputFilePathResolver.Resolve(template, nowUtc: fixedDate);
+        var resolved = OutputFilePathResolver.Resolve(template, timeProvider: new FakeTimeProvider(new DateTimeOffset(fixedDate)));
         resolved.Should().Be("audit_20261024_143045.csv");
     }
 
@@ -70,7 +71,7 @@ public sealed class OutputFilePathResolverTests
         try
         {
             // Act
-            var resolved = OutputFilePathResolver.Resolve("audit_{Date}_{Timestamp}.csv", nowUtc: new DateTime(2026, 11, 17, 8, 30, 5, DateTimeKind.Utc));
+            var resolved = OutputFilePathResolver.Resolve("audit_{Date}_{Timestamp}.csv", timeProvider: new FakeTimeProvider(new DateTimeOffset(2026, 11, 17, 8, 30, 5, TimeSpan.Zero)));
 
             // Assert
             resolved.Should().Be("audit_2026-11-17_20261117_083005.csv");
@@ -95,7 +96,7 @@ public sealed class OutputFilePathResolverTests
     {
         const string template = @"C:\Logs\{ServerName}\audit_{Date}.csv";
         var fixedDate = new DateTime(2026, 10, 24, 8, 0, 0, DateTimeKind.Utc);
-        var resolved = OutputFilePathResolver.Resolve(template, machineName: "SRV-01", nowUtc: fixedDate);
+        var resolved = OutputFilePathResolver.Resolve(template, machineName: "SRV-01", timeProvider: new FakeTimeProvider(new DateTimeOffset(fixedDate)));
         resolved.Should().Be(@"C:\Logs\SRV-01\audit_2026-10-24.csv");
     }
 
@@ -104,7 +105,7 @@ public sealed class OutputFilePathResolverTests
     {
         const string template = "export_{servername}_{date}_{TIMESTAMP}.html";
         var fixedDate = new DateTime(2026, 10, 24, 9, 15, 30, DateTimeKind.Utc);
-        var resolved = OutputFilePathResolver.Resolve(template, machineName: "WEB-01", nowUtc: fixedDate);
+        var resolved = OutputFilePathResolver.Resolve(template, machineName: "WEB-01", timeProvider: new FakeTimeProvider(new DateTimeOffset(fixedDate)));
         resolved.Should().Be("export_WEB-01_2026-10-24_20261024_091530.html");
     }
 }

@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Mono.Cecil;
 using NetArchTest.Rules;
 using PortAtlas.Core.Models;
 using Xunit;
@@ -21,6 +22,32 @@ public sealed class ArchitectureTests
 
         // Assert
         result.IsSuccessful.Should().BeTrue();
+    }
+
+    // Read from the IL rather than the sources: a call hidden in a lambda, an iterator or a property initializer is
+    // found as well, in the code the compiler actually emits. Under coverage, Coverlet adds its own tracker type to the
+    // assembly, which reads the clock: only the types of the project are inspected.
+    [Fact]
+    public void CoreAssembly_WhenInspectingItsCalls_ReadsTheClockOnlyThroughTimeProvider()
+    {
+        // Arrange
+        string[] clockTypes = ["System.DateTime", "System.DateTimeOffset"];
+        string[] clockGetters = ["get_Now", "get_UtcNow", "get_Today"];
+        using var module = ModuleDefinition.ReadModule(typeof(NetworkAuditEntry).Assembly.Location);
+
+        // Act
+        var callers = module.GetTypes()
+            .Where(type => type.FullName.StartsWith("PortAtlas.", StringComparison.Ordinal))
+            .SelectMany(type => type.Methods)
+            .Where(method => method.HasBody && method.Body.Instructions.Any(instruction =>
+                instruction.Operand is MethodReference called &&
+                clockTypes.Contains(called.DeclaringType.FullName) &&
+                clockGetters.Contains(called.Name)))
+            .Select(method => method.FullName)
+            .ToList();
+
+        // Assert
+        callers.Should().BeEmpty("the core reads the time through an injected TimeProvider, so that tests can set it");
     }
 
     [Fact]

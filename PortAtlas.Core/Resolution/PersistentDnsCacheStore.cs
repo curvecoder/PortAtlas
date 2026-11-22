@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using FileForge.IO;
 
 namespace PortAtlas.Core.Resolution;
@@ -8,9 +9,17 @@ namespace PortAtlas.Core.Resolution;
 /// Persistence manager storing reverse DNS and IP organization cache records into a JSON file.
 /// </summary>
 /// <param name="filePath">Target JSON cache file path.</param>
-public sealed class PersistentDnsCacheStore(string filePath)
+public sealed class PersistentDnsCacheStore(string filePath, TimeProvider? timeProvider = null)
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    // ResolvedAtUtc is required of the code that builds an entry, not of the file: an entry written without it, by
+    // hand or by an older version, is kept and dated when it is read, as the flat format is.
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        TypeInfoResolver = new DefaultJsonTypeInfoResolver { Modifiers = { ReadEveryEntryPropertyAsOptional } }
+    };
+
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
     private readonly string _filePath = filePath ?? throw new ArgumentNullException(nameof(filePath));
     private readonly object _syncLock = new();
 
@@ -69,7 +78,7 @@ public sealed class PersistentDnsCacheStore(string filePath)
     }
 
     // Returns null when the root is not an object: the file holds no cache that this version can read.
-    private static Dictionary<string, DnsCacheEntry>? ReadEntries(string json)
+    private Dictionary<string, DnsCacheEntry>? ReadEntries(string json)
     {
         using var doc = JsonDocument.Parse(json);
         if (doc.RootElement.ValueKind != JsonValueKind.Object)
@@ -91,7 +100,7 @@ public sealed class PersistentDnsCacheStore(string filePath)
                     HostName = name,
                     Organization = name.Contains(' ') ? name : null,
                     Source = name.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(name) ? "RDAP" : "None"),
-                    ResolvedAtUtc = DateTimeOffset.UtcNow
+                    ResolvedAtUtc = _timeProvider.GetUtcNow()
                 };
             }
             else if (prop.Value.ValueKind == JsonValueKind.Object &&
@@ -104,17 +113,32 @@ public sealed class PersistentDnsCacheStore(string filePath)
         return result;
     }
 
+    private static void ReadEveryEntryPropertyAsOptional(JsonTypeInfo typeInfo)
+    {
+        if (typeInfo.Type != typeof(DnsCacheEntry))
+        {
+            return;
+        }
+
+        foreach (var property in typeInfo.Properties)
+        {
+            property.IsRequired = false;
+        }
+    }
+
     // An entry edited by hand or written by another version can hold a value of the wrong type: only that entry is
     // dropped, and its address is resolved again, instead of losing the whole cache. A JSON null is accepted by the
     // deserializer for the non-nullable HostName and Source, so it is rejected here.
-    private static bool TryReadStructuredEntry(JsonElement element, [NotNullWhen(true)] out DnsCacheEntry? entry)
+    private bool TryReadStructuredEntry(JsonElement element, [NotNullWhen(true)] out DnsCacheEntry? entry)
     {
         try
         {
             var read = element.Deserialize<DnsCacheEntry>(JsonOptions);
             if (read is { HostName: not null, Source: not null })
             {
-                entry = read;
+                entry = element.TryGetProperty(nameof(DnsCacheEntry.ResolvedAtUtc), out _)
+                    ? read
+                    : read with { ResolvedAtUtc = _timeProvider.GetUtcNow() };
                 return true;
             }
         }
@@ -174,7 +198,8 @@ public sealed class PersistentDnsCacheStore(string filePath)
             kvp => new DnsCacheEntry
             {
                 HostName = kvp.Value,
-                Source = kvp.Value.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(kvp.Value) ? "RDAP" : "None")
+                Source = kvp.Value.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(kvp.Value) ? "RDAP" : "None"),
+                ResolvedAtUtc = _timeProvider.GetUtcNow()
             },
             StringComparer.OrdinalIgnoreCase);
 
@@ -219,7 +244,8 @@ public sealed class PersistentDnsCacheStore(string filePath)
             kvp => new DnsCacheEntry
             {
                 HostName = kvp.Value,
-                Source = kvp.Value.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(kvp.Value) ? "RDAP" : "None")
+                Source = kvp.Value.Contains('.') ? "DNS" : (!string.IsNullOrWhiteSpace(kvp.Value) ? "RDAP" : "None"),
+                ResolvedAtUtc = _timeProvider.GetUtcNow()
             },
             StringComparer.OrdinalIgnoreCase);
 

@@ -2,6 +2,7 @@ using System.Security.AccessControl;
 using System.Security.Principal;
 using System.Text;
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Resolution;
 using Xunit;
 
@@ -73,8 +74,8 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
 
     private static Dictionary<string, DnsCacheEntry> TwoEntryCache() => new(StringComparer.OrdinalIgnoreCase)
     {
-        ["192.168.1.10"] = new() { HostName = "nas.home.arpa", Source = "DNS" },
-        ["192.168.1.20"] = new() { HostName = "pve.home.arpa", Source = "DNS" }
+        ["192.168.1.10"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "nas.home.arpa", Source = "DNS" },
+        ["192.168.1.20"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pve.home.arpa", Source = "DNS" }
     };
 
     [Fact]
@@ -101,11 +102,13 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
         {
             ["140.82.121.4"] = new()
             {
+                ResolvedAtUtc = DateTimeOffset.UtcNow,
                 HostName = "lb-140-82-121-4-iad.github.com",
                 Source = "DNS"
             },
             ["52.123.242.181"] = new()
             {
+                ResolvedAtUtc = DateTimeOffset.UtcNow,
                 HostName = "Microsoft Corporation",
                 Organization = "Microsoft Corporation",
                 Country = "US",
@@ -114,6 +117,7 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
             },
             ["192.0.2.1"] = new()
             {
+                ResolvedAtUtc = DateTimeOffset.UtcNow,
                 HostName = "",
                 Source = "None"
             }
@@ -160,6 +164,40 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
         loaded["52.123.242.181"].HostName.Should().Be("Microsoft Corporation");
         loaded["8.8.8.8"].HostName.Should().Be("dns.google");
         loaded["10.0.0.1"].HostName.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Load_WhenLegacyStringJsonFormatProvided_DatesTheEntriesWithTheGivenClock()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDir, "legacy_dated_cache.json");
+        await File.WriteAllTextAsync(filePath, """{ "8.8.8.8": "dns.google" }""");
+        var loadTime = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var store = new PersistentDnsCacheStore(filePath, new FakeTimeProvider(loadTime));
+
+        // Act
+        var loaded = store.Load();
+
+        // Assert
+        loaded["8.8.8.8"].ResolvedAtUtc.Should().Be(loadTime);
+    }
+
+    [Fact]
+    public async Task Load_WhenAnEntryHasNoResolutionTime_KeepsItDatedWithTheGivenClock()
+    {
+        // Arrange
+        var filePath = Path.Combine(_testDir, "undated_cache.json");
+        await File.WriteAllTextAsync(filePath, """{ "192.168.1.10": { "HostName": "nas.home.arpa", "Source": "DNS" } }""");
+        var loadTime = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var store = new PersistentDnsCacheStore(filePath, new FakeTimeProvider(loadTime));
+
+        // Act
+        var loaded = store.Load();
+
+        // Assert
+        loaded.Should().ContainKey("192.168.1.10");
+        loaded["192.168.1.10"].HostName.Should().Be("nas.home.arpa");
+        loaded["192.168.1.10"].ResolvedAtUtc.Should().Be(loadTime);
     }
 
     [Fact]
@@ -362,6 +400,6 @@ public sealed class PersistentDnsCacheStoreTests : IAsyncLifetime
     private static Dictionary<string, DnsCacheEntry> PiHoleEntry() =>
         new(StringComparer.OrdinalIgnoreCase)
         {
-            ["192.168.1.2"] = new() { HostName = "pihole.home.arpa", Source = "DNS" }
+            ["192.168.1.2"] = new() { ResolvedAtUtc = DateTimeOffset.UtcNow, HostName = "pihole.home.arpa", Source = "DNS" }
         };
 }

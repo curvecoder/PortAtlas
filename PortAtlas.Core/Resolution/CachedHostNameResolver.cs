@@ -158,7 +158,7 @@ public sealed class CachedHostNameResolver(
     {
         if (!_cache.TryGetValue(address, out var cached))
         {
-            entry = new DnsCacheEntry();
+            entry = new DnsCacheEntry { ResolvedAtUtc = _timeProvider.GetUtcNow() };
             return false;
         }
 
@@ -193,7 +193,7 @@ public sealed class CachedHostNameResolver(
         if (IsFastTrackAddress(address, out var fastHost))
         {
             var source = IPAddress.IsLoopback(address) ? "Local" : ExcludedSource;
-            entry = new DnsCacheEntry { HostName = fastHost, Source = source };
+            entry = new DnsCacheEntry { HostName = fastHost, Source = source, ResolvedAtUtc = _timeProvider.GetUtcNow() };
             return true;
         }
 

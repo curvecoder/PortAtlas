@@ -11,7 +11,7 @@ namespace PortAtlas.Core.Export;
 /// <summary>
 /// Default implementation of <see cref="IAuditCsvHistoryParser"/> that parses historical RFC 4180 audit CSV records.
 /// </summary>
-public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
+public sealed class AuditCsvHistoryParser(TimeProvider? timeProvider = null) : IAuditCsvHistoryParser
 {
     private static readonly Dictionary<string, int> StandardPositionalColumnMap = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -41,6 +41,8 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
     /// Columns whose name tells the header of an audit log from a data row, and from the header of another file.
     /// </summary>
     internal static readonly IReadOnlyList<string> HeaderMarkerColumns = [nameof(AuditCsvColumn.ServerName), nameof(AuditCsvColumn.LocalPort)];
+
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     private static readonly HashSet<string> AuditColumnNames = new(Enum.GetNames<AuditCsvColumn>(), StringComparer.OrdinalIgnoreCase);
 
@@ -255,7 +257,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
         return map;
     }
 
-    private static NetworkAuditEntry? ConvertFieldsToAuditEntry(
+    private NetworkAuditEntry? ConvertFieldsToAuditEntry(
         IReadOnlyList<string> fields,
         Dictionary<string, int> columnMap)
     {
@@ -287,7 +289,7 @@ public sealed class AuditCsvHistoryParser : IAuditCsvHistoryParser
 
         var firstSeen = TryParseTimestamp(firstSeenStr, out var parsedFirst)
             ? parsedFirst
-            : DateTimeOffset.UtcNow;
+            : _timeProvider.GetUtcNow();
 
         var lastSeen = TryParseTimestamp(lastSeenStr, out var parsedLast)
             ? parsedLast

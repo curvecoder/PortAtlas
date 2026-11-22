@@ -1,4 +1,5 @@
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Resolution;
 using Xunit;
 
@@ -6,6 +7,29 @@ namespace PortAtlas.Tests.Resolution;
 
 public sealed class DnsCacheConsolidatorTests
 {
+    [Fact]
+    public async Task ConsolidateFiles_WhenACacheFileHasUndatedEntries_DatesThemWithTheGivenClock()
+    {
+        // Arrange
+        var path = Path.Combine(Path.GetTempPath(), "PortAtlas_Consolidate_" + Guid.NewGuid().ToString("N") + ".json");
+        await File.WriteAllTextAsync(path, """{ "8.8.8.8": "dns.google" }""");
+        var loadTime = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var consolidator = new DnsCacheConsolidator(new FakeTimeProvider(loadTime));
+
+        try
+        {
+            // Act
+            var report = consolidator.ConsolidateFiles([path]);
+
+            // Assert
+            report.MergedEntries["8.8.8.8"].ResolvedAtUtc.Should().Be(loadTime);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void Consolidate_WhenSingleCacheProvided_ReturnsIdenticalEntries()
     {

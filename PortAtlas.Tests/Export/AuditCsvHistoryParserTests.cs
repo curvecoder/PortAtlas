@@ -1,5 +1,6 @@
 using System.Net;
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Export;
 using PortAtlas.Core.Models;
 using ProcessForge.Models;
@@ -87,6 +88,28 @@ public sealed class AuditCsvHistoryParserTests : IDisposable
 
         // Assert
         entries.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task ParseHistoryAsync_WhenARowHasNoTimestamps_DatesItWithTheGivenClock()
+    {
+        // Arrange
+        var readTime = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var parser = new AuditCsvHistoryParser(new FakeTimeProvider(readTime));
+        var csvPath = Path.Combine(_tempDirectory, "undated.csv");
+        var csvContent = """
+            FirstSeenUtc,LastSeenUtc,ObservationCount,ServerName,Protocol,LocalPort,RemoteIp,RemotePort,ProcessName
+            ,,3,SRV-01,Tcp,54321,192.168.1.50,443,curl
+            """;
+        await File.WriteAllTextAsync(csvPath, csvContent);
+
+        // Act
+        var entries = await parser.ParseHistoryAsync(csvPath, maxRows: null, delimiter: ',');
+
+        // Assert
+        var entry = entries.Should().ContainSingle().Subject;
+        entry.FirstSeenUtc.Should().Be(readTime);
+        entry.LastSeenUtc.Should().Be(readTime);
     }
 
     [Fact]

@@ -8,7 +8,8 @@ namespace PortAtlas.Core.Enrichment;
 /// the meaning they have for the audit: neither kind of address is sent to a DNS or RDAP server.
 /// </summary>
 /// <param name="options">Enrichment options holding the aliases and the excluded networks.</param>
-internal sealed class ConfiguredAddressNamingPolicy(OfflineAuditEnrichmentOptions options)
+/// <param name="timeProvider">Clock that dates the alias entries.</param>
+internal sealed class ConfiguredAddressNamingPolicy(OfflineAuditEnrichmentOptions options, TimeProvider timeProvider)
 {
     // The audit never caches these names either: an alias written to the master cache would keep naming the address
     // after its removal from the configuration.
@@ -38,7 +39,7 @@ internal sealed class ConfiguredAddressNamingPolicy(OfflineAuditEnrichmentOption
         {
             if (IPAddress.TryParse(ip, out var address) && _aliases.TryFind(address, out var alias))
             {
-                named[ip] = new DnsCacheEntry { HostName = alias.HostName, Source = AliasSource };
+                named[ip] = new DnsCacheEntry { HostName = alias.HostName, Source = AliasSource, ResolvedAtUtc = timeProvider.GetUtcNow() };
             }
         }
 

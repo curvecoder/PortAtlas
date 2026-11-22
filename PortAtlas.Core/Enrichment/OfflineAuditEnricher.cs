@@ -15,10 +15,12 @@ namespace PortAtlas.Core.Enrichment;
 /// <param name="consolidator">Consolidator responsible for merging multi-source DNS caches.</param>
 /// <param name="offlineResolver">Resolver for executing throttled online DNS and RDAP resolution.</param>
 /// <param name="logger">Optional progress reporting callback.</param>
+/// <param name="timeProvider">Clock that dates the alias entries and the undated cache entries; the system clock by default.</param>
 public sealed class OfflineAuditEnricher(
     DnsCacheConsolidator? consolidator = null,
     IOfflineIpResolver? offlineResolver = null,
-    Action<string>? logger = null)
+    Action<string>? logger = null,
+    TimeProvider? timeProvider = null)
 {
     // The audit's default CsvDelimiter. The separator of each log is read from its first line, which may come from
     // another machine's configuration, so this one is kept only on a tie or when the first line gives no separator.
@@ -35,9 +37,10 @@ public sealed class OfflineAuditEnricher(
     private static readonly JsonNodeOptions CaseInsensitiveKeys = new() { PropertyNameCaseInsensitive = true };
     private const string RemoteHostNameKey = "remoteHostName";
 
-    private readonly DnsCacheConsolidator _consolidator = consolidator ?? new DnsCacheConsolidator();
+    private readonly DnsCacheConsolidator _consolidator = consolidator ?? new DnsCacheConsolidator(timeProvider);
     private readonly IOfflineIpResolver _offlineResolver = offlineResolver ?? new OfflineDnsResolver();
     private readonly Action<string>? _logger = logger;
+    private readonly TimeProvider _timeProvider = timeProvider ?? TimeProvider.System;
 
     /// <summary>
     /// Enriches audit files using in-memory or loaded DNS caches.
@@ -70,7 +73,7 @@ public sealed class OfflineAuditEnricher(
         // 1. Consolidate input caches
         var cacheReport = _consolidator.Consolidate(initialCaches, masterCache);
         var activeCache = new Dictionary<string, DnsCacheEntry>(cacheReport.MergedEntries, StringComparer.OrdinalIgnoreCase);
-        var namingPolicy = new ConfiguredAddressNamingPolicy(options);
+        var namingPolicy = new ConfiguredAddressNamingPolicy(options, _timeProvider);
 
         // 2. Scan audit files to identify missing IP addresses requiring resolution
         var distinctUnresolvedIps = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -209,13 +212,13 @@ public sealed class OfflineAuditEnricher(
             File.Exists(outputCacheFullPath) &&
             !cacheFiles.Contains(outputCacheFullPath, StringComparer.OrdinalIgnoreCase))
         {
-            masterCache = new PersistentDnsCacheStore(options.OutputCachePath).LoadOrThrow();
+            masterCache = new PersistentDnsCacheStore(options.OutputCachePath, _timeProvider).LoadOrThrow();
         }
 
         var loadedCaches = new List<IReadOnlyDictionary<string, DnsCacheEntry>>();
         foreach (var cachePath in cacheFiles)
         {
-            var store = new PersistentDnsCacheStore(cachePath);
+            var store = new PersistentDnsCacheStore(cachePath, _timeProvider);
             var isOutputCache = string.Equals(cachePath, outputCacheFullPath, StringComparison.OrdinalIgnoreCase);
             loadedCaches.Add(isOutputCache ? store.LoadOrThrow() : store.Load());
         }
@@ -265,7 +268,7 @@ public sealed class OfflineAuditEnricher(
         }
 
         // Not cancellable: this save also runs after a cancellation, whose token is already cancelled.
-        var store = new PersistentDnsCacheStore(outputCachePath);
+        var store = new PersistentDnsCacheStore(outputCachePath, _timeProvider);
         var saved = await store.SaveAsync(activeCache, CancellationToken.None).ConfigureAwait(false);
         _logger?.Invoke(saved
             ? $"Consolidated cache successfully saved to: {outputCachePath}"

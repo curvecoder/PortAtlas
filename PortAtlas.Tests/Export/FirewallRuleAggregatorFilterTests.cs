@@ -1,5 +1,7 @@
 using AwesomeAssertions;
+using Microsoft.Extensions.Time.Testing;
 using PortAtlas.Core.Export;
+using PortAtlas.Core.Models;
 using SocketForge.Models;
 using TopologyForge.Filtering;
 using TopologyForge.Models;
@@ -13,6 +15,25 @@ namespace PortAtlas.Tests.Export;
 /// </summary>
 public sealed class FirewallRuleAggregatorFilterTests
 {
+    [Fact]
+    public void Aggregate_WhenActiveWithinDaysIsSet_MeasuresTheWindowFromTheGivenClock()
+    {
+        // Arrange
+        var now = new DateTimeOffset(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
+        var aggregator = new FirewallRuleAggregator(new FakeTimeProvider(now));
+        NetworkAuditEntry[] entries =
+        [
+            CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51000, "192.168.1.50", 443, firstSeen: now.AddDays(-3), lastSeen: now.AddDays(-2)),
+            CreateSampleEntry(SocketFlowDirection.Outbound, "192.168.1.20", 51001, "192.168.1.53", 53, firstSeen: now.AddDays(-10), lastSeen: now.AddDays(-9))
+        ];
+
+        // Act
+        var rules = aggregator.Aggregate(entries, new FirewallRuleExportOptions { ActiveWithinDays = 7 });
+
+        // Assert
+        rules.Should().ContainSingle().Which.DestinationIp.Should().Be("192.168.1.50");
+    }
+
     [Fact]
     public void Aggregate_WhenDestinationPortIsEphemeralAndExcludeEphemeralEnabled_FiltersRuleOut()
     {
