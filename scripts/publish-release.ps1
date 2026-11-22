@@ -24,6 +24,27 @@ if ($Tag -match "-(preview|beta|alpha|rc)") {
 
 $version = $Tag.TrimStart('v')
 
+# Windows can lock an executable for a while after it has run (the smoke test) or been written (antivirus scan), and
+# Compress-Archive then stops on an access error: the archive is retried until the lock is released.
+function New-ReleaseArchive {
+    param ([string]$SourceDir, [string]$ArchivePath)
+
+    for ($attempt = 1; ; $attempt++) {
+        try {
+            Compress-Archive -Path "$SourceDir\*" -DestinationPath $ArchivePath -CompressionLevel Optimal -Force
+            return
+        }
+        catch [System.IO.IOException], [System.UnauthorizedAccessException] {
+            if ($attempt -ge 10) {
+                throw
+            }
+
+            Write-Host "  $SourceDir is locked ($($_.Exception.Message)); retrying in 5 seconds..." -ForegroundColor DarkYellow
+            Start-Sleep -Seconds 5
+        }
+    }
+}
+
 # Release notes are written by hand for each version, so that a release never ships the notes of a previous one.
 $notesPath = if ([string]::IsNullOrWhiteSpace($NotesFile)) { "./release-notes/$Tag.md" } else { $NotesFile }
 if (-not (Test-Path $notesPath)) {
@@ -67,7 +88,7 @@ Copy-Item "LICENSE" (Join-Path $winPublishDir "LICENSE") -Force
 
 $winZip = Join-Path $DistDir "PortAtlas-$version-win-x64.zip"
 Write-Host "Creating $winZip ..." -ForegroundColor Yellow
-Compress-Archive -Path "$winPublishDir\*" -DestinationPath $winZip -CompressionLevel Optimal
+New-ReleaseArchive -SourceDir $winPublishDir -ArchivePath $winZip
 
 $winStandaloneExe = Join-Path $DistDir "PortAtlas-$version-win-x64.exe"
 Copy-Item (Join-Path $winPublishDir "PortAtlas.exe") $winStandaloneExe -Force
@@ -100,7 +121,7 @@ tar -czf $linuxTar -C $linuxPublishDir .
 
 $linuxZip = Join-Path $DistDir "PortAtlas-$version-linux-x64.zip"
 Write-Host "Creating $linuxZip ..." -ForegroundColor Yellow
-Compress-Archive -Path "$linuxPublishDir\*" -DestinationPath $linuxZip -CompressionLevel Optimal
+New-ReleaseArchive -SourceDir $linuxPublishDir -ArchivePath $linuxZip
 
 $linuxStandaloneBin = Join-Path $DistDir "PortAtlas-$version-linux-x64"
 Copy-Item (Join-Path $linuxPublishDir "PortAtlas") $linuxStandaloneBin -Force
@@ -134,7 +155,7 @@ Copy-Item "LICENSE" (Join-Path $guiPublishDir "LICENSE") -Force
 
 $guiZip = Join-Path $DistDir "PortAtlas.Gui-$version-win-x64.zip"
 Write-Host "Creating $guiZip ..." -ForegroundColor Yellow
-Compress-Archive -Path "$guiPublishDir\*" -DestinationPath $guiZip -CompressionLevel Optimal
+New-ReleaseArchive -SourceDir $guiPublishDir -ArchivePath $guiZip
 
 $guiStandaloneExe = Join-Path $DistDir "PortAtlas.Gui-$version-win-x64.exe"
 Copy-Item (Join-Path $guiPublishDir "PortAtlas.Gui.exe") $guiStandaloneExe -Force
