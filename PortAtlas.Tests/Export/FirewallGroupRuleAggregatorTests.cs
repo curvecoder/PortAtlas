@@ -62,6 +62,32 @@ public sealed class FirewallGroupRuleAggregatorTests
     }
 
     [Fact]
+    public void Aggregate_WhenTheRulesComeInAnyOrder_NumbersTheRowsInTheOrderOfTheMatrix()
+    {
+        // Arrange
+        var groups = AddressGroupDirectoryTests.Create(("lab", "192.168.10.0/24"), ("servers", "192.168.1.0/24"));
+        FirewallRuleItem[] sorted =
+        [
+            Outbound("192.168.1.50", "nas", "192.168.10.21", "pc-21", 22, "ssh"),
+            Outbound("192.168.10.21", "pc-21", "192.168.1.50", "nas", 53, "dnsmasq", protocol: "UDP"),
+            Outbound("192.168.10.21", "pc-21", "192.168.1.50", "nas", 443, "curl"),
+            Outbound("192.168.10.22", "pc-22", "192.168.1.51", "git", 443, "git")
+        ];
+        FirewallRuleItem[] shuffled = [sorted[3], sorted[1], sorted[0], sorted[2]];
+        var aggregator = new FirewallGroupRuleAggregator();
+
+        // Act
+        var rows = aggregator.Aggregate(shuffled, groups);
+
+        // Assert
+        rows.Should().BeEquivalentTo(aggregator.Aggregate(sorted, groups), options => options.WithStrictOrdering());
+        rows.Select(row => (row.GroupRuleId, row.SourceGroup, row.DestinationGroup, row.DestinationPort, row.RuleCount)).Should().Equal(
+            ("GROUP-001", "lab", "servers", 53, 1),
+            ("GROUP-002", "lab", "servers", 443, 2),
+            ("GROUP-003", "servers", "lab", 22, 1));
+    }
+
+    [Fact]
     public void Aggregate_WhenARuleIsAListeningSocket_WritesAnyAsItsSource()
     {
         // Arrange
