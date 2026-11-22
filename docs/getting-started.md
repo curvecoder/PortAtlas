@@ -69,6 +69,10 @@ Linux:
 
 The command prints `Topology map generated: …` with the number of servers and flows. Open `first_map.html` in a browser: your machine sits in the map with the servers it talked to. The page works offline.
 
+For comparison, here is the map of the [example homelab](examples/homelab/README.md), whose three server logs are read together by `PortAtlas map -i logs --html homelab.html`. Each box is a machine with the ports it offers; a blue arrow is a flow the machine opened, a green arrow a flow it accepted, labelled with the port and protocol.
+
+![Topology map of the example homelab: laptop, nas, pve, pihole and their flows](../assets/homelab-map-layered.png)
+
 ## Next steps
 
 - Run the audit permanently: [Run PortAtlas as a service](how-to/run-as-a-service.md).

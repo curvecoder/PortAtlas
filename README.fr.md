@@ -53,17 +53,33 @@ Auditer la machine avec le tableau de bord (en administrateur sous Windows, avec
 PortAtlas audit
 ```
 
+Le tableau de bord montré plus haut s'ouvre et liste chaque nouveau flux ; `Q` arrête l'audit et laisse les flux dans `portatlas_audit.csv`.
+
 Dessiner une carte à partir des journaux de plusieurs serveurs :
 
 ```bash
 PortAtlas map -i "collected/audit_*.csv" --html homelab.html
 ```
 
-Exporter en matrice de règles de pare-feu les flux internes vus au moins cinq fois :
+La commande affiche `Topology map generated: <path> (<servers> servers, <flows> flows)`. `homelab.html` s'ouvre hors ligne dans un navigateur, comme sur la seconde image plus haut.
+
+Exporter en matrice de règles de pare-feu les flux internes vus au moins cinq fois. Lancée dans le dossier du [homelab d'exemple](docs/examples/homelab/README.fr.md), dont les journaux sont dans `logs` :
 
 ```bash
-PortAtlas export rules -i collected -o rules.csv --zone internal --min-observations 5
+PortAtlas export rules -i logs -o rules.csv --zone internal --min-observations 5
 ```
+
+`rules.csv` contient une règle par source, destination, port et processus, par exemple :
+
+<!-- example-output: rules-readme/rules.csv -->
+
+| RuleId | Direction | SourceHost | DestinationHost | Protocol | DestinationPort | ObservationCount |
+| :--- | :--- | :--- | :--- | :--- | ---: | ---: |
+| RULE-002 | Inbound | laptop.home.arpa | nas | TCP | 445 | 240 |
+| RULE-004 | Inbound | laptop.home.arpa | pve | TCP | 8006 | 310 |
+| RULE-008 | Outbound | pve | nas.home.arpa | TCP | 873 | 96 |
+
+La session SSH ouverte une seule fois sur `nas` et les flux NTP et DNS sur TLS vers Internet sont écartés. Le [guide des règles de pare-feu](docs/how-to/export-firewall-rules.fr.md) montre ce que change chaque option.
 
 ## Documentation
 

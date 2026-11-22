@@ -173,6 +173,10 @@ Read by `audit` and `map`. Accepted values are compared without case.
 - `--edge-labels none`: unchecks *Show Ports*. The arrows lose their port labels and the flows of a server pair are merged into one arrow, with a head at each end that receives a flow. The server inspector still lists the ports.
 - `--drawio-edges pair`: one edge per server pair in the Draw.io diagram, with two heads when flows run both ways.
 
+The [example homelab](../examples/homelab/README.md) drawn by `PortAtlas map -i logs --html homelab.html --layout tree --routing bus`: the audited servers on the first row, the machines they talk to on the second, and one trunk per server and direction.
+
+![Map of the example homelab with the tree layout and bus routing](../../assets/homelab-map-tree-bus.png)
+
 ## audit
 
 Scans the TCP and UDP sockets of the machine at a fixed interval, attributes each socket to its process and writes one line per deduplicated flow in the CSV audit log. Runs until `Q`, `Ctrl+C` or `SIGTERM`.

@@ -13,5 +13,6 @@
   { "name": "input-pattern", "command": "export rules -i \"logs/p*.csv\" -o rules.csv" },
   { "name": "config-file", "command": "export rules -i logs -o rules.csv --config filters.json" },
   { "name": "config-override", "command": "export rules -i logs -o rules.csv --config filters.json --exclude-ports 123" },
-  { "name": "resolve", "command": "resolve -i logs/pihole.csv --cache dns_cache.json --cache-only" }
+  { "name": "resolve", "command": "resolve -i logs/pihole.csv --cache dns_cache.json --cache-only" },
+  { "name": "rules-readme", "command": "export rules -i logs -o rules.csv --zone internal --min-observations 5" }
 ]

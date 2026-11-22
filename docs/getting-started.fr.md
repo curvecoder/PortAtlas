@@ -69,6 +69,10 @@ Linux :
 
 La commande affiche `Topology map generated: …` avec le nombre de serveurs et de flux. Ouvrez `first_map.html` dans un navigateur : votre machine apparaît avec les serveurs auxquels elle a parlé. La page fonctionne hors ligne.
 
+À titre de comparaison, voici la carte du [homelab d'exemple](examples/homelab/README.fr.md), dont les journaux des trois serveurs sont lus ensemble par `PortAtlas map -i logs --html homelab.html`. Chaque boîte est une machine avec les ports qu'elle offre ; une flèche bleue est un flux que la machine a ouvert, une flèche verte un flux qu'elle a accepté, avec le port et le protocole.
+
+![Carte topologique du homelab d'exemple : laptop, nas, pve, pihole et leurs flux](../assets/homelab-map-layered.png)
+
 ## Et ensuite
 
 - Faire tourner l'audit en permanence : [Exécuter PortAtlas en service](how-to/run-as-a-service.fr.md).

@@ -173,6 +173,10 @@ Lues par `audit` et `map`. Les valeurs admises sont comparées sans tenir compte
 - `--edge-labels none` : décoche *Show Ports*. Les flèches perdent leurs étiquettes de ports et les flux d'une paire de serveurs sont fusionnés en une seule flèche, avec une pointe à chaque extrémité qui reçoit un flux. L'inspecteur du serveur liste toujours les ports.
 - `--drawio-edges pair` : une arête par paire de serveurs dans le diagramme Draw.io, avec deux pointes quand les flux vont dans les deux sens.
 
+Le [homelab d'exemple](../examples/homelab/README.fr.md) dessiné par `PortAtlas map -i logs --html homelab.html --layout tree --routing bus` : les serveurs audités sur la première rangée, les machines avec lesquelles ils échangent sur la seconde, et un tronc par serveur et par sens.
+
+![Carte du homelab d'exemple avec la disposition en arbre et le routage en bus](../../assets/homelab-map-tree-bus.png)
+
 ## audit
 
 Balaye à intervalle fixe les sockets TCP et UDP de la machine, rattache chaque socket à son processus et écrit une ligne par flux dédupliqué dans le journal CSV. Tourne jusqu'à `Q`, `Ctrl+C` ou `SIGTERM`.

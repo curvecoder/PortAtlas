@@ -53,17 +53,33 @@ Audit the machine with the terminal dashboard (as administrator on Windows, with
 PortAtlas audit
 ```
 
+The dashboard shown above opens and lists each new flow; `Q` stops the audit and leaves the flows in `portatlas_audit.csv`.
+
 Draw a map from the audit logs of several servers:
 
 ```bash
 PortAtlas map -i "collected/audit_*.csv" --html homelab.html
 ```
 
-Export the internal flows seen at least five times as a firewall rule matrix:
+The command prints `Topology map generated: <path> (<servers> servers, <flows> flows)`. `homelab.html` opens offline in a browser, as in the second picture above.
+
+Export the internal flows seen at least five times as a firewall rule matrix. Run in the folder of the [example homelab](docs/examples/homelab/README.md), whose logs are in `logs`:
 
 ```bash
-PortAtlas export rules -i collected -o rules.csv --zone internal --min-observations 5
+PortAtlas export rules -i logs -o rules.csv --zone internal --min-observations 5
 ```
+
+`rules.csv` holds one rule per source, destination, port and process, such as:
+
+<!-- example-output: rules-readme/rules.csv -->
+
+| RuleId | Direction | SourceHost | DestinationHost | Protocol | DestinationPort | ObservationCount |
+| :--- | :--- | :--- | :--- | :--- | ---: | ---: |
+| RULE-002 | Inbound | laptop.home.arpa | nas | TCP | 445 | 240 |
+| RULE-004 | Inbound | laptop.home.arpa | pve | TCP | 8006 | 310 |
+| RULE-008 | Outbound | pve | nas.home.arpa | TCP | 873 | 96 |
+
+The SSH session opened once on `nas` and the NTP and DNS over TLS flows to the Internet are left out. The [firewall rule guide](docs/how-to/export-firewall-rules.md) shows what each option changes.
 
 ## Documentation
 
