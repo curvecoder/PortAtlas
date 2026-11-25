@@ -86,6 +86,12 @@ public sealed record FirewallRuleExportOptions
     public char Delimiter { get; init; } = ',';
 
     /// <summary>
+    /// File format of every matrix written: CSV by default, or Markdown, where each file starts with an explanation of
+    /// the matrix and of its uses.
+    /// </summary>
+    public MatrixFileFormat Format { get; init; } = MatrixFileFormat.Csv;
+
+    /// <summary>
     /// Destination of the pair matrix (one row per source and destination address), written beside the detailed
     /// matrix; <see langword="null"/> skips it.
     /// </summary>

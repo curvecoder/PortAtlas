@@ -246,7 +246,8 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 
 | Option | Valeur | Défaut | Effet |
 | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `portatlas_rules.csv` | Fichier de la matrice ([colonnes](output-formats.fr.md#matrice-de-règles-de-pare-feu)) |
+| `-o`, `--output` | `<path>` | `portatlas_rules.csv`, `portatlas_rules.md` avec `--format markdown` | Fichier de la matrice ([colonnes](output-formats.fr.md#matrice-de-règles-de-pare-feu)) |
+| `--format` | `csv`, `markdown` | `csv` | Format de fichier de toutes les matrices de la passe ; `markdown` ouvre chaque fichier sur ce que contient la matrice et sur ses usages ([Matrices en Markdown](output-formats.fr.md#matrices-en-markdown)) |
 | `--pairs-output` | `<path>` | non écrite | Écrit aussi la matrice par paire, une ligne par source et destination ([colonnes](output-formats.fr.md#matrice-par-paire)) ; mêmes jetons que `--output` |
 | `--flows-output` | `<path>` | non écrite | Écrit aussi la matrice de flux, une ligne par flux, les deux bouts d'une connexion fusionnés ([colonnes](output-formats.fr.md#matrice-de-flux)) ; mêmes jetons que `--output` |
 | `--host-rules-output` | `<path>` | non écrite | Écrit aussi la matrice de règles par hôte, une règle sortante sur la source et une règle entrante sur la destination de chaque flux, pour les groupes de sécurité réseau ([colonnes](output-formats.fr.md#matrice-de-règles-par-hôte)) ; mêmes jetons que `--output` |
@@ -414,7 +415,7 @@ Clés de configuration lues : aucune.
 | `--dns-timeout-ms`, `--rdap-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
 | `--mask-server`, `--mask-ip`, `--obfuscate` | ✔ | | | | | | |
-| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output`, `--address-group` | | | ✔ | | | | |
+| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output`, `--address-group`, `--format` | | | ✔ | | | | |
 | `--cache`, `--output-cache`, `--in-place`, `--force-resolve`, `--rdap-delay-ms`, `--cache-only` | | | | | ✔ | | |
 
 `config init` accepte `--config` parce que l'option est globale, mais ne la lit pas.

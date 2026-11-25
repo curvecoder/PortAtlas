@@ -6,9 +6,9 @@ namespace PortAtlas.Core.Export;
 /// <summary>
 /// Formats host rule matrix rows into RFC 4180 compliant CSV lines.
 /// </summary>
-public sealed class FirewallHostRuleCsvFormatter
+public sealed class FirewallHostRuleCsvFormatter : IMatrixColumnLayout<FirewallHostRuleItem>
 {
-    private static readonly string[] ColumnNames =
+    private static readonly string[] Columns =
     [
         "HostRuleId",
         "Host",
@@ -29,26 +29,16 @@ public sealed class FirewallHostRuleCsvFormatter
         "FlowId"
     ];
 
-    /// <summary>
-    /// Builds the CSV header line.
-    /// </summary>
-    /// <param name="delimiter">Field delimiter character.</param>
-    /// <returns>Delimited header row string.</returns>
-    public string BuildHeader(char delimiter = ',') => string.Join(delimiter, ColumnNames);
+    /// <inheritdoc />
+    public IReadOnlyList<string> ColumnNames => Columns;
 
-    /// <summary>
-    /// Formats a host rule into an escaped, delimited CSV row.
-    /// </summary>
-    /// <param name="rule">Host rule to serialize.</param>
-    /// <param name="delimiter">Field delimiter character.</param>
-    /// <returns>Escaped CSV row string.</returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="rule"/> is null.</exception>
-    public string FormatRow(FirewallHostRuleItem rule, char delimiter = ',')
+    /// <inheritdoc />
+    public IReadOnlyList<string> FieldsOf(FirewallHostRuleItem rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
 
-        var values = new[]
-        {
+        return
+        [
             rule.HostRuleId,
             rule.Host,
             rule.HostIp,
@@ -66,7 +56,26 @@ public sealed class FirewallHostRuleCsvFormatter
             rule.FirstSeenUtc.ToString("o", CultureInfo.InvariantCulture),
             rule.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture),
             rule.FlowId
-        };
+        ];
+    }
+
+    /// <summary>
+    /// Builds the CSV header line.
+    /// </summary>
+    /// <param name="delimiter">Field delimiter character.</param>
+    /// <returns>Delimited header row string.</returns>
+    public string BuildHeader(char delimiter = ',') => string.Join(delimiter, Columns);
+
+    /// <summary>
+    /// Formats a host rule into an escaped, delimited CSV row.
+    /// </summary>
+    /// <param name="rule">Host rule to serialize.</param>
+    /// <param name="delimiter">Field delimiter character.</param>
+    /// <returns>Escaped CSV row string.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="rule"/> is null.</exception>
+    public string FormatRow(FirewallHostRuleItem rule, char delimiter = ',')
+    {
+        var values = FieldsOf(rule);
 
         // Opened in a spreadsheet and never read back, with host and process names chosen by third parties: see
         // FirewallRuleCsvFormatter.

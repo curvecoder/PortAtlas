@@ -246,7 +246,8 @@ PortAtlas export rules [-i <path>]... [-o <path>] [options]
 
 | Option | Value | Default | Effect |
 | :--- | :--- | :--- | :--- |
-| `-o`, `--output` | `<path>` | `portatlas_rules.csv` | Matrix file ([columns](output-formats.md#firewall-rule-matrix)) |
+| `-o`, `--output` | `<path>` | `portatlas_rules.csv`, `portatlas_rules.md` with `--format markdown` | Matrix file ([columns](output-formats.md#firewall-rule-matrix)) |
+| `--format` | `csv`, `markdown` | `csv` | File format of every matrix of the run; `markdown` starts each file with what the matrix holds and what it can be used for ([Markdown matrices](output-formats.md#markdown-matrices)) |
 | `--pairs-output` | `<path>` | not written | Also writes the pair matrix, one row per source and destination ([columns](output-formats.md#pair-matrix)); same tokens as `--output` |
 | `--flows-output` | `<path>` | not written | Also writes the flow matrix, one row per flow with the two ends of a connection merged ([columns](output-formats.md#flow-matrix)); same tokens as `--output` |
 | `--host-rules-output` | `<path>` | not written | Also writes the host rule matrix, an outbound rule on the source and an inbound rule on the destination of each flow, for network security groups ([columns](output-formats.md#host-rule-matrix)); same tokens as `--output` |
@@ -414,7 +415,7 @@ Configuration keys read: none.
 | `--dns-timeout-ms`, `--rdap-timeout-ms` | ✔ | | | | ✔ | ✔ | |
 | `--exclude-remote-ips`, `--alias` | ✔ | | | | | | |
 | `--mask-server`, `--mask-ip`, `--obfuscate` | ✔ | | | | | | |
-| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output`, `--address-group` | | | ✔ | | | | |
+| `--min-observations`, `--active-within-days`, `--zone`, `--pairs-output`, `--flows-output`, `--host-rules-output`, `--listeners-output`, `--group-rules-output`, `--address-group`, `--format` | | | ✔ | | | | |
 | `--cache`, `--output-cache`, `--in-place`, `--force-resolve`, `--rdap-delay-ms`, `--cache-only` | | | | | ✔ | | |
 
 `config init` accepts `--config` because the option is global, but does not read it.

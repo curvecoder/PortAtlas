@@ -380,6 +380,95 @@ public sealed class FirewallRuleExporterTests : IDisposable
         lines[1].Should().StartWith("RULE-001,Inbound,0.0.0.0,Any,0.0.0.0,nas,Internal,TCP,443,HTTPS,caddy,");
     }
 
+    [Fact]
+    public async Task ExportRulesAsync_WhenFormatIsMarkdown_WritesTheRuleMatrixAsATablePrecededByItsExplanation()
+    {
+        // Arrange
+        var logs = await WriteDesktopAndNasAuditsAsync();
+        var matrixMarkdown = Path.Combine(_tempDirectory, "rules.md");
+        var options = new FirewallRuleExportOptions { Format = MatrixFileFormat.Markdown };
+
+        // Act
+        var report = await new FirewallRuleExporter().ExportRulesAsync(logs, matrixMarkdown, options);
+
+        // Assert
+        report.TotalRulesExported.Should().Be(2);
+        var bytes = await File.ReadAllBytesAsync(matrixMarkdown);
+        bytes.Take(3).Should().NotEqual([0xEF, 0xBB, 0xBF], "a Markdown file carries no byte order mark");
+        var lines = await File.ReadAllLinesAsync(matrixMarkdown);
+        lines[0].Should().Be($"# {FirewallMatrixDescriptions.Rules.Title}");
+        lines.Should().Contain(FirewallMatrixDescriptions.Rules.Summary);
+        lines.Should().ContainInConsecutiveOrder("## Rules (2)", "", "| RuleId | Direction | SourceIp | SourceHost | DestinationIp | DestinationHost | DestinationZone | Protocol | DestinationPort | ServiceName | ProcessName | ExecutablePath | UserName | ObservationCount | FirstSeenUtc | LastSeenUtc |");
+        lines.Should().Contain(line => line.StartsWith("| RULE-001 | Inbound | 192.168.1.10 | desktop.home.arpa | 192.168.1.50 | nas | Internal | TCP | 443 | HTTPS | caddy |", StringComparison.Ordinal));
+        lines.Should().Contain(line => line.StartsWith("| RULE-002 | Outbound | 192.168.1.10 | desktop | 192.168.1.50 | nas.home.arpa | Internal | TCP | 443 | HTTPS | curl | C:\\\\curl.exe |", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenFormatIsMarkdown_WritesEveryRequestedMatrixWithItsOwnExplanation()
+    {
+        // Arrange
+        var logs = await WriteDesktopAndNasAuditsAsync();
+        var paths = new Dictionary<string, string>
+        {
+            [FirewallMatrixDescriptions.Listeners.Title] = Path.Combine(_tempDirectory, "listeners.md"),
+            [FirewallMatrixDescriptions.Flows.Title] = Path.Combine(_tempDirectory, "flows.md"),
+            [FirewallMatrixDescriptions.Pairs.Title] = Path.Combine(_tempDirectory, "pairs.md"),
+            [FirewallMatrixDescriptions.HostRules.Title] = Path.Combine(_tempDirectory, "host_rules.md"),
+            [FirewallMatrixDescriptions.GroupRules.Title] = Path.Combine(_tempDirectory, "group_rules.md")
+        };
+        var options = new FirewallRuleExportOptions
+        {
+            Format = MatrixFileFormat.Markdown,
+            ListenersOutputPath = paths[FirewallMatrixDescriptions.Listeners.Title],
+            FlowsOutputPath = paths[FirewallMatrixDescriptions.Flows.Title],
+            PairsOutputPath = paths[FirewallMatrixDescriptions.Pairs.Title],
+            HostRulesOutputPath = paths[FirewallMatrixDescriptions.HostRules.Title],
+            GroupRulesOutputPath = paths[FirewallMatrixDescriptions.GroupRules.Title]
+        };
+
+        // Act
+        var report = await new FirewallRuleExporter().ExportRulesAsync(logs, Path.Combine(_tempDirectory, "rules.md"), options);
+
+        // Assert
+        report.HostRules.Should().Be(new ExportedMatrixFile(paths[FirewallMatrixDescriptions.HostRules.Title], 2));
+        foreach (var (title, path) in paths)
+        {
+            (await File.ReadAllLinesAsync(path))[0].Should().Be($"# {title}");
+        }
+
+        (await File.ReadAllLinesAsync(paths[FirewallMatrixDescriptions.HostRules.Title])).Should()
+            .Contain(line => line.StartsWith("| HOST-001 | desktop | 192.168.1.10 | Yes | Outbound | 192.168.1.50 | nas |", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ExportRulesAsync_WhenListenersOnlyIsMarkdown_ExplainsTheListeningSocketMatrix()
+    {
+        // Arrange
+        var logs = await WriteDesktopAndNasAuditsAsync();
+        var matrixMarkdown = Path.Combine(_tempDirectory, "rules.md");
+        var options = new FirewallRuleExportOptions { Format = MatrixFileFormat.Markdown, ListenersOnly = true };
+
+        // Act
+        await new FirewallRuleExporter().ExportRulesAsync(logs, matrixMarkdown, options);
+
+        // Assert
+        var lines = await File.ReadAllLinesAsync(matrixMarkdown);
+        lines[0].Should().Be($"# {FirewallMatrixDescriptions.Listeners.Title}");
+        lines.Should().Contain("## Listening sockets (1)");
+    }
+
+    [Theory]
+    [InlineData(MatrixFileFormat.Csv, DefaultOutputFileNames.RulesCsv)]
+    [InlineData(MatrixFileFormat.Markdown, DefaultOutputFileNames.RulesMarkdown)]
+    public void RulesFor_WhenFormatIsGiven_ReturnsTheDefaultFileNameWithItsExtension(MatrixFileFormat format, string expected)
+    {
+        // Act
+        var name = DefaultOutputFileNames.RulesFor(format);
+
+        // Assert
+        name.Should().Be(expected);
+    }
+
     // The same HTTPS connection seen from desktop (192.168.1.10, curl) and from nas (192.168.1.50, caddy listening on 443).
     private async Task<IReadOnlyList<string>> WriteDesktopAndNasAuditsAsync()
     {

@@ -5,7 +5,7 @@ using PortAtlas.Core.Models;
 namespace PortAtlas.Core.Export;
 
 /// <summary>
-/// Ingests raw historical network audits and exports consolidated network flow matrices to CSV.
+/// Ingests raw historical network audits and exports consolidated network flow matrices to CSV or Markdown.
 /// </summary>
 /// <param name="csvParser">Parser for historical CSV audit logs.</param>
 /// <param name="ndjsonParser">Parser for NDJSON streaming logs.</param>
@@ -36,12 +36,14 @@ public sealed class FirewallRuleExporter(
     private readonly FirewallHostRuleCsvFormatter _hostRuleFormatter = new();
     private readonly FirewallGroupRuleAggregator _groupRuleAggregator = new();
     private readonly FirewallGroupRuleCsvFormatter _groupRuleFormatter = new();
+    private readonly MarkdownMatrixFormatter _markdownFormatter = new();
 
     /// <summary>
-    /// Ingests audit files, aggregates firewall rules, and exports a formatted CSV matrix.
+    /// Ingests audit files, aggregates firewall rules, and exports the matrices in the format of
+    /// <see cref="FirewallRuleExportOptions.Format"/>.
     /// </summary>
     /// <param name="auditFiles">Collection of source CSV or NDJSON audit file paths.</param>
-    /// <param name="outputPath">Destination path for the generated firewall matrix CSV.</param>
+    /// <param name="outputPath">Destination path for the generated firewall matrix.</param>
     /// <param name="options">Consolidation and filtering options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Execution report detailing processed files, row counts, and exported rule counts.</returns>
@@ -85,21 +87,21 @@ public sealed class FirewallRuleExporter(
         _logger?.Invoke($"Consolidating {allEntries.Count} raw flow(s) from {validFiles.Count} file(s)...");
 
         var rules = _aggregator.Aggregate(allEntries, options);
+        var ruleMatrix = new MatrixSpecification<FirewallRuleItem>(
+            options.ListenersOnly ? FirewallMatrixDescriptions.Listeners : FirewallMatrixDescriptions.Rules,
+            _formatter,
+            _formatter.FormatRow);
 
-        await WriteCsvAsync(
-            outputPath,
-            _formatter.BuildHeader(options.Delimiter),
-            rules.Select(rule => _formatter.FormatRow(rule, options.Delimiter)),
-            cancellationToken).ConfigureAwait(false);
+        await WriteMatrixAsync(outputPath, ruleMatrix, rules, options, cancellationToken).ConfigureAwait(false);
         _logger?.Invoke($"Firewall rule matrix with {rules.Count} rule(s) successfully generated: {Path.GetFullPath(outputPath)}");
 
         // The listening sockets come from the same logs and filters as the rules: only the listener switch differs.
         var listeners = await WriteOptionalMatrixAsync(
             options.ListenersOutputPath,
-            _formatter.BuildHeader(options.Delimiter),
+            ruleMatrix with { Description = FirewallMatrixDescriptions.Listeners },
             () => _aggregator.Aggregate(allEntries, options with { ListenersOnly = true }),
-            rule => _formatter.FormatRow(rule, options.Delimiter),
             count => $"Listening socket matrix with {count} socket(s)",
+            options,
             cancellationToken).ConfigureAwait(false);
 
         // The pair and host rule matrices are built on the flow matrix, which merges the two ends of each connection.
@@ -108,34 +110,34 @@ public sealed class FirewallRuleExporter(
 
         var flowFile = await WriteOptionalMatrixAsync(
             options.FlowsOutputPath,
-            _flowFormatter.BuildHeader(options.Delimiter),
+            new MatrixSpecification<FirewallFlowItem>(FirewallMatrixDescriptions.Flows, _flowFormatter, _flowFormatter.FormatRow),
             () => flows.Value,
-            flow => _flowFormatter.FormatRow(flow, options.Delimiter),
             count => $"Flow matrix with {count} flow(s)",
+            options,
             cancellationToken).ConfigureAwait(false);
 
         var pairs = await WriteOptionalMatrixAsync(
             options.PairsOutputPath,
-            _pairFormatter.BuildHeader(options.Delimiter),
+            new MatrixSpecification<FirewallRulePairItem>(FirewallMatrixDescriptions.Pairs, _pairFormatter, _pairFormatter.FormatRow),
             () => _pairAggregator.Aggregate(flows.Value),
-            pair => _pairFormatter.FormatRow(pair, options.Delimiter),
             count => $"Pair matrix with {count} source/destination pair(s)",
+            options,
             cancellationToken).ConfigureAwait(false);
 
         var hostRules = await WriteOptionalMatrixAsync(
             options.HostRulesOutputPath,
-            _hostRuleFormatter.BuildHeader(options.Delimiter),
+            new MatrixSpecification<FirewallHostRuleItem>(FirewallMatrixDescriptions.HostRules, _hostRuleFormatter, _hostRuleFormatter.FormatRow),
             () => _hostRuleAggregator.Aggregate(flows.Value, servers.Value),
-            rule => _hostRuleFormatter.FormatRow(rule, options.Delimiter),
             count => $"Host rule matrix with {count} rule(s)",
+            options,
             cancellationToken).ConfigureAwait(false);
 
         var groupRules = await WriteOptionalMatrixAsync(
             options.GroupRulesOutputPath,
-            _groupRuleFormatter.BuildHeader(options.Delimiter),
+            new MatrixSpecification<FirewallGroupRuleItem>(FirewallMatrixDescriptions.GroupRules, _groupRuleFormatter, _groupRuleFormatter.FormatRow),
             () => _groupRuleAggregator.Aggregate(rules, options.AddressGroups),
-            row => _groupRuleFormatter.FormatRow(row, options.Delimiter),
             count => $"Group rule matrix with {count} rule(s)",
+            options,
             cancellationToken).ConfigureAwait(false);
 
         return new FirewallRuleExportReport(
@@ -155,10 +157,10 @@ public sealed class FirewallRuleExporter(
 
     private async Task<ExportedMatrixFile?> WriteOptionalMatrixAsync<T>(
         string? path,
-        string header,
+        MatrixSpecification<T> matrix,
         Func<IReadOnlyList<T>> build,
-        Func<T, string> format,
         Func<int, string> describe,
+        FirewallRuleExportOptions options,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -167,15 +169,34 @@ public sealed class FirewallRuleExporter(
         }
 
         var items = build();
-        await WriteCsvAsync(path, header, items.Select(format), cancellationToken).ConfigureAwait(false);
+        await WriteMatrixAsync(path, matrix, items, options, cancellationToken).ConfigureAwait(false);
         var file = new ExportedMatrixFile(Path.GetFullPath(path), items.Count);
         _logger?.Invoke($"{describe(file.RowCount)} successfully generated: {file.Path}");
         return file;
     }
 
-    // UTF-8 with a byte order mark, as the CSV audit log: spreadsheet programs need it to show accented names. The
-    // matrix replaces the previous one only once complete, so that an interrupted export does not leave it truncated.
-    private static Task WriteCsvAsync(string path, string header, IEnumerable<string> rows, CancellationToken cancellationToken)
+    // The CSV matrix keeps the byte order mark of the CSV audit log: spreadsheet programs need it to show accented
+    // names. A Markdown file goes to text editors, renderers and version control, where the mark is a stray character.
+    private Task WriteMatrixAsync<T>(
+        string path,
+        MatrixSpecification<T> matrix,
+        IReadOnlyList<T> items,
+        FirewallRuleExportOptions options,
+        CancellationToken cancellationToken)
+    {
+        if (options.Format == MatrixFileFormat.Markdown)
+        {
+            var document = _markdownFormatter.Format(matrix.Description, matrix.Layout, items);
+            return WriteLinesAsync(path, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), document, cancellationToken);
+        }
+
+        var header = string.Join(options.Delimiter, matrix.Layout.ColumnNames);
+        var rows = items.Select(item => matrix.CsvRow(item, options.Delimiter));
+        return WriteLinesAsync(path, Encoding.UTF8, rows.Prepend(header), cancellationToken);
+    }
+
+    // The matrix replaces the previous one only once complete, so that an interrupted export does not leave it truncated.
+    private static Task WriteLinesAsync(string path, Encoding encoding, IEnumerable<string> lines, CancellationToken cancellationToken)
         => OutputFileUnwritableException.GuardAsync(path, () =>
         {
             // AtomicFileWriter would write the whole matrix beside the folder before failing to replace it, and leave
@@ -190,13 +211,12 @@ public sealed class FirewallRuleExporter(
                 async (stream, token) =>
                 {
                     // The stream stays open for AtomicFileWriter, which flushes it to disk.
-                    var writer = new StreamWriter(stream, Encoding.UTF8, leaveOpen: true);
+                    var writer = new StreamWriter(stream, encoding, leaveOpen: true);
                     await using (writer.ConfigureAwait(false))
                     {
-                        await writer.WriteLineAsync(header.AsMemory(), token).ConfigureAwait(false);
-                        foreach (var row in rows)
+                        foreach (var line in lines)
                         {
-                            await writer.WriteLineAsync(row.AsMemory(), token).ConfigureAwait(false);
+                            await writer.WriteLineAsync(line.AsMemory(), token).ConfigureAwait(false);
                         }
                     }
                 },
@@ -204,10 +224,10 @@ public sealed class FirewallRuleExporter(
         });
 
     /// <summary>
-    /// Resolves file paths, directories, or wildcards, aggregates rules, and exports the CSV matrix.
+    /// Resolves file paths, directories, or wildcards, aggregates rules, and exports the matrices.
     /// </summary>
     /// <param name="auditPathsOrPatterns">Paths, directories, or glob patterns for audit files.</param>
-    /// <param name="outputPath">Destination path for the generated firewall matrix CSV.</param>
+    /// <param name="outputPath">Destination path for the generated firewall matrix.</param>
     /// <param name="options">Consolidation and filtering options.</param>
     /// <param name="cancellationToken">Cooperative cancellation token.</param>
     /// <returns>Execution report detailing processed files, row counts, and exported rule counts.</returns>
@@ -234,4 +254,11 @@ public sealed class FirewallRuleExporter(
 
         return await ExportRulesAsync(selection.Files, outputPath, options, cancellationToken).ConfigureAwait(false);
     }
+
+    // A matrix in both formats: its explanation and columns for Markdown, and for CSV its row formatter, which escapes
+    // the values for a spreadsheet.
+    private sealed record MatrixSpecification<T>(
+        MatrixDescription Description,
+        IMatrixColumnLayout<T> Layout,
+        Func<T, char, string> CsvRow);
 }

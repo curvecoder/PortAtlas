@@ -3,7 +3,7 @@ using PortAtlas.Core.Export;
 namespace PortAtlas.Cli.Export;
 
 /// <summary>
-/// Runs the <c>export rules</c> command: consolidates audit logs into a network flow matrix CSV and reports the outcome on the console.
+/// Runs the <c>export rules</c> command: consolidates audit logs into network flow matrices (CSV or Markdown) and reports the outcome on the console.
 /// </summary>
 /// <param name="exporter">Underlying exporter consolidating flows and formatting the CSV matrix.</param>
 public sealed class FirewallRuleExportCommandRunner(FirewallRuleExporter? exporter = null)
@@ -39,6 +39,7 @@ public sealed class FirewallRuleExportCommandRunner(FirewallRuleExporter? export
             Console.WriteLine($"Freshness filter: Observed within the last {options.ActiveWithinDays.Value} day(s)");
         }
         Console.WriteLine($"Destination zone filter: {options.DestinationZoneFilter.ToUpperInvariant()}");
+        Console.WriteLine($"Matrix format: {(options.Format == MatrixFileFormat.Markdown ? "Markdown" : "CSV")}");
         Console.WriteLine($"Destination file: {Path.GetFullPath(outputPath)}");
         WriteRequestedFile("Pair matrix file", options.PairsOutputPath);
         WriteRequestedFile("Flow matrix file", options.FlowsOutputPath);

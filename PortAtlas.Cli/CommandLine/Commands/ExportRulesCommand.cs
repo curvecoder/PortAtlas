@@ -13,7 +13,8 @@ public sealed class ExportRulesCommand : Command
 {
     private readonly AuditInputOptionSet _inputs = new();
     private readonly FlowFilterOptionSet _filters = new();
-    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", $"Matrix CSV to write. Tokens {{ServerName}}, {{HostName}}, {{Date}}, {{Timestamp}} are expanded. Default: {DefaultOutputFileNames.RulesCsv}.", "-o");
+    private readonly Option<string?> _output = OptionFactory.CreatePath("--output", $"Matrix file to write. Tokens {{ServerName}}, {{HostName}}, {{Date}}, {{Timestamp}} are expanded. Default with --format markdown: {DefaultOutputFileNames.RulesMarkdown}. Default: {DefaultOutputFileNames.RulesCsv}.", "-o");
+    private readonly Option<string?> _format = OptionFactory.CreateChoice("--format", "File format of every matrix written: csv, or markdown (each file starts with what the matrix holds and what it can be used for: host firewalls, network security groups, security lists; then a column legend and the rows as a table). Default: csv.", "csv", "markdown");
     private readonly Option<int?> _minObservations = OptionFactory.CreateInteger("--min-observations", "count", "Keep only flows observed at least this number of times. Default: 1.", minimum: 1);
     private readonly Option<int?> _activeWithinDays = OptionFactory.CreateInteger("--active-within-days", "days", "Keep only flows seen during the last N days. Default: no limit.", minimum: 1);
     private readonly Option<string?> _pairsOutput = OptionFactory.CreatePath("--pairs-output", "Also write a pair matrix CSV (one row per source and destination: flow count, ports, observations), with the same filters. Same tokens as --output. Default: not written.");
@@ -35,6 +36,7 @@ public sealed class ExportRulesCommand : Command
         _configFile = configFile;
         _inputs.AddTo(this);
         Options.Add(_output);
+        Options.Add(_format);
         Options.Add(_pairsOutput);
         Options.Add(_flowsOutput);
         Options.Add(_hostRulesOutput);
@@ -72,7 +74,8 @@ public sealed class ExportRulesCommand : Command
                 return 1;
             }
 
-            var outputPath = OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.RulesCsv);
+            var format = string.Equals(parseResult.GetValue(_format), "markdown", StringComparison.Ordinal) ? MatrixFileFormat.Markdown : MatrixFileFormat.Csv;
+            var outputPath = OutputFilePathResolver.Resolve(parseResult.GetValue(_output) ?? DefaultOutputFileNames.RulesFor(format));
             var pairsOutputPath = ResolveOptional(parseResult, _pairsOutput);
             var flowsOutputPath = ResolveOptional(parseResult, _flowsOutput);
             var hostRulesOutputPath = ResolveOptional(parseResult, _hostRulesOutput);
@@ -121,6 +124,7 @@ public sealed class ExportRulesCommand : Command
                 IncludedProcesses = config.MapIncludedProcesses,
                 ExcludedProcesses = config.MapExcludedProcesses,
                 Delimiter = !string.IsNullOrEmpty(config.CsvDelimiter) ? config.CsvDelimiter[0] : ',',
+                Format = format,
                 PairsOutputPath = pairsOutputPath,
                 FlowsOutputPath = flowsOutputPath,
                 HostRulesOutputPath = hostRulesOutputPath,

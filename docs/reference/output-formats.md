@@ -9,7 +9,7 @@
 | CSV audit log | `audit` | UTF-8 with byte order mark | Once complete (see [Rewrite cycle](#rewrite-cycle)) |
 | NDJSON audit log | `audit --ndjson` | UTF-8 without byte order mark | Once complete, as the CSV log |
 | NDJSON export | `export ndjson` | UTF-8 without byte order mark | Written in place: an interrupted export leaves a partial file |
-| Rule, listening socket, flow, pair, host rule and group rule matrices | `export rules` | UTF-8 with byte order mark | Once complete |
+| Rule, listening socket, flow, pair, host rule and group rule matrices | `export rules` | CSV: UTF-8 with byte order mark; Markdown (`--format markdown`): UTF-8 without byte order mark | Once complete |
 | DNS cache | `audit`, `resolve` | UTF-8 without byte order mark | Once complete; when it cannot be written, the previous file stays |
 | Enriched copy | `resolve` | Byte order mark of the log it copies | Once complete |
 | HTML map | `map --html`, `audit --html` | UTF-8 with byte order mark | Written in place |
@@ -217,6 +217,20 @@ Written by `export rules --group-rules-output`, from the rows of the firewall ru
 | `FirstSeenUtc` | Earliest first observation |
 | `LastSeenUtc` | Latest observation |
 | `Processes` | Distinct process names of those rules, in ordinal order (`caddy, curl`) |
+
+## Markdown matrices
+
+Written by `export rules --format markdown`, for every matrix of the run, in place of the CSV file. The rows, their order and their values are those of the CSV matrix; the separator `CsvDelimiter` is not used. Each file holds, in this order:
+
+| Part | Content |
+| :--- | :--- |
+| Title | Name of the matrix (`# Firewall rule matrix`, `# Host rule matrix`…); `# Listening socket matrix` for `--listeners-output`, and for `-o` with `--listeners-only` |
+| Summary | What one row stands for, then a note: the matrix holds only the flows seen while the audit ran |
+| `## What it can be used for` | The rule sets the matrix serves: network firewalls and change requests, host firewalls (Windows Defender Firewall, nftables, iptables), network security groups (Azure, OCI, AWS security groups) for the host rule matrix, subnet-level rules such as OCI security lists for the group and pair matrices |
+| `## Columns` | One line per column: its name and its content |
+| `## <rows> (<count>)` | The rows as a table, with the column names of the CSV matrix as header; `No row passed the filters.` when the matrix is empty |
+
+In a cell, a line break or a tab becomes a space, and the characters `\`, `` ` ``, `*`, `_`, `[`, `]`, `<`, `>`, `|`, `~` and `&` are preceded by a backslash: a host, process or user name shows as written, without adding a link, an HTML element or a column. The leading apostrophe of the CSV matrix is not added.
 
 ## Topology map
 

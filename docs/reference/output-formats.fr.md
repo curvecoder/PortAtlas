@@ -9,7 +9,7 @@
 | Journal d'audit CSV | `audit` | UTF-8 avec marque d'ordre des octets (BOM) | Une fois complet (voir [Cycle de réécriture](#cycle-de-réécriture)) |
 | Journal d'audit NDJSON | `audit --ndjson` | UTF-8 sans BOM | Une fois complet, comme le journal CSV |
 | Export NDJSON | `export ndjson` | UTF-8 sans BOM | Écrit sur place : un export interrompu laisse un fichier partiel |
-| Matrices de règles, des sockets en écoute, de flux, par paire, de règles par hôte et de règles par groupe | `export rules` | UTF-8 avec BOM | Une fois complètes |
+| Matrices de règles, des sockets en écoute, de flux, par paire, de règles par hôte et de règles par groupe | `export rules` | CSV : UTF-8 avec BOM ; Markdown (`--format markdown`) : UTF-8 sans BOM | Une fois complètes |
 | Cache DNS | `audit`, `resolve` | UTF-8 sans BOM | Une fois complet ; quand il ne peut pas être écrit, le fichier précédent reste |
 | Copie enrichie | `resolve` | BOM du journal qu'elle copie | Une fois complète |
 | Carte HTML | `map --html`, `audit --html` | UTF-8 avec BOM | Écrite sur place |
@@ -217,6 +217,20 @@ Les lignes sont triées par nom d'hôte, adresse de l'hôte, sens (`Inbound` d'a
 | `FirstSeenUtc` | Première observation la plus ancienne |
 | `LastSeenUtc` | Observation la plus récente |
 | `Processes` | Noms de processus distincts de ces règles, dans l'ordre ordinal (`caddy, curl`) |
+
+## Matrices en Markdown
+
+Écrites par `export rules --format markdown`, pour chaque matrice de la passe, à la place du fichier CSV. Les lignes, leur ordre et leurs valeurs sont ceux de la matrice CSV ; le séparateur `CsvDelimiter` n'est pas utilisé. Chaque fichier contient, dans cet ordre :
+
+| Partie | Contenu |
+| :--- | :--- |
+| Titre | Nom de la matrice en anglais (`# Firewall rule matrix`, `# Host rule matrix`…) ; `# Listening socket matrix` pour `--listeners-output`, et pour `-o` avec `--listeners-only` |
+| Résumé | Ce que représente une ligne, puis une note : la matrice ne contient que les flux vus pendant l'audit |
+| `## What it can be used for` | Les jeux de règles que sert la matrice : pare-feu réseau et demandes d'ouverture, pare-feu des hôtes (pare-feu Windows Defender, nftables, iptables), groupes de sécurité réseau (Azure, OCI, security groups AWS) pour la matrice de règles par hôte, règles au niveau du sous-réseau comme les security lists d'OCI pour les matrices par groupe et par paire |
+| `## Columns` | Une ligne par colonne : son nom et son contenu |
+| `## <lignes> (<nombre>)` | Les lignes en tableau, avec en en-tête les noms de colonnes de la matrice CSV ; `No row passed the filters.` quand la matrice est vide |
+
+Dans une cellule, un saut de ligne ou une tabulation devient une espace, et les caractères `\`, `` ` ``, `*`, `_`, `[`, `]`, `<`, `>`, `|`, `~` et `&` sont précédés d'une barre oblique inverse : un nom d'hôte, de processus ou de compte s'affiche tel qu'il est écrit, sans ajouter de lien, d'élément HTML ni de colonne. L'apostrophe initiale de la matrice CSV n'est pas ajoutée.
 
 ## Carte topologique
 

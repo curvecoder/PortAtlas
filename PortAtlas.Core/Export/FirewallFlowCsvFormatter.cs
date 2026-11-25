@@ -6,9 +6,9 @@ namespace PortAtlas.Core.Export;
 /// <summary>
 /// Formats flow matrix rows into RFC 4180 compliant CSV lines.
 /// </summary>
-public sealed class FirewallFlowCsvFormatter
+public sealed class FirewallFlowCsvFormatter : IMatrixColumnLayout<FirewallFlowItem>
 {
-    private static readonly string[] ColumnNames =
+    private static readonly string[] Columns =
     [
         "FlowId",
         "SourceIp",
@@ -28,26 +28,16 @@ public sealed class FirewallFlowCsvFormatter
         "LastSeenUtc"
     ];
 
-    /// <summary>
-    /// Builds the CSV header line.
-    /// </summary>
-    /// <param name="delimiter">Field delimiter character.</param>
-    /// <returns>Delimited header row string.</returns>
-    public string BuildHeader(char delimiter = ',') => string.Join(delimiter, ColumnNames);
+    /// <inheritdoc />
+    public IReadOnlyList<string> ColumnNames => Columns;
 
-    /// <summary>
-    /// Formats a flow into an escaped, delimited CSV row.
-    /// </summary>
-    /// <param name="flow">Flow to serialize.</param>
-    /// <param name="delimiter">Field delimiter character.</param>
-    /// <returns>Escaped CSV row string.</returns>
-    /// <exception cref="ArgumentNullException">When <paramref name="flow"/> is null.</exception>
-    public string FormatRow(FirewallFlowItem flow, char delimiter = ',')
+    /// <inheritdoc />
+    public IReadOnlyList<string> FieldsOf(FirewallFlowItem flow)
     {
         ArgumentNullException.ThrowIfNull(flow);
 
-        var values = new[]
-        {
+        return
+        [
             flow.FlowId,
             flow.SourceIp,
             flow.SourceHost,
@@ -64,7 +54,26 @@ public sealed class FirewallFlowCsvFormatter
             flow.DestinationObservationCount.ToString(CultureInfo.InvariantCulture),
             flow.FirstSeenUtc.ToString("o", CultureInfo.InvariantCulture),
             flow.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture)
-        };
+        ];
+    }
+
+    /// <summary>
+    /// Builds the CSV header line.
+    /// </summary>
+    /// <param name="delimiter">Field delimiter character.</param>
+    /// <returns>Delimited header row string.</returns>
+    public string BuildHeader(char delimiter = ',') => string.Join(delimiter, Columns);
+
+    /// <summary>
+    /// Formats a flow into an escaped, delimited CSV row.
+    /// </summary>
+    /// <param name="flow">Flow to serialize.</param>
+    /// <param name="delimiter">Field delimiter character.</param>
+    /// <returns>Escaped CSV row string.</returns>
+    /// <exception cref="ArgumentNullException">When <paramref name="flow"/> is null.</exception>
+    public string FormatRow(FirewallFlowItem flow, char delimiter = ',')
+    {
+        var values = FieldsOf(flow);
 
         // Opened in a spreadsheet and never read back, with host and process names chosen by third parties: see
         // FirewallRuleCsvFormatter.

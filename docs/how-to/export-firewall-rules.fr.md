@@ -276,6 +276,16 @@ PortAtlas export rules -i logs -o rules.csv --group-rules-output group_rules.csv
 | GROUP-006 | dns | upstream | TCP | 853 | unbound |
 | GROUP-009 | servers | upstream | UDP | 123 | chronyd |
 
+## Partager les matrices en Markdown
+
+L'équipe qui écrit les règles (réseau, cloud, système) n'a souvent pas mené l'audit. `--format markdown` écrit chaque matrice de la passe en document Markdown qui s'explique lui-même :
+
+```bash
+PortAtlas export rules -i logs -o rules.md --host-rules-output host_rules.md --group-rules-output group_rules.md --format markdown
+```
+
+Chaque fichier commence par ce que contient la matrice, le rappel que seuls les flux vus pendant l'audit y figurent, les jeux de règles qu'elle sert et une légende des colonnes, puis donne les lignes en tableau. La matrice de règles par hôte cite les groupes de sécurité réseau (NSG Azure et OCI, security groups AWS) et les pare-feu des hôtes ; la matrice de règles par groupe cite les règles au niveau du sous-réseau, comme les security lists d'OCI. Le fichier s'ouvre dans tout éditeur, s'affiche dans une forge Git ou un wiki, et son diff montre les flux apparus ou disparus entre deux audits. Pour un tableur, gardez le format par défaut `--format csv` ([structure d'une matrice Markdown](../reference/output-formats.fr.md#matrices-en-markdown)).
+
 ## Lire le résultat
 
 La commande affiche le nombre de fichiers lus, de flux parcourus et de règles écrites. Chaque ligne porte le processus, son chemin et les dates d'observation, pour que chaque règle puisse être justifiée ([liste des colonnes](../reference/output-formats.fr.md#matrice-de-règles-de-pare-feu)).

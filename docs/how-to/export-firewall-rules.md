@@ -276,6 +276,16 @@ PortAtlas export rules -i logs -o rules.csv --group-rules-output group_rules.csv
 | GROUP-006 | dns | upstream | TCP | 853 | unbound |
 | GROUP-009 | servers | upstream | UDP | 123 | chronyd |
 
+## Share the matrices as Markdown
+
+A team that writes the rules (network, cloud, system) often did not run the audit. `--format markdown` writes every matrix of the run as a Markdown document that explains itself:
+
+```bash
+PortAtlas export rules -i logs -o rules.md --host-rules-output host_rules.md --group-rules-output group_rules.md --format markdown
+```
+
+Each file starts with what the matrix holds, the reminder that only the flows seen during the audit are there, the rule sets it serves and a column legend, then gives the rows as a table. The host rule matrix names network security groups (Azure, OCI, AWS security groups) and host firewalls; the group rule matrix names subnet-level rules such as OCI security lists. The file opens in any editor, renders in a Git forge or a wiki, and its diff shows the flows that appeared or left between two audits. For a spreadsheet, keep the default `--format csv` ([structure of a Markdown matrix](../reference/output-formats.md#markdown-matrices)).
+
 ## Read the result
 
 The command prints the number of files read, flows scanned and rules written. Each row carries the process, its path and the observation dates, so that each rule can be justified ([column list](../reference/output-formats.md#firewall-rule-matrix)).

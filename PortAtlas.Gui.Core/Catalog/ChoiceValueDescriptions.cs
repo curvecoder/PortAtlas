@@ -12,6 +12,9 @@ public static class ChoiceValueDescriptions
     public static IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> Entries { get; } =
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal)
         {
+            ["--format"] = Values(
+                ("csv", "Delimited values for a spreadsheet or a script."),
+                ("markdown", "A document per matrix: what it holds and what it can be used for, a column legend, then the rows as a table.")),
             ["--zone"] = Values(
                 ("all", "Every destination."),
                 ("internal", "Destinations in the private address ranges only."),

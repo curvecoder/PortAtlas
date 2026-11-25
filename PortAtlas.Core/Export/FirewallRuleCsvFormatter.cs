@@ -6,9 +6,9 @@ namespace PortAtlas.Core.Export;
 /// <summary>
 /// Formats consolidated firewall rule items into RFC 4180 compliant CSV lines.
 /// </summary>
-public sealed class FirewallRuleCsvFormatter
+public sealed class FirewallRuleCsvFormatter : IMatrixColumnLayout<FirewallRuleItem>
 {
-    private static readonly string[] ColumnNames =
+    private static readonly string[] Columns =
     [
         "RuleId",
         "Direction",
@@ -28,28 +28,16 @@ public sealed class FirewallRuleCsvFormatter
         "LastSeenUtc"
     ];
 
-    /// <summary>
-    /// Builds the CSV header line.
-    /// </summary>
-    /// <param name="delimiter">Field delimiter character.</param>
-    /// <returns>Delimited header row string.</returns>
-    public string BuildHeader(char delimiter = ',')
-    {
-        return string.Join(delimiter, ColumnNames);
-    }
+    /// <inheritdoc />
+    public IReadOnlyList<string> ColumnNames => Columns;
 
-    /// <summary>
-    /// Formats a single firewall rule item into an escaped, delimited CSV row.
-    /// </summary>
-    /// <param name="rule">Rule item to serialize.</param>
-    /// <param name="delimiter">Field delimiter character.</param>
-    /// <returns>Escaped CSV row string.</returns>
-    public string FormatRow(FirewallRuleItem rule, char delimiter = ',')
+    /// <inheritdoc />
+    public IReadOnlyList<string> FieldsOf(FirewallRuleItem rule)
     {
         ArgumentNullException.ThrowIfNull(rule);
 
-        var values = new[]
-        {
+        return
+        [
             rule.RuleId,
             rule.Direction,
             rule.SourceIp,
@@ -66,7 +54,28 @@ public sealed class FirewallRuleCsvFormatter
             rule.ObservationCount.ToString(CultureInfo.InvariantCulture),
             rule.FirstSeenUtc.ToString("o", CultureInfo.InvariantCulture),
             rule.LastSeenUtc.ToString("o", CultureInfo.InvariantCulture)
-        };
+        ];
+    }
+
+    /// <summary>
+    /// Builds the CSV header line.
+    /// </summary>
+    /// <param name="delimiter">Field delimiter character.</param>
+    /// <returns>Delimited header row string.</returns>
+    public string BuildHeader(char delimiter = ',')
+    {
+        return string.Join(delimiter, Columns);
+    }
+
+    /// <summary>
+    /// Formats a single firewall rule item into an escaped, delimited CSV row.
+    /// </summary>
+    /// <param name="rule">Rule item to serialize.</param>
+    /// <param name="delimiter">Field delimiter character.</param>
+    /// <returns>Escaped CSV row string.</returns>
+    public string FormatRow(FirewallRuleItem rule, char delimiter = ',')
+    {
+        var values = FieldsOf(rule);
 
         // The rule matrix is meant to be opened in a spreadsheet and is never read back by PortAtlas, while a process
         // name, a path or a host name can be chosen by a third party: a value that would start a formula is written

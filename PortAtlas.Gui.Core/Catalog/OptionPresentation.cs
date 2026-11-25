@@ -47,6 +47,7 @@ public static class OptionPresentation
         ["--html"] = Output,
         ["--drawio"] = Output,
         ["--output"] = Output,
+        ["--format"] = new(OptionGroup.Outputs, PathKind.None),
         ["--pairs-output"] = Output,
         ["--flows-output"] = Output,
         ["--host-rules-output"] = Output,
