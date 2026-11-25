@@ -55,7 +55,8 @@ function Invoke-LoggedStep {
     if ($failureLines.Count -gt 0) {
         $failureLines | ForEach-Object {
             Write-Host "  $($_.Line.Trim())" -ForegroundColor Red
-            $_.Context.PostContext | Where-Object { $_.Trim() } | ForEach-Object { Write-Host "    $_" }
+            # Without -FailureContext, Select-String leaves Context null, and piping it still passes one null line.
+            $_.Context.PostContext | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | ForEach-Object { Write-Host "    $_" }
         }
     } else {
         Get-Content -Path $logPath -Tail 40 | ForEach-Object { Write-Host "  $_" }
